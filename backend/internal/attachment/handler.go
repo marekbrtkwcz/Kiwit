@@ -9,9 +9,20 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
+
+func containsXSS(buf []byte) bool {
+	low := strings.ToLower(string(buf))
+	for _, pat := range []string{"<script", "onerror=", "onload=", "javascript:"} {
+		if strings.Contains(low, pat) {
+			return true
+		}
+	}
+	return false
+}
 
 const maxUploadBytes = 25 << 20 // 25 MiB
 
@@ -60,8 +71,19 @@ func RegisterRoutes(r chi.Router, repo Repository, uploadDir string) {
 		written, err := io.Copy(dst, file)
 		_ = dst.Close()
 		if err != nil {
+			_ = os.Remove(storagePath)
 			http.Error(w, `{"detail":"failed to write file"}`, http.StatusInternalServerError)
 			return
+		}
+		if fcheck, err := os.Open(storagePath); err == nil {
+			peek := make([]byte, 64*1024)
+			n, _ := fcheck.Read(peek)
+			_ = fcheck.Close()
+			if containsXSS(peek[:n]) {
+				_ = os.Remove(storagePath)
+				http.Error(w, `{"detail":"file rejected by XSS validator"}`, http.StatusBadRequest)
+				return
+			}
 		}
 
 		ct := header.Header.Get("Content-Type")

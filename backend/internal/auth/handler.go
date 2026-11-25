@@ -108,4 +108,37 @@ func RegisterRoutes(api huma.API, svc *Service) {
 		out.Body.Name = input.Body.Name
 		return out, nil
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "auth-change-password",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/auth/change-password",
+		Summary:     "Change password for authenticated user",
+		Tags:        []string{"Auth"},
+	}, func(ctx context.Context, input *struct {
+		Authorization string `header:"Authorization"`
+		Body          struct {
+			NewPassword string `json:"new_password" minLength:"8"`
+		}
+	}) (*struct {
+		Body struct {
+			OK bool `json:"ok"`
+		}
+	}, error) {
+		raw := strings.TrimPrefix(input.Authorization, "Bearer ")
+		u, err := svc.AuthenticateBearer(ctx, raw)
+		if err != nil {
+			return nil, huma.Error401Unauthorized("unauthorized")
+		}
+		if err := svc.ChangePassword(ctx, u.ID, input.Body.NewPassword); err != nil {
+			return nil, huma.Error500InternalServerError("failed to change password", err)
+		}
+		out := &struct {
+			Body struct {
+				OK bool `json:"ok"`
+			}
+		}{}
+		out.Body.OK = true
+		return out, nil
+	})
 }

@@ -27,6 +27,9 @@ type TestCase struct {
 	GherkinBody   string    `json:"gherkin_body,omitempty"`
 	Priority      string    `json:"priority" enum:"low,medium,high,critical"`
 	Status        string    `json:"status" enum:"draft,confirmed,disabled"`
+	IsAutomated   bool      `json:"is_automated"`
+	Script        string    `json:"script,omitempty"`
+	Arguments     string    `json:"arguments,omitempty"`
 	Steps         []Step    `json:"steps"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
@@ -43,6 +46,9 @@ type UpsertTestCaseInput struct {
 		GherkinBody   string `json:"gherkin_body,omitempty"`
 		Priority      string `json:"priority,omitempty" default:"medium" enum:"low,medium,high,critical"`
 		Status        string `json:"status,omitempty" default:"confirmed" enum:"draft,confirmed,disabled"`
+		IsAutomated   bool   `json:"is_automated,omitempty"`
+		Script        string `json:"script,omitempty"`
+		Arguments     string `json:"arguments,omitempty"`
 		Steps         []Step `json:"steps,omitempty"`
 	}
 }
@@ -116,6 +122,9 @@ func RegisterRoutes(api huma.API, repo Repository) {
 			GherkinBody:   input.Body.GherkinBody,
 			Priority:      input.Body.Priority,
 			Status:        input.Body.Status,
+			IsAutomated:   input.Body.IsAutomated,
+			Script:        input.Body.Script,
+			Arguments:     input.Body.Arguments,
 			Steps:         input.Body.Steps,
 		})
 		if err != nil {
@@ -140,6 +149,9 @@ func RegisterRoutes(api huma.API, repo Repository) {
 			GherkinBody:   input.Body.GherkinBody,
 			Priority:      input.Body.Priority,
 			Status:        input.Body.Status,
+			IsAutomated:   input.Body.IsAutomated,
+			Script:        input.Body.Script,
+			Arguments:     input.Body.Arguments,
 			Steps:         input.Body.Steps,
 		})
 		if err != nil {

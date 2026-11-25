@@ -30,6 +30,7 @@ type Repository interface {
 	List(ctx context.Context) ([]TestRun, error)
 	Create(ctx context.Context, testPlanID, buildID int64, summary, notes string) (TestRun, error)
 	Stop(ctx context.Context, runID int64) error
+	Delete(ctx context.Context, runID int64) error
 	ListExecutions(ctx context.Context, runID int64) ([]ExecutionItem, error)
 	UpdateExecution(ctx context.Context, executionID int64, status, comment string) (ExecutionResult, error)
 }
@@ -69,6 +70,17 @@ func (r *SQLiteRepository) Stop(ctx context.Context, runID int64) error {
 	res, err := r.db.ExecContext(ctx, `UPDATE test_runs SET stopped_at = ? WHERE id = ?`, time.Now().UTC(), runID)
 	if err != nil {
 		return fmt.Errorf("stop test run: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func (r *SQLiteRepository) Delete(ctx context.Context, runID int64) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM test_runs WHERE id = ?`, runID)
+	if err != nil {
+		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return sql.ErrNoRows

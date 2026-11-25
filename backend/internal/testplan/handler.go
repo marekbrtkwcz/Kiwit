@@ -2,6 +2,8 @@ package testplan
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"net/http"
 	"time"
 
@@ -118,5 +120,23 @@ func RegisterRoutes(api huma.API, repo Repository) {
 			return nil, huma.Error400BadRequest("failed to clone test plan", err)
 		}
 		return &TestPlanOutput{Body: tp}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "delete-testplan",
+		Method:      http.MethodDelete,
+		Path:        "/api/v1/testplans/{id}",
+		Summary:     "Delete a test plan",
+		Tags:        []string{"TestPlans"},
+	}, func(ctx context.Context, input *struct {
+		ID int64 `path:"id"`
+	}) (*struct{}, error) {
+		if err := repo.Delete(ctx, input.ID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, huma.Error404NotFound("test plan not found")
+			}
+			return nil, huma.Error500InternalServerError("failed to delete test plan", err)
+		}
+		return nil, nil
 	})
 }

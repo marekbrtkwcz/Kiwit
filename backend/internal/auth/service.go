@@ -228,3 +228,17 @@ func (s *Service) AuthenticateBearer(ctx context.Context, bearerToken string) (U
 	role, _ := claims["role"].(string)
 	return User{ID: int64(sub), Email: email, Role: role}, nil
 }
+
+func (s *Service) ChangePassword(ctx context.Context, userID int64, newPassword string) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+	now := time.Now().UTC()
+	if s.pgPool != nil {
+		_, err := s.pgPool.Exec(ctx, `UPDATE users SET password_hash = $1, updated_at = $2 WHERE id = $3`, string(hash), now, userID)
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?`, string(hash), now, userID)
+	return err
+}

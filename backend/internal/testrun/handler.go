@@ -122,6 +122,24 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 	})
 
 	huma.Register(api, huma.Operation{
+		OperationID: "delete-testrun",
+		Method:      http.MethodDelete,
+		Path:        "/api/v1/testruns/{id}",
+		Summary:     "Delete a test run",
+		Tags:        []string{"TestRuns"},
+	}, func(ctx context.Context, input *struct {
+		ID int64 `path:"id"`
+	}) (*struct{}, error) {
+		if err := repo.Delete(ctx, input.ID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, huma.Error404NotFound("test run not found")
+			}
+			return nil, huma.Error500InternalServerError("failed to delete test run", err)
+		}
+		return nil, nil
+	})
+
+	huma.Register(api, huma.Operation{
 		OperationID: "list-testrun-executions",
 		Method:      http.MethodGet,
 		Path:        "/api/v1/testruns/{id}/executions",

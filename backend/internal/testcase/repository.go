@@ -18,6 +18,9 @@ type UpsertParams struct {
 	GherkinBody   string
 	Priority      string
 	Status        string
+	IsAutomated   bool
+	Script        string
+	Arguments     string
 	Steps         []Step
 }
 

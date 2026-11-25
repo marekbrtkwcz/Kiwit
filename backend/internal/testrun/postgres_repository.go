@@ -106,6 +106,17 @@ func (r *PostgresRepository) Stop(ctx context.Context, runID int64) error {
 	return nil
 }
 
+func (r *PostgresRepository) Delete(ctx context.Context, runID int64) error {
+	tag, err := r.pool.Exec(ctx, `DELETE FROM test_runs WHERE id = $1`, runID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func (r *PostgresRepository) UpdateExecution(ctx context.Context, executionID int64, status, comment string) (ExecutionResult, error) {
 	now := time.Now().UTC()
 	tag, err := r.pool.Exec(ctx, `

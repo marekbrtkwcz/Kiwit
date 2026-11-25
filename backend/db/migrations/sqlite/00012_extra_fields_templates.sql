@@ -1,0 +1,14 @@
+-- +goose Up
+ALTER TABLE test_cases ADD COLUMN is_automated INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE test_cases ADD COLUMN script TEXT NOT NULL DEFAULT '';
+ALTER TABLE test_cases ADD COLUMN arguments TEXT NOT NULL DEFAULT '';
+
+CREATE TABLE templates (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL UNIQUE,
+    body       TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- +goose Down
+DROP TABLE IF EXISTS templates;

@@ -2,6 +2,7 @@ package testplan
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -108,4 +109,15 @@ func (r *PostgresRepository) Clone(ctx context.Context, sourcePlanID int64, newN
 	return TestPlan{
 		ID: newID, ProductID: productID, VersionID: versionID, Name: newName, Description: desc, IsActive: true, CreatedAt: now,
 	}, nil
+}
+
+func (r *PostgresRepository) Delete(ctx context.Context, id int64) error {
+	tag, err := r.pool.Exec(ctx, `DELETE FROM test_plans WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }

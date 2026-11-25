@@ -13,6 +13,7 @@ type Repository interface {
 	Create(ctx context.Context, productID, versionID int64, name, description string) (TestPlan, error)
 	AddCases(ctx context.Context, planID int64, caseIDs []int64) error
 	Clone(ctx context.Context, sourcePlanID int64, newName string, newVersionID *int64) (TestPlan, error)
+	Delete(ctx context.Context, id int64) error
 }
 
 // SQLiteRepository implements Repository using database/sql (SQLite).
@@ -134,4 +135,15 @@ func (r *SQLiteRepository) Clone(ctx context.Context, sourcePlanID int64, newNam
 	return TestPlan{
 		ID: newID, ProductID: productID, VersionID: versionID, Name: newName, Description: desc, IsActive: true, CreatedAt: now,
 	}, nil
+}
+
+func (r *SQLiteRepository) Delete(ctx context.Context, id int64) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM test_plans WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }

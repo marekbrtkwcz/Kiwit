@@ -115,6 +115,7 @@ func main() {
 	management.RegisterRoutes(api, productRepo)
 	management.RegisterRelationRoutes(api, management.NewRelationStore(sqlDBConn, pgPoolConn))
 	testcase.RegisterRoutes(api, testCaseRepo)
+	testcase.RegisterTemplateRoutes(api, sqlDBConn, pgPoolConn)
 	testplan.RegisterRoutes(api, testPlanRepo)
 	notifier := notify.NewWebhookClient(os.Getenv("KIWIT_WEBHOOK_URL"))
 	testrun.RegisterRoutes(api, testRunRepo, notifier)
