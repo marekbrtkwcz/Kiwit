@@ -43,6 +43,7 @@ type Repository interface {
 	Update(ctx context.Context, id int64, p UpsertParams) (TestCase, error)
 	ListRevisions(ctx context.Context, testCaseID int64) ([]Revision, error)
 	BulkUpdate(ctx context.Context, ids []int64, status, priority string) (int64, error)
+	Delete(ctx context.Context, id int64) error
 }
 
 // SQLiteRepository implements Repository using database/sql (SQLite).
@@ -324,4 +325,15 @@ func (r *SQLiteRepository) BulkUpdate(ctx context.Context, ids []int64, status, 
 		}
 	}
 	return updated, tx.Commit()
+}
+
+func (r *SQLiteRepository) Delete(ctx context.Context, id int64) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM test_cases WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }

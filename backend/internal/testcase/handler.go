@@ -206,4 +206,22 @@ func RegisterRoutes(api huma.API, repo Repository) {
 		out.Body.Updated = n
 		return out, nil
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "delete-testcase",
+		Method:      http.MethodDelete,
+		Path:        "/api/v1/testcases/{id}",
+		Summary:     "Delete a test case",
+		Tags:        []string{"TestCases"},
+	}, func(ctx context.Context, input *struct {
+		ID int64 `path:"id"`
+	}) (*struct{}, error) {
+		if err := repo.Delete(ctx, input.ID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, huma.Error404NotFound("test case not found")
+			}
+			return nil, huma.Error500InternalServerError("failed to delete test case", err)
+		}
+		return nil, nil
+	})
 }

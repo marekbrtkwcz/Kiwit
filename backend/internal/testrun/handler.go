@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/kiwit/kiwit/internal/notify"
 )
 
 type TestRun struct {
@@ -49,7 +51,7 @@ type ExecutionOutput struct {
 }
 
 // RegisterRoutes registers TestRun and TestExecution OpenAPI endpoints.
-func RegisterRoutes(api huma.API, repo Repository) {
+func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClient) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-testruns",
 		Method:      http.MethodGet,
@@ -104,6 +106,11 @@ func RegisterRoutes(api huma.API, repo Repository) {
 				return nil, huma.Error404NotFound("test run not found")
 			}
 			return nil, huma.Error500InternalServerError("failed to stop test run", err)
+		}
+		if notifier != nil && notifier.Enabled() {
+			go func(id int64) {
+				_ = notifier.Send(context.Background(), fmt.Sprintf("TestRun #%d stopped", id))
+			}(input.ID)
 		}
 		out := &struct {
 			Body struct {

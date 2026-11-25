@@ -213,3 +213,14 @@ func (r *PostgresRepository) BulkUpdate(ctx context.Context, ids []int64, status
 	}
 	return updated, tx.Commit(ctx)
 }
+
+func (r *PostgresRepository) Delete(ctx context.Context, id int64) error {
+	tag, err := r.pool.Exec(ctx, `DELETE FROM test_cases WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
