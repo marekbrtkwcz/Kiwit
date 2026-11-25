@@ -152,6 +152,21 @@ type ListCategoriesOutput struct {
 	}
 }
 
+type Priority struct {
+	ID        int64     `json:"id"`
+	Value     string    `json:"value"`
+	IsActive  bool      `json:"is_active"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type ExecutionStatus struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	Color     string    `json:"color"`
+	Weight    int       `json:"weight"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 // RegisterRoutes registers management OpenAPI endpoints.
 func RegisterRoutes(api huma.API, repo ProductRepository) {
 	huma.Register(api, huma.Operation{
@@ -367,5 +382,91 @@ func RegisterRoutes(api huma.API, repo ProductRepository) {
 		}{}
 		out.Body.OK = true
 		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "list-priorities",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/priorities",
+		Summary:     "List test case priorities",
+		Tags:        []string{"Management"},
+	}, func(ctx context.Context, input *struct{}) (*struct {
+		Body struct {
+			Items []Priority `json:"items"`
+		}
+	}, error) {
+		items, err := repo.ListPriorities(ctx)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to list priorities", err)
+		}
+		out := &struct {
+			Body struct {
+				Items []Priority `json:"items"`
+			}
+		}{}
+		out.Body.Items = items
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "create-priority",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/priorities",
+		Summary:     "Create test case priority",
+		Tags:        []string{"Management"},
+	}, func(ctx context.Context, input *struct {
+		Body struct {
+			Value string `json:"value" minLength:"1"`
+		}
+	}) (*struct{ Body Priority }, error) {
+		p, err := repo.CreatePriority(ctx, input.Body.Value)
+		if err != nil {
+			return nil, huma.Error409Conflict("failed to create priority", err)
+		}
+		return &struct{ Body Priority }{Body: p}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "list-execution-statuses",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/execution-statuses",
+		Summary:     "List test execution statuses",
+		Tags:        []string{"Management"},
+	}, func(ctx context.Context, input *struct{}) (*struct {
+		Body struct {
+			Items []ExecutionStatus `json:"items"`
+		}
+	}, error) {
+		items, err := repo.ListExecutionStatuses(ctx)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to list execution statuses", err)
+		}
+		out := &struct {
+			Body struct {
+				Items []ExecutionStatus `json:"items"`
+			}
+		}{}
+		out.Body.Items = items
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "create-execution-status",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/execution-statuses",
+		Summary:     "Create test execution status",
+		Tags:        []string{"Management"},
+	}, func(ctx context.Context, input *struct {
+		Body struct {
+			Name   string `json:"name" minLength:"1"`
+			Color  string `json:"color,omitempty" default:"#6b7280"`
+			Weight int    `json:"weight,omitempty"`
+		}
+	}) (*struct{ Body ExecutionStatus }, error) {
+		s, err := repo.CreateExecutionStatus(ctx, input.Body.Name, input.Body.Color, input.Body.Weight)
+		if err != nil {
+			return nil, huma.Error409Conflict("failed to create execution status", err)
+		}
+		return &struct{ Body ExecutionStatus }{Body: s}, nil
 	})
 }

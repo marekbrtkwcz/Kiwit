@@ -23,6 +23,10 @@ type ProductRepository interface {
 	CreateCategory(ctx context.Context, name string) (Category, error)
 	AddMember(ctx context.Context, productID, userID int64, role string) error
 	HasAccess(ctx context.Context, productID, userID int64) (bool, error)
+	ListPriorities(ctx context.Context) ([]Priority, error)
+	CreatePriority(ctx context.Context, value string) (Priority, error)
+	ListExecutionStatuses(ctx context.Context) ([]ExecutionStatus, error)
+	CreateExecutionStatus(ctx context.Context, name, color string, weight int) (ExecutionStatus, error)
 }
 
 // SQLiteRepository implements ProductRepository using database/sql (SQLite).
@@ -271,4 +275,60 @@ func (r *SQLiteRepository) HasAccess(ctx context.Context, productID, userID int6
 		productID, userID,
 	).Scan(&count)
 	return count > 0, err
+}
+
+func (r *SQLiteRepository) ListPriorities(ctx context.Context) ([]Priority, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id, value, is_active, created_at FROM priorities ORDER BY id ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	items := make([]Priority, 0)
+	for rows.Next() {
+		var p Priority
+		var active int
+		if err := rows.Scan(&p.ID, &p.Value, &active, &p.CreatedAt); err != nil {
+			return nil, err
+		}
+		p.IsActive = active == 1
+		items = append(items, p)
+	}
+	return items, rows.Err()
+}
+
+func (r *SQLiteRepository) CreatePriority(ctx context.Context, value string) (Priority, error) {
+	now := time.Now().UTC()
+	res, err := r.db.ExecContext(ctx, `INSERT INTO priorities (value, is_active, created_at) VALUES (?, 1, ?)`, value, now)
+	if err != nil {
+		return Priority{}, err
+	}
+	id, _ := res.LastInsertId()
+	return Priority{ID: id, Value: value, IsActive: true, CreatedAt: now}, nil
+}
+
+func (r *SQLiteRepository) ListExecutionStatuses(ctx context.Context) ([]ExecutionStatus, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id, name, color, weight, created_at FROM execution_statuses ORDER BY id ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	items := make([]ExecutionStatus, 0)
+	for rows.Next() {
+		var s ExecutionStatus
+		if err := rows.Scan(&s.ID, &s.Name, &s.Color, &s.Weight, &s.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, s)
+	}
+	return items, rows.Err()
+}
+
+func (r *SQLiteRepository) CreateExecutionStatus(ctx context.Context, name, color string, weight int) (ExecutionStatus, error) {
+	now := time.Now().UTC()
+	res, err := r.db.ExecContext(ctx, `INSERT INTO execution_statuses (name, color, weight, created_at) VALUES (?, ?, ?, ?)`, name, color, weight, now)
+	if err != nil {
+		return ExecutionStatus{}, err
+	}
+	id, _ := res.LastInsertId()
+	return ExecutionStatus{ID: id, Name: name, Color: color, Weight: weight, CreatedAt: now}, nil
 }

@@ -218,3 +218,55 @@ func (r *PostgresRepository) HasAccess(ctx context.Context, productID, userID in
 	).Scan(&count)
 	return count > 0, err
 }
+
+func (r *PostgresRepository) ListPriorities(ctx context.Context) ([]Priority, error) {
+	rows, err := r.pool.Query(ctx, `SELECT id, value, is_active, created_at FROM priorities ORDER BY id ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]Priority, 0)
+	for rows.Next() {
+		var p Priority
+		if err := rows.Scan(&p.ID, &p.Value, &p.IsActive, &p.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, p)
+	}
+	return items, rows.Err()
+}
+
+func (r *PostgresRepository) CreatePriority(ctx context.Context, value string) (Priority, error) {
+	now := time.Now().UTC()
+	var id int64
+	if err := r.pool.QueryRow(ctx, `INSERT INTO priorities (value, is_active, created_at) VALUES ($1, TRUE, $2) RETURNING id`, value, now).Scan(&id); err != nil {
+		return Priority{}, err
+	}
+	return Priority{ID: id, Value: value, IsActive: true, CreatedAt: now}, nil
+}
+
+func (r *PostgresRepository) ListExecutionStatuses(ctx context.Context) ([]ExecutionStatus, error) {
+	rows, err := r.pool.Query(ctx, `SELECT id, name, color, weight, created_at FROM execution_statuses ORDER BY id ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]ExecutionStatus, 0)
+	for rows.Next() {
+		var s ExecutionStatus
+		if err := rows.Scan(&s.ID, &s.Name, &s.Color, &s.Weight, &s.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, s)
+	}
+	return items, rows.Err()
+}
+
+func (r *PostgresRepository) CreateExecutionStatus(ctx context.Context, name, color string, weight int) (ExecutionStatus, error) {
+	now := time.Now().UTC()
+	var id int64
+	if err := r.pool.QueryRow(ctx, `INSERT INTO execution_statuses (name, color, weight, created_at) VALUES ($1, $2, $3, $4) RETURNING id`, name, color, weight, now).Scan(&id); err != nil {
+		return ExecutionStatus{}, err
+	}
+	return ExecutionStatus{ID: id, Name: name, Color: color, Weight: weight, CreatedAt: now}, nil
+}
