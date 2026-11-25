@@ -163,7 +163,7 @@ export function DashboardView() {
             {t.dashboard.passFail} ({summary.executions.total})
           </h3>
           <span className={`badge ${passRate >= 80 ? 'pill-passed' : passRate >= 50 ? 'pill-blocked' : 'pill-failed'}`}>
-            Pass rate: {passRate}%
+            {t.dashboard.passRate}: {passRate}%
           </span>
         </div>
         <div className="progress-bar" style={{ height: 14 }}>
@@ -252,7 +252,7 @@ export function DashboardView() {
               <div style={{ display: 'grid', gap: '0.65rem' }}>
                 <div>
                   <div style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--muted)', marginBottom: '0.3rem', textTransform: 'uppercase' }}>
-                    Priority
+                    {t.common.priority}
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
                     {breakdown.by_priority.map((p) => (
@@ -264,7 +264,7 @@ export function DashboardView() {
                 </div>
                 <div>
                   <div style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--muted)', marginBottom: '0.3rem', textTransform: 'uppercase' }}>
-                    Categories
+                    {t.dashboard.categories}
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
                     {breakdown.by_category.map((c) => (
@@ -296,9 +296,9 @@ export function DashboardView() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>TestCase</th>
-                    <th>Failed / Total</th>
-                    <th>Fail rate</th>
+                    <th>{t.dashboard.testCases}</th>
+                    <th>{t.dashboard.failedTotal}</th>
+                    <th>{t.dashboard.failRate}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -333,9 +333,9 @@ export function DashboardView() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>TestCase</th>
-                    <th>Status</th>
-                    <th>Count</th>
+                    <th>{t.dashboard.testCases}</th>
+                    <th>{t.common.status}</th>
+                    <th>{t.dashboard.count}</th>
                   </tr>
                 </thead>
                 <tbody>

@@ -120,13 +120,13 @@ export function TestPlansView() {
           ))}
         </select>
         <select className="select" value={versionId} onChange={(e) => setVersionId(Number(e.target.value))}>
-          {versions.length === 0 && <option value={0}>No versions</option>}
+          {versions.length === 0 && <option value={0}>{t.testplans.noVersions}</option>}
           {versions.map((v) => (
             <option key={v.id} value={v.id}>{v.value}</option>
           ))}
         </select>
         <select className="select" value={parentId ?? ''} onChange={(e) => setParentId(e.target.value ? Number(e.target.value) : undefined)}>
-          <option value="">Root plan</option>
+          <option value="">{t.testplans.rootPlan}</option>
           {plans.map((p) => (
             <option key={p.id} value={p.id}>Parent: {p.name}</option>
           ))}
@@ -141,7 +141,7 @@ export function TestPlansView() {
         <div className="card" style={{ padding: '0.75rem', display: 'grid', gap: '0.45rem' }}>
           <div style={{ position: 'relative' }}>
             <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
-            <input className="input" placeholder="Filter plans…" value={filterQ} onChange={(e) => setFilterQ(e.target.value)} style={{ width: '100%', paddingLeft: 30 }} />
+            <input className="input" placeholder={t.testplans.filterPlaceholder} value={filterQ} onChange={(e) => setFilterQ(e.target.value)} style={{ width: '100%', paddingLeft: 30 }} />
           </div>
           {plans.map((tp) => (
             <div
@@ -219,10 +219,10 @@ export function TestPlansView() {
                   <table className="data-table">
                     <thead>
                       <tr>
-                        <th>ID</th>
-                        <th>Summary</th>
-                        <th>Priority</th>
-                        <th>Status</th>
+                        <th>{t.common.id}</th>
+                        <th>{t.common.summary}</th>
+                        <th>{t.common.priority}</th>
+                        <th>{t.common.status}</th>
                         <th />
                       </tr>
                     </thead>

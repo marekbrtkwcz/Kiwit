@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, getAuthToken, request, setAuthToken } from '../api/client'
+import { dict } from './index'
 
 function createMemoryStorage(): Storage {
   const store = new Map<string, string>()
@@ -18,6 +19,46 @@ function createMemoryStorage(): Storage {
     },
   }
 }
+
+function flattenKeys(obj: Record<string, unknown>, prefix = ''): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(obj)) {
+    const full = prefix ? `${prefix}.${k}` : k
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      Object.assign(out, flattenKeys(v as Record<string, unknown>, full))
+    } else {
+      out[full] = String(v ?? '')
+    }
+  }
+  return out
+}
+
+describe('i18n dictionary parity', () => {
+  it('has identical key sets for PL and EN', () => {
+    const plKeys = Object.keys(flattenKeys(dict.pl)).sort()
+    const enKeys = Object.keys(flattenKeys(dict.en)).sort()
+    expect(plKeys).toEqual(enKeys)
+    expect(plKeys.length).toBeGreaterThan(100)
+  })
+
+  it('has non-empty trimmed translations for every PL and EN key', () => {
+    for (const [lang, tree] of Object.entries(dict)) {
+      const flat = flattenKeys(tree as Record<string, unknown>)
+      for (const [key, val] of Object.entries(flat)) {
+        expect(val.trim().length, `${lang}.${key} should not be empty`).toBeGreaterThan(0)
+      }
+    }
+  })
+
+  it('translates key navigation and domain labels differently between PL and EN', () => {
+    expect(dict.pl.nav.bugs).toBe('Błędy')
+    expect(dict.en.nav.bugs).toBe('Bugs')
+    expect(dict.pl.nav.settings).toBe('Ustawienia')
+    expect(dict.en.nav.settings).toBe('Settings')
+    expect(dict.pl.testcases.newCase).not.toEqual(dict.en.testcases.newCase)
+    expect(dict.pl.bugs.report).not.toEqual(dict.en.bugs.report)
+  })
+})
 
 describe('api client', () => {
   beforeEach(() => {

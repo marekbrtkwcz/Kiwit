@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
+  Bug,
   FileCheck2,
   FolderKanban,
   LayoutDashboard,
@@ -50,6 +51,7 @@ export function CommandPalette() {
     { label: t.nav.testcases, path: '/cases', icon: FileCheck2 },
     { label: t.nav.testplans, path: '/plans', icon: FolderKanban },
     { label: t.nav.testruns, path: '/runs', icon: PlayCircle },
+    { label: t.nav.bugs, path: '/bugs', icon: Bug },
     { label: t.nav.products, path: '/products', icon: Package },
     { label: t.nav.settings, path: '/settings', icon: Settings },
     { label: t.nav.auth, path: '/auth', icon: UserCircle2 },

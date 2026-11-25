@@ -131,15 +131,15 @@ export function ProductsView() {
                 <GitBranch size={14} /> {t.products.versions} ({versions.length})
               </button>
               <button type="button" className={`tab-btn ${tab === 'components' ? 'active' : ''}`} onClick={() => setTab('components')}>
-                <Boxes size={14} /> Components ({components.length})
+                <Boxes size={14} /> {t.products.components} ({components.length})
               </button>
               {users.length > 0 && (
                 <button type="button" className={`tab-btn ${tab === 'members' ? 'active' : ''}`} onClick={() => setTab('members')}>
-                  <Shield size={14} /> Product Access
+                  <Shield size={14} /> {t.products.productAccess}
                 </button>
               )}
               <button type="button" className={`tab-btn ${tab === 'tags' ? 'active' : ''}`} onClick={() => setTab('tags')}>
-                <Tag size={14} /> Tags ({tags.length})
+                <Tag size={14} /> {t.common.tags} ({tags.length})
               </button>
             </div>
 

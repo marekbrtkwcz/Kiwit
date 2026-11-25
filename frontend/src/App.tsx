@@ -43,7 +43,7 @@ function AppShell() {
     { to: '/cases', label: t.nav.testcases, icon: FileCheck2 },
     { to: '/plans', label: t.nav.testplans, icon: FolderKanban },
     { to: '/runs', label: t.nav.testruns, icon: PlayCircle },
-    { to: '/bugs', label: 'Bugs', icon: Bug },
+    { to: '/bugs', label: t.nav.bugs, icon: Bug },
     { to: '/products', label: t.nav.products, icon: Package },
     { to: '/settings', label: t.nav.settings, icon: Settings },
     { to: '/auth', label: t.nav.auth, icon: UserCircle2 },

@@ -229,8 +229,8 @@ export function AuthView() {
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Name</th>
-                      <th>Last used</th>
+                      <th>{t.common.name}</th>
+                      <th>{t.auth.lastUsed}</th>
                       <th />
                     </tr>
                   </thead>
@@ -238,10 +238,10 @@ export function AuthView() {
                     {tokens.map((tok) => (
                       <tr key={tok.id}>
                         <td>{tok.name}</td>
-                        <td style={{ color: 'var(--muted)' }}>{tok.last_used_at ? new Date(tok.last_used_at).toLocaleDateString() : 'Never'}</td>
+                        <td style={{ color: 'var(--muted)' }}>{tok.last_used_at ? new Date(tok.last_used_at).toLocaleDateString() : t.auth.never}</td>
                         <td style={{ textAlign: 'right' }}>
                           <button type="button" className="btn btn-danger btn-sm" onClick={() => void handleRevokeToken(tok.id)}>
-                            Revoke
+                            {t.auth.revoke}
                           </button>
                         </td>
                       </tr>
@@ -252,9 +252,9 @@ export function AuthView() {
             </form>
 
             <form onSubmit={handleChangePassword} className="card" style={{ display: 'grid', gap: '0.6rem', alignContent: 'start' }}>
-              <strong>Change password</strong>
+              <strong>{t.auth.changePassword}</strong>
               <label htmlFor="current-password" style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
-                <span>Current password</span>
+                <span>{t.auth.currentPassword}</span>
                 <input
                   id="current-password"
                   name="current-password"
@@ -262,7 +262,7 @@ export function AuthView() {
                   type="password"
                   autoComplete="current-password"
                   enterKeyHint="next"
-                  placeholder="Current password"
+                  placeholder={t.auth.currentPassword}
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   required
@@ -270,7 +270,7 @@ export function AuthView() {
                 />
               </label>
               <label htmlFor="new-password" style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
-                <span>New password</span>
+                <span>{t.auth.newPassword}</span>
                 <input
                   id="new-password"
                   name="new-password"
@@ -278,28 +278,28 @@ export function AuthView() {
                   type="password"
                   autoComplete="new-password"
                   enterKeyHint="done"
-                  placeholder="New password (min. 8 chars)"
+                  placeholder={t.auth.passwordPlaceholder}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
                   minLength={8}
                 />
               </label>
-              <button type="submit" className="btn btn-primary btn-sm">Update password</button>
+              <button type="submit" className="btn btn-primary btn-sm">{t.auth.updatePassword}</button>
             </form>
           </div>
 
           {isAdmin && (
             <div className="card" style={{ display: 'grid', gap: '0.6rem' }}>
-              <strong>Admin — Users ({users.length})</strong>
+              <strong>{t.auth.adminUsers} ({users.length})</strong>
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>ID</th>
+                    <th>{t.common.id}</th>
                     <th>Email</th>
-                    <th>Username</th>
-                    <th>Role</th>
-                    <th>Active</th>
+                    <th>{t.auth.usernamePlaceholder}</th>
+                    <th>{t.auth.role}</th>
+                    <th>{t.auth.active}</th>
                   </tr>
                 </thead>
                 <tbody>

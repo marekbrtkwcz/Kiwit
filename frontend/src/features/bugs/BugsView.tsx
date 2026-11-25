@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react'
 import { Bug, Plus, Search, Trash2, X } from 'lucide-react'
 import { api, InternalBug } from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
+import { useI18n } from '../../i18n'
 
 export function BugsView() {
+  const { t } = useI18n()
   const { products, activeProductId, notify } = useWorkspace()
   const [bugs, setBugs] = useState<InternalBug[]>([])
   const [filterQ, setFilterQ] = useState('')
@@ -30,7 +32,7 @@ export function BugsView() {
       setBugs(res.items)
       setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load bugs')
+      setError(err instanceof Error ? err.message : t.bugs.loadFailed)
     }
   }
 
@@ -69,7 +71,7 @@ export function BugsView() {
           status,
           severity,
         })
-        notify(`Bug #${editing.id} updated`)
+        notify(`${t.bugs.updatedToast} #${editing.id}`)
       } else {
         const created = await api.createInternalBug({
           product_id: productId,
@@ -77,12 +79,12 @@ export function BugsView() {
           description: description.trim(),
           severity,
         })
-        notify(`Bug #${created.id} reported`)
+        notify(`${t.bugs.createdToast} #${created.id}`)
       }
       setDrawerOpen(false)
       await load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save bug')
+      setError(err instanceof Error ? err.message : t.bugs.saveFailed)
     }
   }
 
@@ -97,28 +99,28 @@ export function BugsView() {
           <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
           <input
             className="input"
-            placeholder="Search bugs…"
+            placeholder={t.bugs.searchPlaceholder}
             value={filterQ}
             onChange={(e) => setFilterQ(e.target.value)}
             style={{ width: '100%', paddingLeft: 30 }}
           />
         </div>
         <select className="select" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-          <option value="">All statuses</option>
+          <option value="">{t.bugs.allStatuses}</option>
           <option value="open">open</option>
           <option value="in_progress">in_progress</option>
           <option value="resolved">resolved</option>
           <option value="closed">closed</option>
         </select>
         <select className="select" value={filterSeverity} onChange={(e) => setFilterSeverity(e.target.value)}>
-          <option value="">All severities</option>
+          <option value="">{t.bugs.allSeverities}</option>
           <option value="critical">critical</option>
           <option value="high">high</option>
           <option value="medium">medium</option>
           <option value="low">low</option>
         </select>
         <button type="button" className="btn btn-primary" onClick={openNew}>
-          <Plus size={15} /> Report Bug
+          <Plus size={15} /> {t.bugs.report}
         </button>
       </div>
 
@@ -126,13 +128,13 @@ export function BugsView() {
         <table className="data-table">
           <thead>
             <tr>
-              <th style={{ width: 70 }}>ID</th>
-              <th>Summary</th>
-              <th>Product</th>
-              <th>Severity</th>
-              <th>Status</th>
-              <th>Created</th>
-              <th style={{ textAlign: 'right' }}>Actions</th>
+              <th style={{ width: 70 }}>{t.common.id}</th>
+              <th>{t.common.summary}</th>
+              <th>{t.common.product}</th>
+              <th>{t.common.severity}</th>
+              <th>{t.common.status}</th>
+              <th>{t.common.created}</th>
+              <th style={{ textAlign: 'right' }}>{t.common.actions}</th>
             </tr>
           </thead>
           <tbody>
@@ -161,10 +163,11 @@ export function BugsView() {
                     type="button"
                     className="btn btn-ghost btn-sm"
                     style={{ color: 'var(--danger)' }}
+                    title={t.common.delete}
                     onClick={async () => {
-                      if (!window.confirm(`Delete Bug #${b.id}?`)) return
+                      if (!window.confirm(`${t.bugs.confirmDelete} #${b.id}?`)) return
                       await api.deleteInternalBug(b.id)
-                      notify(`Deleted Bug #${b.id}`)
+                      notify(`${t.bugs.deletedToast} #${b.id}`)
                       await load()
                     }}
                   >
@@ -176,7 +179,7 @@ export function BugsView() {
             {bugs.length === 0 && (
               <tr>
                 <td colSpan={7} style={{ textAlign: 'center', color: 'var(--muted)', padding: '2rem' }}>
-                  No bugs reported yet.
+                  {t.bugs.empty}
                 </td>
               </tr>
             )}
@@ -188,8 +191,8 @@ export function BugsView() {
         <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)}>
           <div className="drawer-panel" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <div className="drawer-header">
-              <h3 style={{ margin: 0, fontSize: '1rem' }}>{editing ? `Bug #${editing.id}` : 'Report Bug'}</h3>
-              <button type="button" className="btn btn-ghost btn-icon" onClick={() => setDrawerOpen(false)}>
+              <h3 style={{ margin: 0, fontSize: '1rem' }}>{editing ? `${t.bugs.title} #${editing.id}` : t.bugs.report}</h3>
+              <button type="button" className="btn btn-ghost btn-icon" onClick={() => setDrawerOpen(false)} aria-label={t.common.close}>
                 <X size={17} />
               </button>
             </div>
@@ -202,7 +205,7 @@ export function BugsView() {
                     ))}
                   </select>
                 )}
-                <input className="input" placeholder="Bug summary" value={summary} onChange={(e) => setSummary(e.target.value)} required />
+                <input className="input" placeholder={t.bugs.summaryPlaceholder} value={summary} onChange={(e) => setSummary(e.target.value)} required />
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <select className="select" value={severity} onChange={(e) => setSeverity(e.target.value as InternalBug['severity'])}>
                     <option value="low">low</option>
@@ -219,9 +222,9 @@ export function BugsView() {
                     </select>
                   )}
                 </div>
-                <textarea className="textarea" rows={6} placeholder="Steps to reproduce / expected vs actual…" value={description} onChange={(e) => setDescription(e.target.value)} />
+                <textarea className="textarea" rows={6} placeholder={t.bugs.descPlaceholder} value={description} onChange={(e) => setDescription(e.target.value)} />
                 <div>
-                  <button type="submit" className="btn btn-primary">{editing ? 'Save changes' : 'Create bug'}</button>
+                  <button type="submit" className="btn btn-primary">{editing ? t.common.saveChanges : t.bugs.create}</button>
                 </div>
               </form>
             </div>

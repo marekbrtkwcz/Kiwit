@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, TagItem } from '../../api/client'
+import { useI18n } from '../../i18n'
 
 interface Props {
   entity: 'testcases' | 'testplans' | 'testruns'
@@ -7,6 +8,7 @@ interface Props {
 }
 
 export function EntityTagsBar({ entity, entityId }: Props) {
+  const { t } = useI18n()
   const [attached, setAttached] = useState<TagItem[]>([])
   const [allTags, setAllTags] = useState<TagItem[]>([])
   const [selectedTagId, setSelectedTagId] = useState<number>(0)
@@ -34,13 +36,13 @@ export function EntityTagsBar({ entity, entityId }: Props) {
       await api.attachEntityTag(entity, entityId, selectedTagId)
       await load()
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Failed to attach tag')
+      setErr(e instanceof Error ? e.message : t.tags.attachFailed)
     }
   }
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.45rem', fontSize: '0.82rem' }}>
-      <span style={{ color: 'var(--muted)' }}>Tags:</span>
+      <span style={{ color: 'var(--muted)' }}>{t.tags.label}</span>
       {attached.map((tg) => (
         <span key={tg.id} className="badge">{tg.name}</span>
       ))}
@@ -52,7 +54,7 @@ export function EntityTagsBar({ entity, entityId }: Props) {
               <option key={tg.id} value={tg.id}>{tg.name}</option>
             ))}
           </select>
-          <button type="button" className="btn btn-sm" onClick={() => void handleAttach()}>+ Tag</button>
+          <button type="button" className="btn btn-sm" onClick={() => void handleAttach()}>{t.tags.add}</button>
         </>
       )}
       {err && <span style={{ color: 'var(--danger)' }}>{err}</span>}

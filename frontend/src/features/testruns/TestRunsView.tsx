@@ -26,6 +26,7 @@ import { CommentsPanel } from '../comments/CommentsPanel'
 import { EntityTagsBar } from '../management/EntityTagsBar'
 
 function ExecutionBugsPanel({ executionId, trackers }: { executionId: number; trackers: IssueTrackerItem[] }) {
+  const { t } = useI18n()
   const { notify } = useWorkspace()
   const [bugs, setBugs] = useState<BugItem[]>([])
   const [mode, setMode] = useState<'none' | 'link' | 'report'>('none')
@@ -99,7 +100,7 @@ function ExecutionBugsPanel({ executionId, trackers }: { executionId: number; tr
     <div style={{ display: 'grid', gap: '0.45rem', fontSize: '0.82rem' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
         <span style={{ color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <Bug size={14} /> Bugs:
+          <Bug size={14} /> {t.testruns.bugsLabel}
         </span>
         {bugs.map((b) => (
           <span key={b.id} className="badge" style={{ gap: 5 }}>
@@ -128,11 +129,11 @@ function ExecutionBugsPanel({ executionId, trackers }: { executionId: number; tr
           </span>
         ))}
         <button type="button" className="btn btn-sm" onClick={() => setMode((m) => (m === 'link' ? 'none' : 'link'))}>
-          {mode === 'link' ? 'Cancel' : '+ Link bug'}
+          {mode === 'link' ? t.common.cancel : t.testruns.linkBug}
         </button>
         {trackers.length > 0 && (
           <button type="button" className="btn btn-sm" onClick={() => setMode((m) => (m === 'report' ? 'none' : 'report'))}>
-            {mode === 'report' ? 'Cancel' : '+ Report to tracker'}
+            {mode === 'report' ? t.common.cancel : t.testruns.reportToTracker}
           </button>
         )}
       </div>
@@ -168,6 +169,7 @@ function ExecutionBugsPanel({ executionId, trackers }: { executionId: number; tr
 }
 
 function ExecutionLinksPanel({ executionId }: { executionId: number }) {
+  const { t } = useI18n()
   const { notify } = useWorkspace()
   const [links, setLinks] = useState<ExecutionLinkItem[]>([])
   const [open, setOpen] = useState(false)
@@ -191,7 +193,7 @@ function ExecutionLinksPanel({ executionId }: { executionId: number }) {
     <div style={{ display: 'grid', gap: '0.4rem', fontSize: '0.82rem' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
         <span style={{ color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <Link2 size={14} /> CI / Log Links:
+          <Link2 size={14} /> {t.testruns.ciLinks}
         </span>
         {links.map((l) => (
           <span key={l.id} className="badge" style={{ gap: 5 }}>
@@ -210,7 +212,7 @@ function ExecutionLinksPanel({ executionId }: { executionId: number }) {
           </span>
         ))}
         <button type="button" className="btn btn-sm" onClick={() => setOpen((v) => !v)}>
-          {open ? 'Cancel' : '+ Add link'}
+          {open ? t.common.cancel : t.testruns.addLink}
         </button>
       </div>
       {open && (
@@ -704,7 +706,7 @@ export function TestRunsView() {
                           </button>
                         )}
                         <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate(`/cases/${activeExec.test_case_id}`)}>
-                          Open Case <ExternalLink size={13} />
+                          {t.testruns.openCase} <ExternalLink size={13} />
                         </button>
                       </div>
                     </div>

@@ -10,6 +10,7 @@ import {
   TemplateItem,
 } from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
+import { useI18n } from '../../i18n'
 
 function parseProperties(raw: string): Record<string, string> {
   const out: Record<string, string> = {}
@@ -23,6 +24,7 @@ function parseProperties(raw: string): Record<string, string> {
 }
 
 export function SettingsView() {
+  const { t } = useI18n()
   const { notify } = useWorkspace()
   const [tab, setTab] = useState<'trackers' | 'env' | 'dicts' | 'notify'>('trackers')
 
@@ -76,7 +78,7 @@ export function SettingsView() {
       setStatuses(st.items)
       setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load settings')
+      setError(err instanceof Error ? err.message : t.settings.loadFailed)
     }
   }
 
@@ -91,7 +93,7 @@ export function SettingsView() {
       notify(okMessage)
       await loadAll()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Operation failed')
+      setError(err instanceof Error ? err.message : t.settings.opFailed)
     }
   }
 
@@ -101,22 +103,22 @@ export function SettingsView() {
 
       <div className="tabs-bar" style={{ marginBottom: 0 }}>
         <button type="button" className={`tab-btn ${tab === 'trackers' ? 'active' : ''}`} onClick={() => setTab('trackers')}>
-          <Bug size={15} /> Issue Trackers ({trackers.length})
+          <Bug size={15} /> {t.settings.tabTrackers} ({trackers.length})
         </button>
         <button type="button" className={`tab-btn ${tab === 'env' ? 'active' : ''}`} onClick={() => setTab('env')}>
-          <Layers size={15} /> Environments &amp; Templates
+          <Layers size={15} /> {t.settings.tabEnv}
         </button>
         <button type="button" className={`tab-btn ${tab === 'dicts' ? 'active' : ''}`} onClick={() => setTab('dicts')}>
-          <Sliders size={15} /> Dictionaries
+          <Sliders size={15} /> {t.settings.tabDicts}
         </button>
         <button type="button" className={`tab-btn ${tab === 'notify' ? 'active' : ''}`} onClick={() => setTab('notify')}>
-          <Bell size={15} /> Notifications &amp; Email
+          <Bell size={15} /> {t.settings.tabNotify}
         </button>
       </div>
 
       {tab === 'trackers' && (
         <div className="card" style={{ display: 'grid', gap: '0.85rem' }}>
-          <h3 className="card-title">Issue Trackers (GitHub / GitLab / Jira)</h3>
+          <h3 className="card-title">{t.settings.trackersTitle}</h3>
           <form
             onSubmit={(e) => {
               e.preventDefault()
@@ -131,38 +133,38 @@ export function SettingsView() {
                 setTrackerName('')
                 setTrackerURL('')
                 setTrackerUsername('')
-              }, 'Issue tracker created.')
+              }, `${t.settings.addTracker}: OK`)
             }}
             style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}
           >
-            <input className="input" placeholder="Name (e.g. GitHub Main)" value={trackerName} onChange={(e) => setTrackerName(e.target.value)} required />
+            <input className="input" placeholder={t.settings.trackerNamePlaceholder} value={trackerName} onChange={(e) => setTrackerName(e.target.value)} required />
             <select className="select" value={trackerProvider} onChange={(e) => setTrackerProvider(e.target.value as 'github' | 'gitlab' | 'jira')}>
               <option value="github">GitHub</option>
               <option value="gitlab">GitLab</option>
               <option value="jira">Jira</option>
             </select>
             <input className="input" placeholder="https://api.github.com/repos/org/repo" value={trackerURL} onChange={(e) => setTrackerURL(e.target.value)} required style={{ flex: 1, minWidth: 220 }} />
-            <input className="input" placeholder="API Username / Email (Jira Cloud)" value={trackerUsername} onChange={(e) => setTrackerUsername(e.target.value)} style={{ minWidth: 200 }} />
-            <button type="submit" className="btn btn-primary btn-sm">Add tracker</button>
+            <input className="input" placeholder={t.settings.trackerUserPlaceholder} value={trackerUsername} onChange={(e) => setTrackerUsername(e.target.value)} style={{ minWidth: 200 }} />
+            <button type="submit" className="btn btn-primary btn-sm">{t.settings.addTracker}</button>
           </form>
           {trackers.length > 0 && (
             <div className="table-wrap">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>ID</th>
-                    <th>Name</th>
-                    <th>Provider</th>
-                    <th>Base URL</th>
+                    <th>{t.common.id}</th>
+                    <th>{t.common.name}</th>
+                    <th>{t.settings.provider}</th>
+                    <th>{t.settings.baseUrl}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {trackers.map((t) => (
-                    <tr key={t.id}>
-                      <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--muted)' }}>#{t.id}</td>
-                      <td>{t.name}</td>
-                      <td><span className="badge">{t.provider}</span></td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>{t.base_url}</td>
+                  {trackers.map((tr) => (
+                    <tr key={tr.id}>
+                      <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--muted)' }}>#{tr.id}</td>
+                      <td>{tr.name}</td>
+                      <td><span className="badge">{tr.provider}</span></td>
+                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>{tr.base_url}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -175,7 +177,7 @@ export function SettingsView() {
       {tab === 'env' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1rem' }}>
           <div className="card" style={{ display: 'grid', gap: '0.7rem', alignContent: 'start' }}>
-            <h3 className="card-title">Environments</h3>
+            <h3 className="card-title">{t.settings.environmentsTitle}</h3>
             <form
               onSubmit={(e) => {
                 e.preventDefault()
@@ -184,15 +186,15 @@ export function SettingsView() {
                   await api.createEnvironment({ name: envName.trim(), description: envDesc.trim(), properties: parseProperties(envProps) })
                   setEnvName('')
                   setEnvDesc('')
-                }, 'Environment created.')
+                }, `${t.settings.addEnvironment}: OK`)
               }}
               style={{ display: 'grid', gap: '0.45rem' }}
             >
-              <input className="input" placeholder="Name (e.g. Staging Linux)" value={envName} onChange={(e) => setEnvName(e.target.value)} required />
-              <input className="input" placeholder="Description (optional)" value={envDesc} onChange={(e) => setEnvDesc(e.target.value)} />
-              <textarea className="textarea" rows={3} placeholder="key=value (one per line)" value={envProps} onChange={(e) => setEnvProps(e.target.value)} />
+              <input className="input" placeholder={t.settings.envNamePlaceholder} value={envName} onChange={(e) => setEnvName(e.target.value)} required />
+              <input className="input" placeholder={t.settings.envDescPlaceholder} value={envDesc} onChange={(e) => setEnvDesc(e.target.value)} />
+              <textarea className="textarea" rows={3} placeholder={t.settings.envPropsPlaceholder} value={envProps} onChange={(e) => setEnvProps(e.target.value)} />
               <div>
-                <button type="submit" className="btn btn-primary btn-sm">Add environment</button>
+                <button type="submit" className="btn btn-primary btn-sm">{t.settings.addEnvironment}</button>
               </div>
             </form>
             {environments.map((env) => (
@@ -209,7 +211,7 @@ export function SettingsView() {
           </div>
 
           <div className="card" style={{ display: 'grid', gap: '0.7rem', alignContent: 'start' }}>
-            <h3 className="card-title">Test Case Templates</h3>
+            <h3 className="card-title">{t.settings.templatesTitle}</h3>
             <form
               onSubmit={(e) => {
                 e.preventDefault()
@@ -218,14 +220,14 @@ export function SettingsView() {
                   await api.createTemplate({ name: tplName.trim(), body: tplBody })
                   setTplName('')
                   setTplBody('')
-                }, 'Template created.')
+                }, `${t.settings.addTemplate}: OK`)
               }}
               style={{ display: 'grid', gap: '0.45rem' }}
             >
-              <input className="input" placeholder="Template name" value={tplName} onChange={(e) => setTplName(e.target.value)} required />
-              <textarea className="textarea" rows={4} placeholder="Template body (Markdown or Gherkin)" value={tplBody} onChange={(e) => setTplBody(e.target.value)} required />
+              <input className="input" placeholder={t.settings.tplNamePlaceholder} value={tplName} onChange={(e) => setTplName(e.target.value)} required />
+              <textarea className="textarea" rows={4} placeholder={t.settings.tplBodyPlaceholder} value={tplBody} onChange={(e) => setTplBody(e.target.value)} required />
               <div>
-                <button type="submit" className="btn btn-primary btn-sm">Add template</button>
+                <button type="submit" className="btn btn-primary btn-sm">{t.settings.addTemplate}</button>
               </div>
             </form>
             {templates.map((tpl) => (
@@ -241,7 +243,7 @@ export function SettingsView() {
       {tab === 'dicts' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1rem' }}>
           <div className="card" style={{ display: 'grid', gap: '0.65rem', alignContent: 'start' }}>
-            <h3 className="card-title">Priorities</h3>
+            <h3 className="card-title">{t.settings.prioritiesTitle}</h3>
             <form
               onSubmit={(e) => {
                 e.preventDefault()
@@ -249,12 +251,12 @@ export function SettingsView() {
                 void runAction(async () => {
                   await api.createPriority(newPriority.trim())
                   setNewPriority('')
-                }, 'Priority added.')
+                }, `${t.settings.prioritiesTitle}: OK`)
               }}
               style={{ display: 'flex', gap: '0.4rem' }}
             >
-              <input className="input" placeholder="e.g. P0 / Blocker" value={newPriority} onChange={(e) => setNewPriority(e.target.value)} style={{ flex: 1 }} required />
-              <button type="submit" className="btn btn-primary btn-sm">Add</button>
+              <input className="input" placeholder={t.settings.priorityPlaceholder} value={newPriority} onChange={(e) => setNewPriority(e.target.value)} style={{ flex: 1 }} required />
+              <button type="submit" className="btn btn-primary btn-sm">{t.common.add}</button>
             </form>
             <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
               {priorities.map((p) => (
@@ -264,7 +266,7 @@ export function SettingsView() {
           </div>
 
           <div className="card" style={{ display: 'grid', gap: '0.65rem', alignContent: 'start' }}>
-            <h3 className="card-title">Execution Statuses</h3>
+            <h3 className="card-title">{t.settings.statusesTitle}</h3>
             <form
               onSubmit={(e) => {
                 e.preventDefault()
@@ -272,14 +274,14 @@ export function SettingsView() {
                 void runAction(async () => {
                   await api.createExecutionStatus({ name: newStatusName.trim(), color: newStatusColor, weight: newStatusWeight })
                   setNewStatusName('')
-                }, 'Execution status added.')
+                }, `${t.settings.statusesTitle}: OK`)
               }}
               style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}
             >
-              <input className="input" placeholder="Status name" value={newStatusName} onChange={(e) => setNewStatusName(e.target.value)} style={{ flex: 1 }} required />
+              <input className="input" placeholder={t.settings.statusPlaceholder} value={newStatusName} onChange={(e) => setNewStatusName(e.target.value)} style={{ flex: 1 }} required />
               <input type="color" value={newStatusColor} onChange={(e) => setNewStatusColor(e.target.value)} style={{ width: 38, height: 34, padding: 2, border: '1px solid var(--border-strong)', borderRadius: 6 }} />
-              <input className="input" type="number" value={newStatusWeight} onChange={(e) => setNewStatusWeight(Number(e.target.value))} style={{ width: 72 }} placeholder="Weight" />
-              <button type="submit" className="btn btn-primary btn-sm">Add</button>
+              <input className="input" type="number" value={newStatusWeight} onChange={(e) => setNewStatusWeight(Number(e.target.value))} style={{ width: 72 }} placeholder={t.settings.weightPlaceholder} />
+              <button type="submit" className="btn btn-primary btn-sm">{t.common.add}</button>
             </form>
             <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
               {statuses.map((s) => (
@@ -305,12 +307,12 @@ export function SettingsView() {
                   notify_on_update: emailNotify,
                   cc_list: cc,
                 })
-              }, `Saved email settings for ${emailEntityType} #${emailEntityId}.`)
+              }, `${t.settings.saveEmailSettings}: OK`)
             }}
             className="card"
             style={{ display: 'grid', gap: '0.6rem', alignContent: 'start' }}
           >
-            <h3 className="card-title">Entity CC List</h3>
+            <h3 className="card-title">{t.settings.ccListTitle}</h3>
             <div style={{ display: 'flex', gap: '0.4rem' }}>
               <select className="select" value={emailEntityType} onChange={(e) => setEmailEntityType(e.target.value as 'test_case' | 'test_plan')}>
                 <option value="test_case">test_case</option>
@@ -325,22 +327,22 @@ export function SettingsView() {
                     const res: EmailSettingsItem = await api.getEmailSettings(emailEntityType, emailEntityId)
                     setEmailNotify(res.notify_on_update)
                     setEmailCC(res.cc_list.join(', '))
-                    notify(`Loaded settings for ${emailEntityType} #${emailEntityId}`)
+                    notify(`${t.common.load}: #${emailEntityId}`)
                   } catch (err) {
-                    setError(err instanceof Error ? err.message : 'Failed to load email settings')
+                    setError(err instanceof Error ? err.message : t.settings.loadFailed)
                   }
                 }}
               >
-                Load
+                {t.common.load}
               </button>
             </div>
             <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.84rem' }}>
               <input type="checkbox" checked={emailNotify} onChange={(e) => setEmailNotify(e.target.checked)} />
-              Notify on update
+              {t.settings.notifyOnUpdate}
             </label>
             <input className="input" placeholder="qa@example.com, lead@example.com" value={emailCC} onChange={(e) => setEmailCC(e.target.value)} />
             <div>
-              <button type="submit" className="btn btn-primary btn-sm">Save email settings</button>
+              <button type="submit" className="btn btn-primary btn-sm">{t.settings.saveEmailSettings}</button>
             </div>
           </form>
 
@@ -349,15 +351,15 @@ export function SettingsView() {
               e.preventDefault()
               void runAction(async () => {
                 await api.sendTestWebhook(webhookMsg)
-              }, 'Test webhook sent.')
+              }, `${t.settings.sendWebhook}: OK`)
             }}
             className="card"
             style={{ display: 'grid', gap: '0.6rem', alignContent: 'start' }}
           >
-            <h3 className="card-title">Test Webhook (Slack / Teams)</h3>
+            <h3 className="card-title">{t.settings.webhookTitle}</h3>
             <input className="input" value={webhookMsg} onChange={(e) => setWebhookMsg(e.target.value)} required />
             <div>
-              <button type="submit" className="btn btn-sm">Send test webhook</button>
+              <button type="submit" className="btn btn-sm">{t.settings.sendWebhook}</button>
             </div>
           </form>
 
@@ -368,17 +370,17 @@ export function SettingsView() {
               if (recipients.length === 0) return
               void runAction(async () => {
                 await api.sendTestEmail({ to: recipients, subject: testEmailSubject, body: testEmailBody })
-              }, 'Test SMTP email sent.')
+              }, `${t.settings.sendEmail}: OK`)
             }}
             className="card"
             style={{ display: 'grid', gap: '0.6rem', alignContent: 'start' }}
           >
-            <h3 className="card-title">Test SMTP Email</h3>
-            <input className="input" placeholder="Recipient email(s), comma-separated" value={testEmailTo} onChange={(e) => setTestEmailTo(e.target.value)} required />
-            <input className="input" placeholder="Subject" value={testEmailSubject} onChange={(e) => setTestEmailSubject(e.target.value)} required />
-            <input className="input" placeholder="Body" value={testEmailBody} onChange={(e) => setTestEmailBody(e.target.value)} required />
+            <h3 className="card-title">{t.settings.smtpTitle}</h3>
+            <input className="input" placeholder={t.settings.smtpRecipientsPlaceholder} value={testEmailTo} onChange={(e) => setTestEmailTo(e.target.value)} required />
+            <input className="input" placeholder={t.settings.smtpSubjectPlaceholder} value={testEmailSubject} onChange={(e) => setTestEmailSubject(e.target.value)} required />
+            <input className="input" placeholder={t.settings.smtpBodyPlaceholder} value={testEmailBody} onChange={(e) => setTestEmailBody(e.target.value)} required />
             <div>
-              <button type="submit" className="btn btn-sm">Send test email</button>
+              <button type="submit" className="btn btn-sm">{t.settings.sendEmail}</button>
             </div>
           </form>
         </div>

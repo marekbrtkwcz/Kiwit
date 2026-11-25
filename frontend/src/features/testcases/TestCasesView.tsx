@@ -361,25 +361,25 @@ export function TestCasesView() {
       {/* Bulk action bar */}
       {selectedIds.length > 0 && (
         <div className="filter-bar" style={{ background: 'var(--primary-soft)', borderColor: 'var(--primary)' }}>
-          <strong>{selectedIds.length} selected</strong>
+          <strong>{selectedIds.length} {t.common.selected}</strong>
           <select className="select" value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)}>
-            <option value="">Status…</option>
+            <option value="">{t.common.status}…</option>
             <option value="draft">draft</option>
             <option value="confirmed">confirmed</option>
             <option value="disabled">disabled</option>
           </select>
           <select className="select" value={bulkPriority} onChange={(e) => setBulkPriority(e.target.value)}>
-            <option value="">Priority…</option>
+            <option value="">{t.common.priority}…</option>
             <option value="low">low</option>
             <option value="medium">medium</option>
             <option value="high">high</option>
             <option value="critical">critical</option>
           </select>
           <button type="button" className="btn btn-primary btn-sm" onClick={() => void handleBulkUpdate()} disabled={!bulkStatus && !bulkPriority}>
-            Apply bulk
+            {t.testcases.applyBulk}
           </button>
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelectedIds([])}>
-            Clear
+            {t.common.clear}
           </button>
         </div>
       )}
@@ -396,13 +396,13 @@ export function TestCasesView() {
                   onChange={(e) => setSelectedIds(e.target.checked ? cases.map((c) => c.id) : [])}
                 />
               </th>
-              <th style={{ width: 70 }}>ID</th>
-              <th>Summary</th>
-              <th>Product / Category</th>
-              <th>Priority</th>
-              <th>Status</th>
-              <th>Type</th>
-              <th style={{ textAlign: 'right' }}>Actions</th>
+              <th style={{ width: 70 }}>{t.common.id}</th>
+              <th>{t.common.summary}</th>
+              <th>{t.testcases.productCategory}</th>
+              <th>{t.common.priority}</th>
+              <th>{t.common.status}</th>
+              <th>{t.common.type}</th>
+              <th style={{ textAlign: 'right' }}>{t.common.actions}</th>
             </tr>
           </thead>
           <tbody>
@@ -544,10 +544,10 @@ export function TestCasesView() {
             {editingId !== null && (
               <div className="tabs-bar" style={{ padding: '0 1.25rem', marginBottom: 0 }}>
                 <button type="button" className={`tab-btn ${drawerTab === 'details' ? 'active' : ''}`} onClick={() => setDrawerTab('details')}>
-                  Details
+                  {t.common.details}
                 </button>
                 <button type="button" className={`tab-btn ${drawerTab === 'comments' ? 'active' : ''}`} onClick={() => setDrawerTab('comments')}>
-                  <MessageSquare size={14} /> Comments
+                  <MessageSquare size={14} /> {t.common.comments}
                 </button>
                 <button type="button" className={`tab-btn ${drawerTab === 'attachments' ? 'active' : ''}`} onClick={() => setDrawerTab('attachments')}>
                   <Paperclip size={14} /> {t.attachments.title}
