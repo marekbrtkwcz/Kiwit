@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/kiwit/kiwit/internal/auth"
 )
 
 func RegisterRoutes(api huma.API, client *WebhookClient) {
@@ -23,6 +24,9 @@ func RegisterRoutes(api huma.API, client *WebhookClient) {
 			Sent bool `json:"sent"`
 		}
 	}, error) {
+		if err := auth.CheckRole(ctx, "admin"); err != nil {
+			return nil, err
+		}
 		if !client.Enabled() {
 			return nil, huma.Error400BadRequest("KIWIT_WEBHOOK_URL is not configured")
 		}

@@ -24,11 +24,14 @@ func TestSQLiteTestCaseRepository(t *testing.T) {
 	tcRepo := testcase.NewSQLiteRepository(sqlDB)
 
 	created, err := tcRepo.Create(ctx, testcase.UpsertParams{
-		ProductID: prod.ID,
-		Summary:   "User can log in",
-		Format:    "steps",
-		Priority:  "high",
-		Status:    "confirmed",
+		ProductID:   prod.ID,
+		Summary:     "User can log in",
+		Format:      "steps",
+		Priority:    "high",
+		Status:      "confirmed",
+		IsAutomated: true,
+		Script:      "tests/login.spec.ts",
+		Arguments:   "--headed",
 		Steps: []testcase.Step{
 			{Position: 1, Action: "Open /login", ExpectedResult: "Login form visible"},
 			{Position: 2, Action: "Submit credentials", ExpectedResult: "Redirect to dashboard"},
@@ -36,25 +39,38 @@ func TestSQLiteTestCaseRepository(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, created.Steps, 2)
+	require.True(t, created.IsAutomated)
+	require.Equal(t, "tests/login.spec.ts", created.Script)
 
 	updated, err := tcRepo.Update(ctx, created.ID, testcase.UpsertParams{
-		ProductID: prod.ID,
-		Summary:   "User can log in (updated)",
-		Format:    "steps",
-		Priority:  "critical",
-		Status:    "confirmed",
+		ProductID:   prod.ID,
+		Summary:     "User can log in (updated)",
+		Format:      "steps",
+		Priority:    "critical",
+		Status:      "confirmed",
+		IsAutomated: true,
+		Script:      "tests/login.spec.ts",
+		Arguments:   "--headless",
 		Steps: []testcase.Step{
 			{Position: 1, Action: "Open /login", ExpectedResult: "Login form visible"},
 		},
 	})
 	require.NoError(t, err)
 	require.Equal(t, "User can log in (updated)", updated.Summary)
+	require.Equal(t, created.CreatedAt.UTC().Unix(), updated.CreatedAt.UTC().Unix())
+	require.Equal(t, "--headless", updated.Arguments)
 	require.Len(t, updated.Steps, 1)
 
-	list, err := tcRepo.List(ctx)
+	filtered, total, err := tcRepo.ListFiltered(ctx, "updated", "critical", 10, 0)
 	require.NoError(t, err)
-	require.Len(t, list, 1)
-	require.Len(t, list[0].Steps, 1)
+	require.Equal(t, int64(1), total)
+	require.Len(t, filtered, 1)
+	require.Len(t, filtered[0].Steps, 1)
+
+	cloned, err := tcRepo.Clone(ctx, created.ID, "")
+	require.NoError(t, err)
+	require.Equal(t, "User can log in (updated) (copy)", cloned.Summary)
+	require.Len(t, cloned.Steps, 1)
 
 	revs, err := tcRepo.ListRevisions(ctx, created.ID)
 	require.NoError(t, err)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/kiwit/kiwit/internal/auth"
 )
 
 type Template struct {
@@ -78,6 +79,9 @@ func RegisterTemplateRoutes(api huma.API, db *sql.DB, pgPool *pgxpool.Pool) {
 			Body string `json:"body" minLength:"1"`
 		}
 	}) (*struct{ Body Template }, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
 		now := time.Now().UTC()
 		var id int64
 		if pgPool != nil {

@@ -4,10 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/kiwit/kiwit/internal/auth"
+	"github.com/kiwit/kiwit/internal/notify"
 )
 
 type TestPlan struct {
@@ -25,6 +28,7 @@ type CreateTestPlanInput struct {
 	Body struct {
 		ProductID   int64  `json:"product_id"`
 		VersionID   int64  `json:"version_id"`
+		ParentID    *int64 `json:"parent_id,omitempty"`
 		Name        string `json:"name" minLength:"1" maxLength:"255"`
 		Description string `json:"description,omitempty"`
 	}
@@ -55,7 +59,7 @@ type AddCasesOutput struct {
 }
 
 // RegisterRoutes registers TestPlan OpenAPI endpoints.
-func RegisterRoutes(api huma.API, repo Repository) {
+func RegisterRoutes(api huma.API, repo Repository, emailSettings *notify.SettingsStore, emailClient *notify.EmailClient) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-testplans",
 		Method:      http.MethodGet,
@@ -79,11 +83,40 @@ func RegisterRoutes(api huma.API, repo Repository) {
 		Summary:     "Create test plan",
 		Tags:        []string{"TestPlans"},
 	}, func(ctx context.Context, input *CreateTestPlanInput) (*TestPlanOutput, error) {
-		tp, err := repo.Create(ctx, input.Body.ProductID, input.Body.VersionID, input.Body.Name, input.Body.Description)
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
+		tp, err := repo.Create(ctx, input.Body.ProductID, input.Body.VersionID, input.Body.ParentID, input.Body.Name, input.Body.Description)
 		if err != nil {
 			return nil, huma.Error400BadRequest("failed to create test plan", err)
 		}
 		return &TestPlanOutput{Body: tp}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "list-testplan-cases",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/testplans/{id}/cases",
+		Summary:     "List test cases attached to a test plan",
+		Tags:        []string{"TestPlans"},
+	}, func(ctx context.Context, input *struct {
+		ID int64 `path:"id"`
+	}) (*struct {
+		Body struct {
+			Items []PlanCase `json:"items"`
+		}
+	}, error) {
+		items, err := repo.ListCases(ctx, input.ID)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to list plan cases", err)
+		}
+		out := &struct {
+			Body struct {
+				Items []PlanCase `json:"items"`
+			}
+		}{}
+		out.Body.Items = items
+		return out, nil
 	})
 
 	huma.Register(api, huma.Operation{
@@ -93,9 +126,16 @@ func RegisterRoutes(api huma.API, repo Repository) {
 		Summary:     "Attach test cases to a test plan",
 		Tags:        []string{"TestPlans"},
 	}, func(ctx context.Context, input *AddCasesInput) (*AddCasesOutput, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
 		if err := repo.AddCases(ctx, input.ID, input.Body.CaseIDs); err != nil {
 			return nil, huma.Error400BadRequest("failed to attach cases", err)
 		}
+		emailSettings.NotifyIfEnabled(emailClient, "test_plan", input.ID,
+			fmt.Sprintf("[Kiwit] TestPlan #%d updated", input.ID),
+			fmt.Sprintf("%d test case(s) attached to TestPlan #%d.", len(input.Body.CaseIDs), input.ID),
+		)
 		out := &AddCasesOutput{}
 		out.Body.PlanID = input.ID
 		out.Body.Added = len(input.Body.CaseIDs)
@@ -115,6 +155,9 @@ func RegisterRoutes(api huma.API, repo Repository) {
 			VersionID *int64 `json:"version_id,omitempty"`
 		}
 	}) (*TestPlanOutput, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
 		tp, err := repo.Clone(ctx, input.ID, input.Body.Name, input.Body.VersionID)
 		if err != nil {
 			return nil, huma.Error400BadRequest("failed to clone test plan", err)
@@ -131,6 +174,9 @@ func RegisterRoutes(api huma.API, repo Repository) {
 	}, func(ctx context.Context, input *struct {
 		ID int64 `path:"id"`
 	}) (*struct{}, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
 		if err := repo.Delete(ctx, input.ID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, huma.Error404NotFound("test plan not found")

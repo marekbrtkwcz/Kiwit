@@ -19,7 +19,7 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 
 func (r *PostgresRepository) List(ctx context.Context) ([]TestPlan, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, product_id, version_id, name, description, is_active, created_at
+		SELECT id, product_id, version_id, parent_id, name, description, is_active, created_at
 		FROM test_plans ORDER BY id ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("query test plans: %w", err)
@@ -29,28 +29,55 @@ func (r *PostgresRepository) List(ctx context.Context) ([]TestPlan, error) {
 	items := make([]TestPlan, 0)
 	for rows.Next() {
 		var tp TestPlan
-		if err := rows.Scan(&tp.ID, &tp.ProductID, &tp.VersionID, &tp.Name, &tp.Description, &tp.IsActive, &tp.CreatedAt); err != nil {
+		var parentID sql.NullInt64
+		if err := rows.Scan(&tp.ID, &tp.ProductID, &tp.VersionID, &parentID, &tp.Name, &tp.Description, &tp.IsActive, &tp.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan test plan: %w", err)
+		}
+		if parentID.Valid {
+			tp.ParentID = &parentID.Int64
 		}
 		items = append(items, tp)
 	}
 	return items, rows.Err()
 }
 
-func (r *PostgresRepository) Create(ctx context.Context, productID, versionID int64, name, description string) (TestPlan, error) {
+func (r *PostgresRepository) Create(ctx context.Context, productID, versionID int64, parentID *int64, name, description string) (TestPlan, error) {
 	now := time.Now().UTC()
 	var id int64
 	err := r.pool.QueryRow(ctx, `
-		INSERT INTO test_plans (product_id, version_id, name, description, is_active, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, TRUE, $5, $6) RETURNING id`,
-		productID, versionID, name, description, now, now,
+		INSERT INTO test_plans (product_id, version_id, parent_id, name, description, is_active, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, TRUE, $6, $7) RETURNING id`,
+		productID, versionID, parentID, name, description, now, now,
 	).Scan(&id)
 	if err != nil {
 		return TestPlan{}, fmt.Errorf("insert test plan: %w", err)
 	}
 	return TestPlan{
-		ID: id, ProductID: productID, VersionID: versionID, Name: name, Description: description, IsActive: true, CreatedAt: now,
+		ID: id, ProductID: productID, VersionID: versionID, ParentID: parentID, Name: name, Description: description, IsActive: true, CreatedAt: now,
 	}, nil
+}
+
+func (r *PostgresRepository) ListCases(ctx context.Context, planID int64) ([]PlanCase, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT tpc.test_case_id, tpc.position, tc.summary, tc.priority, tc.status
+		FROM test_plan_cases tpc
+		JOIN test_cases tc ON tc.id = tpc.test_case_id
+		WHERE tpc.test_plan_id = $1
+		ORDER BY tpc.position ASC, tpc.test_case_id ASC`, planID)
+	if err != nil {
+		return nil, fmt.Errorf("query plan cases: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]PlanCase, 0)
+	for rows.Next() {
+		var pc PlanCase
+		if err := rows.Scan(&pc.TestCaseID, &pc.Position, &pc.Summary, &pc.Priority, &pc.Status); err != nil {
+			return nil, fmt.Errorf("scan plan case: %w", err)
+		}
+		items = append(items, pc)
+	}
+	return items, rows.Err()
 }
 
 func (r *PostgresRepository) AddCases(ctx context.Context, planID int64, caseIDs []int64) error {
@@ -78,21 +105,26 @@ func (r *PostgresRepository) Clone(ctx context.Context, sourcePlanID int64, newN
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	var productID, versionID int64
+	var parentID sql.NullInt64
 	var desc string
-	err = tx.QueryRow(ctx, `SELECT product_id, version_id, description FROM test_plans WHERE id = $1`, sourcePlanID).
-		Scan(&productID, &versionID, &desc)
+	err = tx.QueryRow(ctx, `SELECT product_id, version_id, parent_id, description FROM test_plans WHERE id = $1`, sourcePlanID).
+		Scan(&productID, &versionID, &parentID, &desc)
 	if err != nil {
 		return TestPlan{}, fmt.Errorf("load source plan: %w", err)
 	}
 	if newVersionID != nil {
 		versionID = *newVersionID
 	}
+	var parentPtr *int64
+	if parentID.Valid {
+		parentPtr = &parentID.Int64
+	}
 
 	now := time.Now().UTC()
 	var newID int64
 	err = tx.QueryRow(ctx, `
-		INSERT INTO test_plans (product_id, version_id, name, description, is_active, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, TRUE, $5, $6) RETURNING id`, productID, versionID, newName, desc, now, now).Scan(&newID)
+		INSERT INTO test_plans (product_id, version_id, parent_id, name, description, is_active, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, TRUE, $6, $7) RETURNING id`, productID, versionID, parentPtr, newName, desc, now, now).Scan(&newID)
 	if err != nil {
 		return TestPlan{}, fmt.Errorf("insert cloned plan: %w", err)
 	}
@@ -107,7 +139,7 @@ func (r *PostgresRepository) Clone(ctx context.Context, sourcePlanID int64, newN
 		return TestPlan{}, fmt.Errorf("commit tx: %w", err)
 	}
 	return TestPlan{
-		ID: newID, ProductID: productID, VersionID: versionID, Name: newName, Description: desc, IsActive: true, CreatedAt: now,
+		ID: newID, ProductID: productID, VersionID: versionID, ParentID: parentPtr, Name: newName, Description: desc, IsActive: true, CreatedAt: now,
 	}, nil
 }
 

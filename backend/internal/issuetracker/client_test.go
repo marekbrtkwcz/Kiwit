@@ -22,7 +22,7 @@ func TestReportIssueProviders(t *testing.T) {
 	}))
 	t.Cleanup(ghSrv.Close)
 
-	ghRes, err := issuetracker.ReportIssue(ctx, issuetracker.Tracker{Provider: "github", BaseURL: ghSrv.URL}, "gh-tok", "", "Bug title", "desc")
+	ghRes, err := issuetracker.ReportIssueWithClient(ctx, ghSrv.Client(), issuetracker.Tracker{Provider: "github", BaseURL: ghSrv.URL}, "gh-tok", "", "Bug title", "desc")
 	require.NoError(t, err)
 	require.Equal(t, "#99", ghRes.ExternalKey)
 
@@ -32,7 +32,13 @@ func TestReportIssueProviders(t *testing.T) {
 	}))
 	t.Cleanup(jiraSrv.Close)
 
-	jiraRes, err := issuetracker.ReportIssue(ctx, issuetracker.Tracker{Provider: "jira", BaseURL: jiraSrv.URL}, "j-tok", "QA", "Bug title", "desc")
+	jiraRes, err := issuetracker.ReportIssueWithClient(ctx, jiraSrv.Client(), issuetracker.Tracker{Provider: "jira", BaseURL: jiraSrv.URL}, "j-tok", "QA", "Bug title", "desc")
 	require.NoError(t, err)
 	require.Equal(t, "QA-12", jiraRes.ExternalKey)
+
+	// SSRF protection rejects loopback and metadata URLs
+	_, err = issuetracker.ReportIssue(ctx, issuetracker.Tracker{Provider: "github", BaseURL: "http://127.0.0.1:8080"}, "tok", "", "t", "b")
+	require.Error(t, err)
+	_, err = issuetracker.ReportIssue(ctx, issuetracker.Tracker{Provider: "github", BaseURL: "http://169.254.169.254/latest"}, "tok", "", "t", "b")
+	require.Error(t, err)
 }

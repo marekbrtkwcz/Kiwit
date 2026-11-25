@@ -28,6 +28,7 @@ type Bug struct {
 
 type Repository interface {
 	ListTrackers(ctx context.Context) ([]Tracker, error)
+	GetTrackerByID(ctx context.Context, id int64) (Tracker, error)
 	CreateTracker(ctx context.Context, name, provider, baseURL string) (Tracker, error)
 	ListBugsByExecution(ctx context.Context, executionID int64) ([]Bug, error)
 	LinkBug(ctx context.Context, executionID int64, trackerID *int64, externalKey, url, title string) (Bug, error)
@@ -57,6 +58,16 @@ func (r *SQLiteRepository) ListTrackers(ctx context.Context) ([]Tracker, error) 
 		items = append(items, t)
 	}
 	return items, rows.Err()
+}
+
+func (r *SQLiteRepository) GetTrackerByID(ctx context.Context, id int64) (Tracker, error) {
+	var t Tracker
+	err := r.db.QueryRowContext(ctx, `SELECT id, name, provider, base_url, created_at FROM issue_trackers WHERE id = ?`, id).
+		Scan(&t.ID, &t.Name, &t.Provider, &t.BaseURL, &t.CreatedAt)
+	if err != nil {
+		return Tracker{}, err
+	}
+	return t, nil
 }
 
 func (r *SQLiteRepository) CreateTracker(ctx context.Context, name, provider, baseURL string) (Tracker, error) {

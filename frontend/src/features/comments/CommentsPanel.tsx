@@ -9,11 +9,13 @@ interface Props {
 export function CommentsPanel({ entityType, entityId }: Props) {
   const [items, setItems] = useState<CommentItem[]>([])
   const [body, setBody] = useState('')
+  const [error, setError] = useState<string | null>(null)
 
   const load = async () => {
     try {
       const res = await api.listComments(entityType, entityId)
       setItems(res.items)
+      setError(null)
     } catch {
       // Ignore when unauthenticated
     }
@@ -26,13 +28,19 @@ export function CommentsPanel({ entityType, entityId }: Props) {
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!body.trim()) return
-    await api.createComment(entityType, entityId, body.trim())
-    setBody('')
-    await load()
+    try {
+      await api.createComment(entityType, entityId, body.trim())
+      setBody('')
+      setError(null)
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to post comment')
+    }
   }
 
   return (
     <div style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>
+      {error && <div style={{ color: '#b91c1c', marginBottom: '0.25rem' }}>{error}</div>}
       <form onSubmit={handleAdd} style={{ display: 'flex', gap: '0.35rem' }}>
         <input
           placeholder="Comment..."

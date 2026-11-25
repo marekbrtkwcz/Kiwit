@@ -7,10 +7,20 @@ import (
 	"time"
 )
 
+// PlanCase represents a test case attached to a test plan.
+type PlanCase struct {
+	TestCaseID int64  `json:"test_case_id"`
+	Position   int    `json:"position"`
+	Summary    string `json:"summary"`
+	Priority   string `json:"priority"`
+	Status     string `json:"status"`
+}
+
 // Repository defines persistence operations for test plans.
 type Repository interface {
 	List(ctx context.Context) ([]TestPlan, error)
-	Create(ctx context.Context, productID, versionID int64, name, description string) (TestPlan, error)
+	Create(ctx context.Context, productID, versionID int64, parentID *int64, name, description string) (TestPlan, error)
+	ListCases(ctx context.Context, planID int64) ([]PlanCase, error)
 	AddCases(ctx context.Context, planID int64, caseIDs []int64) error
 	Clone(ctx context.Context, sourcePlanID int64, newName string, newVersionID *int64) (TestPlan, error)
 	Delete(ctx context.Context, id int64) error
@@ -28,7 +38,7 @@ func NewSQLiteRepository(db *sql.DB) *SQLiteRepository {
 
 func (r *SQLiteRepository) List(ctx context.Context) ([]TestPlan, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, product_id, version_id, name, description, is_active, created_at
+		SELECT id, product_id, version_id, parent_id, name, description, is_active, created_at
 		FROM test_plans
 		ORDER BY id ASC`)
 	if err != nil {
@@ -39,9 +49,13 @@ func (r *SQLiteRepository) List(ctx context.Context) ([]TestPlan, error) {
 	items := make([]TestPlan, 0)
 	for rows.Next() {
 		var tp TestPlan
+		var parentID sql.NullInt64
 		var active int
-		if err := rows.Scan(&tp.ID, &tp.ProductID, &tp.VersionID, &tp.Name, &tp.Description, &active, &tp.CreatedAt); err != nil {
+		if err := rows.Scan(&tp.ID, &tp.ProductID, &tp.VersionID, &parentID, &tp.Name, &tp.Description, &active, &tp.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan test plan: %w", err)
+		}
+		if parentID.Valid {
+			tp.ParentID = &parentID.Int64
 		}
 		tp.IsActive = active == 1
 		items = append(items, tp)
@@ -49,12 +63,12 @@ func (r *SQLiteRepository) List(ctx context.Context) ([]TestPlan, error) {
 	return items, rows.Err()
 }
 
-func (r *SQLiteRepository) Create(ctx context.Context, productID, versionID int64, name, description string) (TestPlan, error) {
+func (r *SQLiteRepository) Create(ctx context.Context, productID, versionID int64, parentID *int64, name, description string) (TestPlan, error) {
 	now := time.Now().UTC()
 	res, err := r.db.ExecContext(ctx, `
-		INSERT INTO test_plans (product_id, version_id, name, description, is_active, created_at, updated_at)
-		VALUES (?, ?, ?, ?, 1, ?, ?)`,
-		productID, versionID, name, description, now, now,
+		INSERT INTO test_plans (product_id, version_id, parent_id, name, description, is_active, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
+		productID, versionID, parentID, name, description, now, now,
 	)
 	if err != nil {
 		return TestPlan{}, fmt.Errorf("insert test plan: %w", err)
@@ -67,11 +81,35 @@ func (r *SQLiteRepository) Create(ctx context.Context, productID, versionID int6
 		ID:          id,
 		ProductID:   productID,
 		VersionID:   versionID,
+		ParentID:    parentID,
 		Name:        name,
 		Description: description,
 		IsActive:    true,
 		CreatedAt:   now,
 	}, nil
+}
+
+func (r *SQLiteRepository) ListCases(ctx context.Context, planID int64) ([]PlanCase, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT tpc.test_case_id, tpc.position, tc.summary, tc.priority, tc.status
+		FROM test_plan_cases tpc
+		JOIN test_cases tc ON tc.id = tpc.test_case_id
+		WHERE tpc.test_plan_id = ?
+		ORDER BY tpc.position ASC, tpc.test_case_id ASC`, planID)
+	if err != nil {
+		return nil, fmt.Errorf("query plan cases: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	items := make([]PlanCase, 0)
+	for rows.Next() {
+		var pc PlanCase
+		if err := rows.Scan(&pc.TestCaseID, &pc.Position, &pc.Summary, &pc.Priority, &pc.Status); err != nil {
+			return nil, fmt.Errorf("scan plan case: %w", err)
+		}
+		items = append(items, pc)
+	}
+	return items, rows.Err()
 }
 
 func (r *SQLiteRepository) AddCases(ctx context.Context, planID int64, caseIDs []int64) error {
@@ -101,20 +139,25 @@ func (r *SQLiteRepository) Clone(ctx context.Context, sourcePlanID int64, newNam
 	defer func() { _ = tx.Rollback() }()
 
 	var productID, versionID int64
+	var parentID sql.NullInt64
 	var desc string
-	err = tx.QueryRowContext(ctx, `SELECT product_id, version_id, description FROM test_plans WHERE id = ?`, sourcePlanID).
-		Scan(&productID, &versionID, &desc)
+	err = tx.QueryRowContext(ctx, `SELECT product_id, version_id, parent_id, description FROM test_plans WHERE id = ?`, sourcePlanID).
+		Scan(&productID, &versionID, &parentID, &desc)
 	if err != nil {
 		return TestPlan{}, fmt.Errorf("load source plan: %w", err)
 	}
 	if newVersionID != nil {
 		versionID = *newVersionID
 	}
+	var parentPtr *int64
+	if parentID.Valid {
+		parentPtr = &parentID.Int64
+	}
 
 	now := time.Now().UTC()
 	res, err := tx.ExecContext(ctx, `
-		INSERT INTO test_plans (product_id, version_id, name, description, is_active, created_at, updated_at)
-		VALUES (?, ?, ?, ?, 1, ?, ?)`, productID, versionID, newName, desc, now, now)
+		INSERT INTO test_plans (product_id, version_id, parent_id, name, description, is_active, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, 1, ?, ?)`, productID, versionID, parentPtr, newName, desc, now, now)
 	if err != nil {
 		return TestPlan{}, fmt.Errorf("insert cloned plan: %w", err)
 	}
@@ -133,7 +176,7 @@ func (r *SQLiteRepository) Clone(ctx context.Context, sourcePlanID int64, newNam
 		return TestPlan{}, fmt.Errorf("commit tx: %w", err)
 	}
 	return TestPlan{
-		ID: newID, ProductID: productID, VersionID: versionID, Name: newName, Description: desc, IsActive: true, CreatedAt: now,
+		ID: newID, ProductID: productID, VersionID: versionID, ParentID: parentPtr, Name: newName, Description: desc, IsActive: true, CreatedAt: now,
 	}, nil
 }
 

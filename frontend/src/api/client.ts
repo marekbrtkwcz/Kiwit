@@ -26,6 +26,9 @@ export interface TestCase {
   gherkin_body?: string
   priority: 'low' | 'medium' | 'high' | 'critical'
   status: 'draft' | 'confirmed' | 'disabled'
+  is_automated?: boolean
+  script?: string
+  arguments?: string
   steps: TestStep[]
   created_at: string
   updated_at: string
@@ -42,7 +45,7 @@ export function setAuthToken(token: string | null) {
   else localStorage.removeItem(TOKEN_KEY)
 }
 
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
+export async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const token = getAuthToken()
   const res = await fetch(url, {
     headers: {
@@ -56,7 +59,39 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     const text = await res.text()
     throw new Error(text || `HTTP ${res.status}`)
   }
-  return res.json() as Promise<T>
+  if (res.status === 204 || res.headers.get('content-length') === '0') {
+    return undefined as T
+  }
+  const text = await res.text()
+  if (!text) {
+    return undefined as T
+  }
+  return JSON.parse(text) as T
+}
+
+export async function downloadAuthenticated(url: string, filename: string, openInNewTab = false): Promise<void> {
+  const token = getAuthToken()
+  const res = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(text || `HTTP ${res.status}`)
+  }
+  const blob = await res.blob()
+  const blobUrl = URL.createObjectURL(blob)
+  if (openInNewTab) {
+    window.open(blobUrl, '_blank', 'noopener,noreferrer')
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000)
+    return
+  }
+  const a = document.createElement('a')
+  a.href = blobUrl
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(blobUrl)
 }
 
 export interface Version {
@@ -76,10 +111,19 @@ export interface TestPlan {
   id: number
   product_id: number
   version_id: number
+  parent_id?: number
   name: string
   description?: string
   is_active: boolean
   created_at: string
+}
+
+export interface PlanCaseItem {
+  test_case_id: number
+  position: number
+  summary: string
+  priority: string
+  status: string
 }
 
 export interface TestRun {
@@ -105,6 +149,15 @@ export interface User {
   email: string
   username: string
   role: string
+  is_active?: boolean
+  created_at?: string
+}
+
+export interface ApiTokenInfo {
+  id: number
+  name: string
+  created_at: string
+  last_used_at?: string
 }
 
 export interface AttachmentItem {
@@ -129,6 +182,27 @@ export interface TelemetrySummary {
     skipped: number
     idle: number
   }
+}
+
+export interface TrendPoint {
+  date: string
+  status: string
+  count: number
+}
+
+export interface MatrixRow {
+  test_case_id: number
+  summary: string
+  status: string
+  count: number
+}
+
+export interface CaseHealth {
+  test_case_id: number
+  summary: string
+  total: number
+  failed: number
+  fail_rate: number
 }
 
 export interface BugItem {
@@ -169,6 +243,49 @@ export interface TagItem {
   name: string
 }
 
+export interface IssueTrackerItem {
+  id: number
+  name: string
+  provider: 'github' | 'gitlab' | 'jira'
+  base_url: string
+  created_at: string
+}
+
+export interface EnvironmentItem {
+  id: number
+  name: string
+  description?: string
+  properties: Record<string, string>
+  created_at: string
+}
+
+export interface TemplateItem {
+  id: number
+  name: string
+  body: string
+  created_at: string
+}
+
+export interface PriorityItem {
+  id: number
+  value: string
+  is_active: boolean
+}
+
+export interface ExecutionStatusItem {
+  id: number
+  name: string
+  color: string
+  weight: number
+}
+
+export interface EmailSettingsItem {
+  entity_type: 'test_case' | 'test_plan'
+  entity_id: number
+  notify_on_update: boolean
+  cc_list: string[]
+}
+
 export const api = {
   register: (body: { email: string; username: string; password: string }) =>
     request<User>('/api/v1/auth/register', { method: 'POST', body: JSON.stringify(body) }),
@@ -182,6 +299,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ name }),
     }),
+  listApiTokens: () => request<{ items: ApiTokenInfo[] }>('/api/v1/auth/tokens'),
+  revokeApiToken: (id: number) => request<void>(`/api/v1/auth/tokens/${id}`, { method: 'DELETE' }),
+  changePassword: (body: { current_password: string; new_password: string }) =>
+    request<{ ok: boolean }>('/api/v1/auth/change-password', { method: 'POST', body: JSON.stringify(body) }),
+  listUsers: () => request<{ items: User[] }>('/api/v1/admin/users'),
+  updateUser: (id: number, body: { role: 'viewer' | 'tester' | 'admin'; is_active: boolean }) =>
+    request<User>(`/api/v1/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   listProducts: () => request<{ items: Product[] }>('/api/v1/products'),
   createProduct: (body: { name: string; description?: string }) =>
     request<Product>('/api/v1/products', { method: 'POST', body: JSON.stringify(body) }),
@@ -195,21 +319,29 @@ export const api = {
   createCategory: (name: string) =>
     request<Category>('/api/v1/categories', { method: 'POST', body: JSON.stringify({ name }) }),
 
-  listTestCases: (params?: { q?: string; priority?: string }) => {
+  listTestCases: (params?: { q?: string; priority?: string; limit?: number; offset?: number }) => {
     const qs = new URLSearchParams()
     if (params?.q) qs.set('q', params.q)
     if (params?.priority) qs.set('priority', params.priority)
+    if (params?.limit !== undefined) qs.set('limit', String(params.limit))
+    if (params?.offset !== undefined) qs.set('offset', String(params.offset))
     const suffix = qs.toString() ? `?${qs.toString()}` : ''
-    return request<{ items: TestCase[] }>(`/api/v1/testcases${suffix}`)
+    return request<{ items: TestCase[]; total?: number }>(`/api/v1/testcases${suffix}`)
   },
   createTestCase: (body: Omit<TestCase, 'id' | 'created_at' | 'updated_at'>) =>
     request<TestCase>('/api/v1/testcases', { method: 'POST', body: JSON.stringify(body) }),
   updateTestCase: (id: number, body: Omit<TestCase, 'id' | 'created_at' | 'updated_at'>) =>
     request<TestCase>(`/api/v1/testcases/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  cloneTestCase: (id: number, summary?: string) =>
+    request<TestCase>(`/api/v1/testcases/${id}/clone`, { method: 'POST', body: JSON.stringify({ summary: summary || '' }) }),
+  bulkUpdateTestCases: (body: { ids: number[]; status?: string; priority?: string }) =>
+    request<{ updated: number }>('/api/v1/testcases/bulk', { method: 'PATCH', body: JSON.stringify(body) }),
 
   listTestPlans: () => request<{ items: TestPlan[] }>('/api/v1/testplans'),
-  createTestPlan: (body: { product_id: number; version_id: number; name: string; description?: string }) =>
+  listTestPlanCases: (planId: number) => request<{ items: PlanCaseItem[] }>(`/api/v1/testplans/${planId}/cases`),
+  createTestPlan: (body: { product_id: number; version_id: number; parent_id?: number; name: string; description?: string }) =>
     request<TestPlan>('/api/v1/testplans', { method: 'POST', body: JSON.stringify(body) }),
+  deleteTestPlan: (id: number) => request<void>(`/api/v1/testplans/${id}`, { method: 'DELETE' }),
   addTestPlanCases: (planId: number, caseIds: number[]) =>
     request<{ plan_id: number; added: number }>(`/api/v1/testplans/${planId}/cases`, {
       method: 'POST',
@@ -221,18 +353,33 @@ export const api = {
       body: JSON.stringify({ name }),
     }),
 
-  listTestRuns: () => request<{ items: TestRun[] }>('/api/v1/testruns'),
+  listTestRuns: () => request<{ items: TestRun[]; total?: number }>('/api/v1/testruns'),
   createTestRun: (body: { test_plan_id: number; build_id: number; summary: string; notes?: string }) =>
     request<TestRun>('/api/v1/testruns', { method: 'POST', body: JSON.stringify(body) }),
   stopTestRun: (runId: number) =>
     request<{ stopped: boolean }>(`/api/v1/testruns/${runId}/stop`, { method: 'POST' }),
+  deleteTestRun: (runId: number) =>
+    request<void>(`/api/v1/testruns/${runId}`, { method: 'DELETE' }),
+  downloadRunExport: (runId: number, format: 'csv' | 'html') =>
+    downloadAuthenticated(
+      `/api/v1/testruns/${runId}/export?format=${format}`,
+      `testrun-${runId}.${format}`,
+      format === 'html',
+    ),
   listExecutions: (runId: number) => request<{ items: TestExecution[] }>(`/api/v1/testruns/${runId}/executions`),
   updateExecution: (id: number, body: { status: TestExecution['status']; comment?: string }) =>
     request<{ id: number; status: string; comment?: string }>(`/api/v1/executions/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
 
   listAttachments: (entityType: 'test_case' | 'test_execution', entityId: number) =>
     request<{ items: AttachmentItem[] }>(`/api/v1/attachments?entity_type=${entityType}&entity_id=${entityId}`),
+  downloadAttachment: (id: number, filename: string) =>
+    downloadAuthenticated(`/api/v1/attachments/${id}/download`, filename),
+  deleteAttachment: (id: number) =>
+    request<void>(`/api/v1/attachments/${id}`, { method: 'DELETE' }),
   getTelemetrySummary: () => request<TelemetrySummary>('/api/v1/telemetry/summary'),
+  getExecutionTrends: () => request<{ items: TrendPoint[] }>('/api/v1/telemetry/execution-trends'),
+  getStatusMatrix: () => request<{ items: MatrixRow[] }>('/api/v1/telemetry/status-matrix'),
+  getTestCaseHealth: () => request<{ items: CaseHealth[] }>('/api/v1/telemetry/test-case-health'),
   uploadAttachment: async (entityType: 'test_case' | 'test_execution', entityId: number, file: File) => {
     const form = new FormData()
     form.append('entity_type', entityType)
@@ -277,6 +424,58 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ name, description }),
     }),
+  addProductMember: (productId: number, body: { user_id: number; role: 'viewer' | 'tester' | 'maintainer' }) =>
+    request<{ ok: boolean }>(`/api/v1/products/${productId}/members`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   listTags: () => request<{ items: TagItem[] }>('/api/v1/tags'),
   createTag: (name: string) => request<TagItem>('/api/v1/tags', { method: 'POST', body: JSON.stringify({ name }) }),
+  listEntityTags: (entity: 'testcases' | 'testplans' | 'testruns', id: number) =>
+    request<{ items: TagItem[] }>(`/api/v1/${entity}/${id}/tags`),
+  attachEntityTag: (entity: 'testcases' | 'testplans' | 'testruns', id: number, tagId: number) =>
+    request<{ ok: boolean }>(`/api/v1/${entity}/${id}/tags`, {
+      method: 'POST',
+      body: JSON.stringify({ tag_id: tagId }),
+    }),
+  listTestCaseComponents: (caseId: number) =>
+    request<{ items: ComponentItem[] }>(`/api/v1/testcases/${caseId}/components`),
+  attachTestCaseComponent: (caseId: number, componentId: number) =>
+    request<{ ok: boolean }>(`/api/v1/testcases/${caseId}/components`, {
+      method: 'POST',
+      body: JSON.stringify({ component_id: componentId }),
+    }),
+
+  listIssueTrackers: () => request<{ items: IssueTrackerItem[] }>('/api/v1/issue-trackers'),
+  createIssueTracker: (body: { name: string; provider: 'github' | 'gitlab' | 'jira'; base_url: string }) =>
+    request<IssueTrackerItem>('/api/v1/issue-trackers', { method: 'POST', body: JSON.stringify(body) }),
+  reportExecutionBug: (
+    executionId: number,
+    body: { tracker_id: number; api_token?: string; project_key?: string; title: string; body?: string },
+  ) => request<BugItem>(`/api/v1/executions/${executionId}/bugs/report`, { method: 'POST', body: JSON.stringify(body) }),
+
+  listEnvironments: () => request<{ items: EnvironmentItem[] }>('/api/v1/environments'),
+  createEnvironment: (body: { name: string; description?: string; properties?: Record<string, string> }) =>
+    request<EnvironmentItem>('/api/v1/environments', { method: 'POST', body: JSON.stringify(body) }),
+
+  listTemplates: () => request<{ items: TemplateItem[] }>('/api/v1/templates'),
+  createTemplate: (body: { name: string; body: string }) =>
+    request<TemplateItem>('/api/v1/templates', { method: 'POST', body: JSON.stringify(body) }),
+
+  listPriorities: () => request<{ items: PriorityItem[] }>('/api/v1/priorities'),
+  createPriority: (value: string) =>
+    request<PriorityItem>('/api/v1/priorities', { method: 'POST', body: JSON.stringify({ value }) }),
+
+  listExecutionStatuses: () => request<{ items: ExecutionStatusItem[] }>('/api/v1/execution-statuses'),
+  createExecutionStatus: (body: { name: string; color?: string; weight?: number }) =>
+    request<ExecutionStatusItem>('/api/v1/execution-statuses', { method: 'POST', body: JSON.stringify(body) }),
+
+  getEmailSettings: (entityType: 'test_case' | 'test_plan', entityId: number) =>
+    request<EmailSettingsItem>(`/api/v1/email-settings?entity_type=${entityType}&entity_id=${entityId}`),
+  upsertEmailSettings: (body: EmailSettingsItem) =>
+    request<EmailSettingsItem>('/api/v1/email-settings', { method: 'PUT', body: JSON.stringify(body) }),
+  sendTestWebhook: (message: string) =>
+    request<{ sent: boolean }>('/api/v1/notifications/test', { method: 'POST', body: JSON.stringify({ message }) }),
+  sendTestEmail: (body: { to: string[]; subject: string; body: string }) =>
+    request<{ sent: boolean }>('/api/v1/notifications/email-test', { method: 'POST', body: JSON.stringify(body) }),
 }

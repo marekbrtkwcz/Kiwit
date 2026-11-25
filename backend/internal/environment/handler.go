@@ -10,6 +10,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/kiwit/kiwit/internal/auth"
 )
 
 type Environment struct {
@@ -67,6 +68,9 @@ func RegisterRoutes(api huma.API, s *Store) {
 			Properties  map[string]string `json:"properties,omitempty"`
 		}
 	}) (*struct{ Body Environment }, error) {
+		if err := auth.CheckRole(ctx, "admin"); err != nil {
+			return nil, err
+		}
 		env, err := s.create(ctx, input.Body.Name, input.Body.Description, input.Body.Properties)
 		if err != nil {
 			return nil, huma.Error409Conflict("failed to create environment", err)

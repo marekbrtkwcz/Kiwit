@@ -174,9 +174,8 @@ type CaseHealth struct {
 
 func queryTrends(ctx context.Context, db *sql.DB, pgPool *pgxpool.Pool) ([]TrendPoint, error) {
 	items := make([]TrendPoint, 0)
-	q := `SELECT CAST(created_at AS DATE) AS d, status, COUNT(*) FROM test_executions GROUP BY d, status ORDER BY d ASC`
 	if pgPool != nil {
-		rows, err := pgPool.Query(ctx, q)
+		rows, err := pgPool.Query(ctx, `SELECT TO_CHAR(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS d, status, COUNT(*) FROM test_executions GROUP BY d, status ORDER BY d ASC`)
 		if err != nil {
 			return nil, err
 		}

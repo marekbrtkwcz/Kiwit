@@ -51,10 +51,36 @@ export function AttachmentsPanel({ entityType, entityId }: Props) {
       {items.length > 0 && (
         <ul style={{ listStyle: 'none', padding: 0, margin: '0.25rem 0 0', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
           {items.map((a) => (
-            <li key={a.id}>
-              <a href={`/api/v1/attachments/${a.id}/download`} style={{ color: '#111827' }}>
+            <li key={a.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await api.downloadAttachment(a.id, a.filename)
+                    setError(null)
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : t.errors.uploadAttachment)
+                  }
+                }}
+                style={{ background: 'none', border: 'none', padding: 0, color: '#111827', textDecoration: 'underline', cursor: 'pointer', fontSize: 'inherit' }}
+              >
                 {a.filename} ({Math.ceil(a.size_bytes / 1024)} KB)
-              </a>
+              </button>
+              <button
+                type="button"
+                aria-label={`Delete ${a.filename}`}
+                onClick={async () => {
+                  try {
+                    await api.deleteAttachment(a.id)
+                    await load()
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : t.errors.uploadAttachment)
+                  }
+                }}
+                style={{ background: 'none', border: 'none', padding: '0 0.2rem', color: '#b91c1c', cursor: 'pointer', fontSize: '0.85rem' }}
+              >
+                ×
+              </button>
             </li>
           ))}
         </ul>

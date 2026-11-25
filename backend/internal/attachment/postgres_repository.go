@@ -2,6 +2,7 @@ package attachment
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -57,4 +58,32 @@ func (r *PostgresRepository) GetByID(ctx context.Context, id int64) (Attachment,
 		FROM attachments WHERE id = $1`, id,
 	).Scan(&a.ID, &a.EntityType, &a.EntityID, &a.Filename, &a.ContentType, &a.SizeBytes, &a.StoragePath, &a.CreatedAt)
 	return a, err
+}
+
+func (r *PostgresRepository) Delete(ctx context.Context, id int64) error {
+	tag, err := r.pool.Exec(ctx, `DELETE FROM attachments WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func (r *PostgresRepository) EntityExists(ctx context.Context, entityType string, entityID int64) (bool, error) {
+	var q string
+	switch entityType {
+	case "test_case":
+		q = `SELECT COUNT(*) FROM test_cases WHERE id = $1`
+	case "test_execution":
+		q = `SELECT COUNT(*) FROM test_executions WHERE id = $1`
+	default:
+		return false, nil
+	}
+	var count int
+	if err := r.pool.QueryRow(ctx, q, entityID).Scan(&count); err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }

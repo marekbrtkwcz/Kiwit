@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { api, TestExecution, TestPlan, TestRun } from '../../api/client'
+import { api, BugItem, Build, IssueTrackerItem, TestExecution, TestPlan, TestRun } from '../../api/client'
 import { useI18n } from '../../i18n'
 import { AttachmentsPanel } from '../attachments/AttachmentsPanel'
 import { CommentsPanel } from '../comments/CommentsPanel'
+import { EntityTagsBar } from '../management/EntityTagsBar'
 
 const STATUSES: TestExecution['status'][] = ['passed', 'failed', 'blocked', 'skipped']
 
@@ -15,21 +16,147 @@ const STATUS_COLORS: Record<string, string> = {
   running: '#2563eb',
 }
 
+function ExecutionBugsPanel({ executionId, trackers }: { executionId: number; trackers: IssueTrackerItem[] }) {
+  const [bugs, setBugs] = useState<BugItem[]>([])
+  const [mode, setMode] = useState<'none' | 'link' | 'report'>('none')
+  const [key, setKey] = useState('')
+  const [url, setUrl] = useState('')
+  const [title, setTitle] = useState('')
+  const [trackerId, setTrackerId] = useState<number>(trackers[0]?.id ?? 0)
+  const [projectKey, setProjectKey] = useState('')
+  const [apiToken, setApiToken] = useState('')
+  const [reportBody, setReportBody] = useState('')
+  const [err, setErr] = useState<string | null>(null)
+
+  const load = async () => {
+    try {
+      const res = await api.listExecutionBugs(executionId)
+      setBugs(res.items)
+    } catch {
+      // Ignore when unauthenticated
+    }
+  }
+
+  useEffect(() => {
+    void load()
+  }, [executionId])
+
+  useEffect(() => {
+    if (!trackerId && trackers.length > 0) setTrackerId(trackers[0].id)
+  }, [trackers, trackerId])
+
+  const handleLink = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!key.trim() || !url.trim()) return
+    try {
+      await api.linkExecutionBug(executionId, { external_key: key.trim(), url: url.trim(), title: title.trim() })
+      setKey('')
+      setUrl('')
+      setTitle('')
+      setMode('none')
+      setErr(null)
+      await load()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Failed to link bug')
+    }
+  }
+
+  const handleReport = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!trackerId || !title.trim()) return
+    try {
+      await api.reportExecutionBug(executionId, {
+        tracker_id: trackerId,
+        project_key: projectKey.trim() || undefined,
+        api_token: apiToken.trim() || undefined,
+        title: title.trim(),
+        body: reportBody.trim() || undefined,
+      })
+      setTitle('')
+      setReportBody('')
+      setApiToken('')
+      setMode('none')
+      setErr(null)
+      await load()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Failed to report bug')
+    }
+  }
+
+  return (
+    <div style={{ marginTop: '0.4rem', fontSize: '0.82rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+        <span style={{ color: 'var(--muted)' }}>Bugs:</span>
+        {bugs.map((b) => (
+          <a key={b.id} href={b.url} target="_blank" rel="noreferrer" className="badge" style={{ textDecoration: 'none' }}>
+            {b.external_key}{b.title ? `: ${b.title}` : ''}
+          </a>
+        ))}
+        <button type="button" className="btn btn-sm" onClick={() => setMode((m) => (m === 'link' ? 'none' : 'link'))}>
+          {mode === 'link' ? 'Cancel' : '+ Link bug'}
+        </button>
+        {trackers.length > 0 && (
+          <button type="button" className="btn btn-sm" onClick={() => setMode((m) => (m === 'report' ? 'none' : 'report'))}>
+            {mode === 'report' ? 'Cancel' : '+ Report to tracker'}
+          </button>
+        )}
+      </div>
+      {err && <div style={{ color: 'var(--danger)' }}>{err}</div>}
+      {mode === 'link' && (
+        <form onSubmit={handleLink} style={{ display: 'flex', gap: '0.35rem', marginTop: '0.35rem', flexWrap: 'wrap' }}>
+          <input className="input" placeholder="Key (e.g. PROJ-12)" value={key} onChange={(e) => setKey(e.target.value)} required style={{ width: 120 }} />
+          <input className="input" placeholder="https://..." value={url} onChange={(e) => setUrl(e.target.value)} required style={{ flex: 1, minWidth: 180 }} />
+          <input className="input" placeholder="Title (optional)" value={title} onChange={(e) => setTitle(e.target.value)} style={{ width: 160 }} />
+          <button type="submit" className="btn btn-primary btn-sm">Link</button>
+        </form>
+      )}
+      {mode === 'report' && (
+        <form onSubmit={handleReport} style={{ display: 'grid', gap: '0.35rem', marginTop: '0.35rem' }}>
+          <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+            <select className="select" value={trackerId} onChange={(e) => setTrackerId(Number(e.target.value))}>
+              {trackers.map((tr) => (
+                <option key={tr.id} value={tr.id}>{tr.name} ({tr.provider})</option>
+              ))}
+            </select>
+            <input className="input" placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} required style={{ flex: 1, minWidth: 160 }} />
+            <input className="input" placeholder="Project key (Jira)" value={projectKey} onChange={(e) => setProjectKey(e.target.value)} style={{ width: 130 }} />
+            <input className="input" type="password" placeholder="API token (optional)" value={apiToken} onChange={(e) => setApiToken(e.target.value)} style={{ width: 150 }} />
+          </div>
+          <div style={{ display: 'flex', gap: '0.35rem' }}>
+            <input className="input" placeholder="Description (optional)" value={reportBody} onChange={(e) => setReportBody(e.target.value)} style={{ flex: 1 }} />
+            <button type="submit" className="btn btn-primary btn-sm">Create issue</button>
+          </div>
+        </form>
+      )}
+    </div>
+  )
+}
+
 export function TestRunsView() {
   const { t } = useI18n()
   const [plans, setPlans] = useState<TestPlan[]>([])
+  const [builds, setBuilds] = useState<Build[]>([])
   const [runs, setRuns] = useState<TestRun[]>([])
+  const [trackers, setTrackers] = useState<IssueTrackerItem[]>([])
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null)
   const [executions, setExecutions] = useState<TestExecution[]>([])
   const [planId, setPlanId] = useState<number>(0)
-  const [buildId, setBuildId] = useState<number>(1)
+  const [buildId, setBuildId] = useState<number>(0)
   const [summary, setSummary] = useState('')
+  const [showJUnit, setShowJUnit] = useState(false)
+  const [junitXML, setJunitXML] = useState('')
+  const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const loadRuns = async () => {
     try {
-      const [tpRes, trRes] = await Promise.all([api.listTestPlans(), api.listTestRuns()])
+      const [tpRes, trRes, itRes] = await Promise.all([
+        api.listTestPlans(),
+        api.listTestRuns(),
+        api.listIssueTrackers().catch(() => ({ items: [] as IssueTrackerItem[] })),
+      ])
       setPlans(tpRes.items)
+      setTrackers(itRes.items)
       if (tpRes.items.length > 0 && !planId) setPlanId(tpRes.items[0].id)
       setRuns(trRes.items)
       if (trRes.items.length > 0 && selectedRunId === null) {
@@ -46,17 +173,61 @@ export function TestRunsView() {
   }, [])
 
   useEffect(() => {
-    if (selectedRunId === null) return
-    void api.listExecutions(selectedRunId).then((res) => setExecutions(res.items)).catch(() => {})
+    const plan = plans.find((p) => p.id === planId)
+    if (!plan) {
+      setBuilds([])
+      setBuildId(0)
+      return
+    }
+    void api
+      .listBuilds(plan.version_id)
+      .then((res) => {
+        setBuilds(res.items)
+        setBuildId(res.items.length > 0 ? res.items[0].id : 0)
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : t.errors.loadTestRuns))
+  }, [planId, plans])
+
+  useEffect(() => {
+    if (selectedRunId === null) {
+      setExecutions([])
+      return
+    }
+    void api
+      .listExecutions(selectedRunId)
+      .then((res) => setExecutions(res.items))
+      .catch((e) => setError(e instanceof Error ? e.message : t.errors.loadTestRuns))
   }, [selectedRunId])
 
   const handleCreateRun = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!summary.trim() || !planId) return
+    if (!summary.trim() || !planId || !buildId) return
     try {
       const created = await api.createTestRun({ test_plan_id: planId, build_id: buildId, summary: summary.trim() })
       setSummary('')
       setSelectedRunId(created.id)
+      setNotice(null)
+      await loadRuns()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.errors.createTestRun)
+    }
+  }
+
+  const handleImportJUnit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!planId || !buildId || !junitXML.trim()) return
+    try {
+      const res = await api.importJUnitXML({
+        test_plan_id: planId,
+        build_id: buildId,
+        summary: summary.trim() || `JUnit Import (${new Date().toLocaleDateString()})`,
+        xml: junitXML,
+      })
+      setJunitXML('')
+      setShowJUnit(false)
+      setSelectedRunId(res.test_run.id)
+      setNotice(`Imported ${res.results.length} JUnit test case result(s) into Run #${res.test_run.id}.`)
+      setError(null)
       await loadRuns()
     } catch (err) {
       setError(err instanceof Error ? err.message : t.errors.createTestRun)
@@ -72,80 +243,149 @@ export function TestRunsView() {
     }
   }
 
+  const handleExport = async (format: 'csv' | 'html') => {
+    if (selectedRunId === null) return
+    try {
+      await api.downloadRunExport(selectedRunId, format)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.errors.loadTestRuns)
+    }
+  }
+
   return (
     <section>
       <h2>{t.testruns.title}</h2>
-      {error && <p style={{ color: '#b91c1c' }}>{error}</p>}
+      {error && <p className="alert-error">{error}</p>}
+      {notice && <p className="alert-ok">{notice}</p>}
 
-      <form onSubmit={handleCreateRun} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-        <select value={planId} onChange={(e) => setPlanId(Number(e.target.value))} style={{ padding: '0.4rem', borderRadius: 6, border: '1px solid #d1d5db' }}>
+      <form onSubmit={handleCreateRun} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+        <select className="select" value={planId} onChange={(e) => setPlanId(Number(e.target.value))}>
           {plans.map((tp) => (
             <option key={tp.id} value={tp.id}>{tp.name}</option>
           ))}
         </select>
-        <input
-          type="number"
-          min={1}
-          value={buildId}
-          onChange={(e) => setBuildId(Number(e.target.value))}
-          placeholder="Build ID"
-          style={{ width: 90, padding: '0.4rem', borderRadius: 6, border: '1px solid #d1d5db' }}
-        />
-        <input
-          placeholder={t.testruns.summaryPlaceholder}
-          value={summary}
-          onChange={(e) => setSummary(e.target.value)}
-          style={{ flex: 1, padding: '0.4rem 0.6rem', borderRadius: 6, border: '1px solid #d1d5db' }}
-        />
-        <button type="submit" disabled={!planId} style={{ padding: '0.4rem 0.9rem', borderRadius: 6, background: '#111827', color: '#fff', border: 'none', cursor: 'pointer' }}>
-          {t.testruns.create}
+        <select className="select" value={buildId} onChange={(e) => setBuildId(Number(e.target.value))}>
+          {builds.length === 0 && <option value={0}>No builds</option>}
+          {builds.map((b) => (
+            <option key={b.id} value={b.id}>{b.name} (#{b.id})</option>
+          ))}
+        </select>
+        <input className="input" placeholder={t.testruns.summaryPlaceholder} value={summary} onChange={(e) => setSummary(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
+        <button type="submit" disabled={!planId || !buildId} className="btn btn-primary">{t.testruns.create}</button>
+        <button type="button" className="btn" onClick={() => setShowJUnit((v) => !v)}>
+          {showJUnit ? 'Hide JUnit' : 'Import JUnit XML'}
         </button>
       </form>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: '1rem' }}>
+      {showJUnit && (
+        <form onSubmit={handleImportJUnit} className="card" style={{ marginBottom: '1rem', display: 'grid', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <strong>Import JUnit XML</strong>
+            <input
+              type="file"
+              accept=".xml,text/xml,application/xml"
+              onChange={async (e) => {
+                const f = e.target.files?.[0]
+                if (f) setJunitXML(await f.text())
+              }}
+            />
+          </div>
+          <textarea
+            className="textarea"
+            rows={5}
+            placeholder='<testsuite name="suite"><testcase name="Login works"/></testsuite>'
+            value={junitXML}
+            onChange={(e) => setJunitXML(e.target.value)}
+            required
+          />
+          <div>
+            <button type="submit" className="btn btn-primary btn-sm" disabled={!planId || !buildId || !junitXML.trim()}>
+              Run JUnit Import
+            </button>
+          </div>
+        </form>
+      )}
+
+      <div className="runs-layout">
         <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: '0.4rem', alignContent: 'start' }}>
           {runs.map((r) => (
             <li
               key={r.id}
+              className="card"
               onClick={() => setSelectedRunId(r.id)}
               style={{
-                padding: '0.6rem',
-                borderRadius: 8,
-                border: selectedRunId === r.id ? '2px solid #111827' : '1px solid #e5e7eb',
+                padding: '0.65rem',
+                border: selectedRunId === r.id ? '2px solid var(--primary)' : undefined,
                 cursor: 'pointer',
               }}
             >
-              <strong>{r.summary}</strong>
-              <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>Plan #{r.test_plan_id} · Build #{r.build_id}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <strong>{r.summary}</strong>
+                <button
+                  type="button"
+                  className="btn btn-danger btn-sm"
+                  onClick={async (e) => {
+                    e.stopPropagation()
+                    if (!window.confirm(`Delete TestRun #${r.id}?`)) return
+                    try {
+                      await api.deleteTestRun(r.id)
+                      if (selectedRunId === r.id) setSelectedRunId(null)
+                      await loadRuns()
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : t.errors.loadTestRuns)
+                    }
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>Plan #{r.test_plan_id} · Build #{r.build_id}</div>
             </li>
           ))}
-          {runs.length === 0 && <li style={{ color: '#6b7280' }}>{t.testruns.emptyRuns}</li>}
+          {runs.length === 0 && <li style={{ color: 'var(--muted)' }}>{t.testruns.emptyRuns}</li>}
         </ul>
 
-        <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '0.75rem' }}>
+        <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
             <h3 style={{ margin: 0 }}>{t.testruns.executions}</h3>
             {selectedRunId !== null && (
-              <div style={{ display: 'flex', gap: '0.4rem', fontSize: '0.85rem' }}>
-                <button type="button" onClick={() => void api.stopTestRun(selectedRunId)} style={{ padding: '0.25rem 0.5rem', border: '1px solid #d1d5db', borderRadius: 4, background: '#fff', cursor: 'pointer' }}>Stop</button>
-                <a href={`/api/v1/testruns/${selectedRunId}/export?format=csv`} style={{ padding: '0.25rem 0.5rem', border: '1px solid #d1d5db', borderRadius: 4, textDecoration: 'none', color: '#111827' }}>CSV</a>
-                <a href={`/api/v1/testruns/${selectedRunId}/export?format=html`} target="_blank" rel="noreferrer" style={{ padding: '0.25rem 0.5rem', border: '1px solid #d1d5db', borderRadius: 4, textDecoration: 'none', color: '#111827' }}>HTML</a>
+              <div style={{ display: 'flex', gap: '0.4rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={async () => {
+                    try {
+                      await api.stopTestRun(selectedRunId)
+                      setNotice(`TestRun #${selectedRunId} stopped.`)
+                      setError(null)
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : t.errors.updateStatus)
+                    }
+                  }}
+                >
+                  Stop
+                </button>
+                <button type="button" className="btn btn-sm" onClick={() => void handleExport('csv')}>CSV</button>
+                <button type="button" className="btn btn-sm" onClick={() => void handleExport('html')}>HTML</button>
               </div>
             )}
           </div>
-          {executions.length === 0 && <p style={{ color: '#6b7280' }}>{t.testruns.emptyExecutions}</p>}
-          <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: '0.5rem' }}>
+          {selectedRunId !== null && <EntityTagsBar entity="testruns" entityId={selectedRunId} />}
+          {executions.length === 0 && <p style={{ color: 'var(--muted)' }}>{t.testruns.emptyExecutions}</p>}
+          <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: '0.6rem' }}>
             {executions.map((ex) => (
-              <li key={ex.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem', border: '1px solid #f3f4f6', borderRadius: 6 }}>
-                <div>
+              <li key={ex.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem', padding: '0.6rem', border: '1px solid var(--border)', borderRadius: 6 }}>
+                <div style={{ flex: 1 }}>
                   <strong>{ex.summary}</strong>
-                  <span style={{ marginLeft: '0.5rem', fontSize: '0.8rem', color: STATUS_COLORS[ex.status] ?? '#111827', fontWeight: 600 }}>
+                  <span style={{ marginLeft: '0.5rem', fontSize: '0.8rem', color: STATUS_COLORS[ex.status] ?? 'var(--text)', fontWeight: 600 }}>
                     {ex.status.toUpperCase()}
                   </span>
+                  <ExecutionBugsPanel executionId={ex.id} trackers={trackers} />
                   <AttachmentsPanel entityType="test_execution" entityId={ex.id} />
                   <CommentsPanel entityType="test_execution" entityId={ex.id} />
                 </div>
-                <div style={{ display: 'flex', gap: '0.25rem' }}>
+                <div style={{ display: 'flex', gap: '0.25rem', flexShrink: 0 }}>
                   {STATUSES.map((st) => (
                     <button
                       key={st}
@@ -154,9 +394,9 @@ export function TestRunsView() {
                       style={{
                         padding: '0.25rem 0.5rem',
                         borderRadius: 4,
-                        border: '1px solid #d1d5db',
+                        border: '1px solid var(--border-strong)',
                         background: ex.status === st ? STATUS_COLORS[st] : '#fff',
-                        color: ex.status === st ? '#fff' : '#111827',
+                        color: ex.status === st ? '#fff' : 'var(--text)',
                         cursor: 'pointer',
                         fontSize: '0.8rem',
                       }}

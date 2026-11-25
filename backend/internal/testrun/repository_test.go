@@ -48,7 +48,7 @@ func TestSQLiteTestRunAndExecutionFlow(t *testing.T) {
 	require.NoError(t, err)
 
 	tpRepo := testplan.NewSQLiteRepository(sqlDB)
-	tp, err := tpRepo.Create(ctx, prod.ID, versionID, "Release 1.0", "")
+	tp, err := tpRepo.Create(ctx, prod.ID, versionID, nil, "Release 1.0", "")
 	require.NoError(t, err)
 	require.NoError(t, tpRepo.AddCases(ctx, tp.ID, []int64{tc.ID}))
 

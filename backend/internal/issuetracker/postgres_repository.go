@@ -3,9 +3,11 @@ package issuetracker
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -33,6 +35,19 @@ func (r *PostgresRepository) ListTrackers(ctx context.Context) ([]Tracker, error
 		items = append(items, t)
 	}
 	return items, rows.Err()
+}
+
+func (r *PostgresRepository) GetTrackerByID(ctx context.Context, id int64) (Tracker, error) {
+	var t Tracker
+	err := r.pool.QueryRow(ctx, `SELECT id, name, provider, base_url, created_at FROM issue_trackers WHERE id = $1`, id).
+		Scan(&t.ID, &t.Name, &t.Provider, &t.BaseURL, &t.CreatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Tracker{}, sql.ErrNoRows
+		}
+		return Tracker{}, err
+	}
+	return t, nil
 }
 
 func (r *PostgresRepository) CreateTracker(ctx context.Context, name, provider, baseURL string) (Tracker, error) {

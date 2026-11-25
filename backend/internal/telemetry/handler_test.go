@@ -40,7 +40,7 @@ func TestTelemetryEndpoints(t *testing.T) {
 	require.NoError(t, err)
 
 	tpRepo := testplan.NewSQLiteRepository(sqlDB)
-	tp, err := tpRepo.Create(ctx, prod.ID, ver.ID, "Plan", "")
+	tp, err := tpRepo.Create(ctx, prod.ID, ver.ID, nil, "Plan", "")
 	require.NoError(t, err)
 	require.NoError(t, tpRepo.AddCases(ctx, tp.ID, []int64{tc.ID}))
 

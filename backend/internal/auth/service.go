@@ -20,6 +20,7 @@ import (
 var (
 	ErrInvalidCredentials = errors.New("invalid email or password")
 	ErrUnauthorized       = errors.New("unauthorized")
+	ErrRegistrationClosed = errors.New("registration is disabled")
 )
 
 type User struct {
@@ -29,18 +30,40 @@ type User struct {
 	Role     string `json:"role"`
 }
 
+type UserSummary struct {
+	ID        int64     `json:"id"`
+	Email     string    `json:"email"`
+	Username  string    `json:"username"`
+	Role      string    `json:"role"`
+	IsActive  bool      `json:"is_active"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type APITokenInfo struct {
+	ID         int64      `json:"id"`
+	Name       string     `json:"name"`
+	CreatedAt  time.Time  `json:"created_at"`
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+}
+
 type Service struct {
-	db        *sql.DB
-	pgPool    *pgxpool.Pool
-	jwtSecret []byte
+	db                *sql.DB
+	pgPool            *pgxpool.Pool
+	jwtSecret         []byte
+	allowRegistration bool
 }
 
 func NewService(db *sql.DB, jwtSecret string) *Service {
-	return &Service{db: db, jwtSecret: []byte(jwtSecret)}
+	return &Service{db: db, jwtSecret: []byte(jwtSecret), allowRegistration: true}
 }
 
 func NewPostgresService(pool *pgxpool.Pool, jwtSecret string) *Service {
-	return &Service{pgPool: pool, jwtSecret: []byte(jwtSecret)}
+	return &Service{pgPool: pool, jwtSecret: []byte(jwtSecret), allowRegistration: true}
+}
+
+// SetAllowRegistration controls whether self-registration is enabled after the initial admin user exists.
+func (s *Service) SetAllowRegistration(allow bool) {
+	s.allowRegistration = allow
 }
 
 func (s *Service) Register(ctx context.Context, email, username, password string) (User, error) {
@@ -51,14 +74,25 @@ func (s *Service) Register(ctx context.Context, email, username, password string
 
 	now := time.Now().UTC()
 	if s.pgPool != nil {
+		tx, err := s.pgPool.Begin(ctx)
+		if err != nil {
+			return User{}, fmt.Errorf("begin tx: %w", err)
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+
 		var count int
-		_ = s.pgPool.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&count)
+		if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
+			return User{}, fmt.Errorf("count users: %w", err)
+		}
+		if count > 0 && !s.allowRegistration {
+			return User{}, ErrRegistrationClosed
+		}
 		role := "tester"
 		if count == 0 {
 			role = "admin"
 		}
 		var id int64
-		err := s.pgPool.QueryRow(ctx, `
+		err = tx.QueryRow(ctx, `
 			INSERT INTO users (email, username, password_hash, role, is_active, created_at, updated_at)
 			VALUES ($1, $2, $3, $4, TRUE, $5, $6) RETURNING id`,
 			email, username, string(hash), role, now, now,
@@ -66,16 +100,30 @@ func (s *Service) Register(ctx context.Context, email, username, password string
 		if err != nil {
 			return User{}, fmt.Errorf("insert user: %w", err)
 		}
+		if err := tx.Commit(ctx); err != nil {
+			return User{}, fmt.Errorf("commit tx: %w", err)
+		}
 		return User{ID: id, Email: email, Username: username, Role: role}, nil
 	}
 
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return User{}, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
 	var count int
-	_ = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&count)
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
+		return User{}, fmt.Errorf("count users: %w", err)
+	}
+	if count > 0 && !s.allowRegistration {
+		return User{}, ErrRegistrationClosed
+	}
 	role := "tester"
 	if count == 0 {
 		role = "admin"
 	}
-	res, err := s.db.ExecContext(ctx, `
+	res, err := tx.ExecContext(ctx, `
 		INSERT INTO users (email, username, password_hash, role, is_active, created_at, updated_at)
 		VALUES (?, ?, ?, ?, 1, ?, ?)`,
 		email, username, string(hash), role, now, now,
@@ -86,6 +134,9 @@ func (s *Service) Register(ctx context.Context, email, username, password string
 	id, err := res.LastInsertId()
 	if err != nil {
 		return User{}, fmt.Errorf("last insert id: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return User{}, fmt.Errorf("commit tx: %w", err)
 	}
 	return User{ID: id, Email: email, Username: username, Role: role}, nil
 }
@@ -224,12 +275,49 @@ func (s *Service) AuthenticateBearer(ctx context.Context, bearerToken string) (U
 	if !ok {
 		return User{}, ErrUnauthorized
 	}
-	email, _ := claims["email"].(string)
-	role, _ := claims["role"].(string)
-	return User{ID: int64(sub), Email: email, Role: role}, nil
+	userID := int64(sub)
+	var u User
+	if s.pgPool != nil {
+		var active bool
+		err := s.pgPool.QueryRow(ctx, `SELECT id, email, username, role, is_active FROM users WHERE id = $1`, userID).
+			Scan(&u.ID, &u.Email, &u.Username, &u.Role, &active)
+		if err != nil || !active {
+			return User{}, ErrUnauthorized
+		}
+		return u, nil
+	}
+	var active int
+	err = s.db.QueryRowContext(ctx, `SELECT id, email, username, role, is_active FROM users WHERE id = ?`, userID).
+		Scan(&u.ID, &u.Email, &u.Username, &u.Role, &active)
+	if err != nil || active != 1 {
+		return User{}, ErrUnauthorized
+	}
+	return u, nil
 }
 
-func (s *Service) ChangePassword(ctx context.Context, userID int64, newPassword string) error {
+func (s *Service) ChangePassword(ctx context.Context, userID int64, currentPassword, newPassword string) error {
+	var passwordHash string
+	if s.pgPool != nil {
+		err := s.pgPool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id = $1`, userID).Scan(&passwordHash)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrUnauthorized
+			}
+			return fmt.Errorf("query user: %w", err)
+		}
+	} else {
+		err := s.db.QueryRowContext(ctx, `SELECT password_hash FROM users WHERE id = ?`, userID).Scan(&passwordHash)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrUnauthorized
+			}
+			return fmt.Errorf("query user: %w", err)
+		}
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(currentPassword)); err != nil {
+		return ErrInvalidCredentials
+	}
+
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
@@ -241,4 +329,155 @@ func (s *Service) ChangePassword(ctx context.Context, userID int64, newPassword 
 	}
 	_, err = s.db.ExecContext(ctx, `UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?`, string(hash), now, userID)
 	return err
+}
+
+func (s *Service) ListAPITokens(ctx context.Context, userID int64) ([]APITokenInfo, error) {
+	items := make([]APITokenInfo, 0)
+	if s.pgPool != nil {
+		rows, err := s.pgPool.Query(ctx, `
+			SELECT id, name, created_at, last_used_at
+			FROM api_tokens WHERE user_id = $1 ORDER BY id DESC`, userID)
+		if err != nil {
+			return nil, fmt.Errorf("query api tokens: %w", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var t APITokenInfo
+			var lastUsed sql.NullTime
+			if err := rows.Scan(&t.ID, &t.Name, &t.CreatedAt, &lastUsed); err != nil {
+				return nil, fmt.Errorf("scan api token: %w", err)
+			}
+			if lastUsed.Valid {
+				ts := lastUsed.Time
+				t.LastUsedAt = &ts
+			}
+			items = append(items, t)
+		}
+		return items, rows.Err()
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, name, created_at, last_used_at
+		FROM api_tokens WHERE user_id = ? ORDER BY id DESC`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("query api tokens: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var t APITokenInfo
+		var lastUsed sql.NullTime
+		if err := rows.Scan(&t.ID, &t.Name, &t.CreatedAt, &lastUsed); err != nil {
+			return nil, fmt.Errorf("scan api token: %w", err)
+		}
+		if lastUsed.Valid {
+			ts := lastUsed.Time
+			t.LastUsedAt = &ts
+		}
+		items = append(items, t)
+	}
+	return items, rows.Err()
+}
+
+func (s *Service) RevokeAPIToken(ctx context.Context, userID, tokenID int64) error {
+	if s.pgPool != nil {
+		tag, err := s.pgPool.Exec(ctx, `DELETE FROM api_tokens WHERE id = $1 AND user_id = $2`, tokenID, userID)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return sql.ErrNoRows
+		}
+		return nil
+	}
+	res, err := s.db.ExecContext(ctx, `DELETE FROM api_tokens WHERE id = ? AND user_id = ?`, tokenID, userID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func (s *Service) ListUsers(ctx context.Context) ([]UserSummary, error) {
+	items := make([]UserSummary, 0)
+	if s.pgPool != nil {
+		rows, err := s.pgPool.Query(ctx, `
+			SELECT id, email, username, role, is_active, created_at
+			FROM users ORDER BY id ASC`)
+		if err != nil {
+			return nil, fmt.Errorf("query users: %w", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var u UserSummary
+			if err := rows.Scan(&u.ID, &u.Email, &u.Username, &u.Role, &u.IsActive, &u.CreatedAt); err != nil {
+				return nil, fmt.Errorf("scan user: %w", err)
+			}
+			items = append(items, u)
+		}
+		return items, rows.Err()
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, email, username, role, is_active, created_at
+		FROM users ORDER BY id ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("query users: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var u UserSummary
+		var active int
+		if err := rows.Scan(&u.ID, &u.Email, &u.Username, &u.Role, &active, &u.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan user: %w", err)
+		}
+		u.IsActive = active == 1
+		items = append(items, u)
+	}
+	return items, rows.Err()
+}
+
+func (s *Service) UpdateUser(ctx context.Context, userID int64, role string, isActive bool) (UserSummary, error) {
+	now := time.Now().UTC()
+	var u UserSummary
+	if s.pgPool != nil {
+		err := s.pgPool.QueryRow(ctx, `
+			UPDATE users SET role = $1, is_active = $2, updated_at = $3
+			WHERE id = $4
+			RETURNING id, email, username, role, is_active, created_at`,
+			role, isActive, now, userID,
+		).Scan(&u.ID, &u.Email, &u.Username, &u.Role, &u.IsActive, &u.CreatedAt)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return UserSummary{}, sql.ErrNoRows
+			}
+			return UserSummary{}, err
+		}
+		return u, nil
+	}
+
+	activeInt := 0
+	if isActive {
+		activeInt = 1
+	}
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE users SET role = ?, is_active = ?, updated_at = ? WHERE id = ?`,
+		role, activeInt, now, userID,
+	)
+	if err != nil {
+		return UserSummary{}, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return UserSummary{}, sql.ErrNoRows
+	}
+	var active int
+	err = s.db.QueryRowContext(ctx, `
+		SELECT id, email, username, role, is_active, created_at FROM users WHERE id = ?`, userID,
+	).Scan(&u.ID, &u.Email, &u.Username, &u.Role, &active, &u.CreatedAt)
+	if err != nil {
+		return UserSummary{}, err
+	}
+	u.IsActive = active == 1
+	return u, nil
 }

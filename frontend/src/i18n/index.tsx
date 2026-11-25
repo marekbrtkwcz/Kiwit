@@ -12,6 +12,7 @@ const dict = {
       testcases: 'Scenariusze',
       testplans: 'Plany testowe',
       testruns: 'Uruchomienia',
+      settings: 'Ustawienia',
       auth: 'Konto',
     },
     products: {
@@ -108,6 +109,7 @@ const dict = {
       testcases: 'TestCases',
       testplans: 'TestPlans',
       testruns: 'TestRuns',
+      settings: 'Settings',
       auth: 'Account',
     },
     products: {

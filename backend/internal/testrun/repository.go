@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 )
 
@@ -28,6 +29,8 @@ type ExecutionItem struct {
 // Repository defines persistence operations for test runs and executions.
 type Repository interface {
 	List(ctx context.Context) ([]TestRun, error)
+	ListPaginated(ctx context.Context, limit, offset int) ([]TestRun, int64, error)
+	GetByID(ctx context.Context, runID int64) (TestRun, error)
 	Create(ctx context.Context, testPlanID, buildID int64, summary, notes string) (TestRun, error)
 	Stop(ctx context.Context, runID int64) error
 	Delete(ctx context.Context, runID int64) error
@@ -46,12 +49,24 @@ func NewSQLiteRepository(db *sql.DB) *SQLiteRepository {
 }
 
 func (r *SQLiteRepository) List(ctx context.Context) ([]TestRun, error) {
-	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, test_plan_id, build_id, summary, notes, started_at
-		FROM test_runs
-		ORDER BY id DESC`)
+	items, _, err := r.ListPaginated(ctx, 0, 0)
+	return items, err
+}
+
+func (r *SQLiteRepository) ListPaginated(ctx context.Context, limit, offset int) ([]TestRun, int64, error) {
+	var total int64
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM test_runs`).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count test runs: %w", err)
+	}
+	query := `SELECT id, test_plan_id, build_id, summary, notes, started_at FROM test_runs ORDER BY id DESC`
+	var args []any
+	if limit > 0 {
+		query += ` LIMIT ? OFFSET ?`
+		args = append(args, limit, offset)
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("query test runs: %w", err)
+		return nil, 0, fmt.Errorf("query test runs: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -59,11 +74,23 @@ func (r *SQLiteRepository) List(ctx context.Context) ([]TestRun, error) {
 	for rows.Next() {
 		var tr TestRun
 		if err := rows.Scan(&tr.ID, &tr.TestPlanID, &tr.BuildID, &tr.Summary, &tr.Notes, &tr.StartedAt); err != nil {
-			return nil, fmt.Errorf("scan test run: %w", err)
+			return nil, 0, fmt.Errorf("scan test run: %w", err)
 		}
 		items = append(items, tr)
 	}
-	return items, rows.Err()
+	return items, total, rows.Err()
+}
+
+func (r *SQLiteRepository) GetByID(ctx context.Context, runID int64) (TestRun, error) {
+	var tr TestRun
+	err := r.db.QueryRowContext(ctx, `
+		SELECT id, test_plan_id, build_id, summary, notes, started_at
+		FROM test_runs WHERE id = ?`, runID,
+	).Scan(&tr.ID, &tr.TestPlanID, &tr.BuildID, &tr.Summary, &tr.Notes, &tr.StartedAt)
+	if err != nil {
+		return TestRun{}, err
+	}
+	return tr, nil
 }
 
 func (r *SQLiteRepository) Stop(ctx context.Context, runID int64) error {
@@ -78,12 +105,47 @@ func (r *SQLiteRepository) Stop(ctx context.Context, runID int64) error {
 }
 
 func (r *SQLiteRepository) Delete(ctx context.Context, runID int64) error {
-	res, err := r.db.ExecContext(ctx, `DELETE FROM test_runs WHERE id = ?`, runID)
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var paths []string
+	if rows, err := tx.QueryContext(ctx, `
+		SELECT storage_path FROM attachments
+		WHERE entity_type = 'test_execution'
+		  AND entity_id IN (SELECT id FROM test_executions WHERE test_run_id = ?)`, runID); err == nil {
+		for rows.Next() {
+			var p string
+			if scanErr := rows.Scan(&p); scanErr == nil && p != "" {
+				paths = append(paths, p)
+			}
+		}
+		_ = rows.Close()
+	}
+
+	_, _ = tx.ExecContext(ctx, `
+		DELETE FROM attachments
+		WHERE entity_type = 'test_execution'
+		  AND entity_id IN (SELECT id FROM test_executions WHERE test_run_id = ?)`, runID)
+	_, _ = tx.ExecContext(ctx, `
+		DELETE FROM comments
+		WHERE entity_type = 'test_execution'
+		  AND entity_id IN (SELECT id FROM test_executions WHERE test_run_id = ?)`, runID)
+
+	res, err := tx.ExecContext(ctx, `DELETE FROM test_runs WHERE id = ?`, runID)
 	if err != nil {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return sql.ErrNoRows
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit tx: %w", err)
+	}
+	for _, p := range paths {
+		_ = os.Remove(p)
 	}
 	return nil
 }

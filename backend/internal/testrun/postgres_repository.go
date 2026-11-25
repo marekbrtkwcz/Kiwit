@@ -3,9 +3,12 @@ package testrun
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"os"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -18,11 +21,24 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 }
 
 func (r *PostgresRepository) List(ctx context.Context) ([]TestRun, error) {
-	rows, err := r.pool.Query(ctx, `
-		SELECT id, test_plan_id, build_id, summary, notes, started_at
-		FROM test_runs ORDER BY id DESC`)
+	items, _, err := r.ListPaginated(ctx, 0, 0)
+	return items, err
+}
+
+func (r *PostgresRepository) ListPaginated(ctx context.Context, limit, offset int) ([]TestRun, int64, error) {
+	var total int64
+	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM test_runs`).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count test runs: %w", err)
+	}
+	query := `SELECT id, test_plan_id, build_id, summary, notes, started_at FROM test_runs ORDER BY id DESC`
+	var args []any
+	if limit > 0 {
+		query += ` LIMIT $1 OFFSET $2`
+		args = append(args, limit, offset)
+	}
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("query test runs: %w", err)
+		return nil, 0, fmt.Errorf("query test runs: %w", err)
 	}
 	defer rows.Close()
 
@@ -30,11 +46,26 @@ func (r *PostgresRepository) List(ctx context.Context) ([]TestRun, error) {
 	for rows.Next() {
 		var tr TestRun
 		if err := rows.Scan(&tr.ID, &tr.TestPlanID, &tr.BuildID, &tr.Summary, &tr.Notes, &tr.StartedAt); err != nil {
-			return nil, fmt.Errorf("scan test run: %w", err)
+			return nil, 0, fmt.Errorf("scan test run: %w", err)
 		}
 		items = append(items, tr)
 	}
-	return items, rows.Err()
+	return items, total, rows.Err()
+}
+
+func (r *PostgresRepository) GetByID(ctx context.Context, runID int64) (TestRun, error) {
+	var tr TestRun
+	err := r.pool.QueryRow(ctx, `
+		SELECT id, test_plan_id, build_id, summary, notes, started_at
+		FROM test_runs WHERE id = $1`, runID,
+	).Scan(&tr.ID, &tr.TestPlanID, &tr.BuildID, &tr.Summary, &tr.Notes, &tr.StartedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return TestRun{}, sql.ErrNoRows
+		}
+		return TestRun{}, err
+	}
+	return tr, nil
 }
 
 func (r *PostgresRepository) Create(ctx context.Context, testPlanID, buildID int64, summary, notes string) (TestRun, error) {
@@ -107,12 +138,47 @@ func (r *PostgresRepository) Stop(ctx context.Context, runID int64) error {
 }
 
 func (r *PostgresRepository) Delete(ctx context.Context, runID int64) error {
-	tag, err := r.pool.Exec(ctx, `DELETE FROM test_runs WHERE id = $1`, runID)
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var paths []string
+	if rows, err := tx.Query(ctx, `
+		SELECT storage_path FROM attachments
+		WHERE entity_type = 'test_execution'
+		  AND entity_id IN (SELECT id FROM test_executions WHERE test_run_id = $1)`, runID); err == nil {
+		for rows.Next() {
+			var p string
+			if scanErr := rows.Scan(&p); scanErr == nil && p != "" {
+				paths = append(paths, p)
+			}
+		}
+		rows.Close()
+	}
+
+	_, _ = tx.Exec(ctx, `
+		DELETE FROM attachments
+		WHERE entity_type = 'test_execution'
+		  AND entity_id IN (SELECT id FROM test_executions WHERE test_run_id = $1)`, runID)
+	_, _ = tx.Exec(ctx, `
+		DELETE FROM comments
+		WHERE entity_type = 'test_execution'
+		  AND entity_id IN (SELECT id FROM test_executions WHERE test_run_id = $1)`, runID)
+
+	tag, err := tx.Exec(ctx, `DELETE FROM test_runs WHERE id = $1`, runID)
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() == 0 {
 		return sql.ErrNoRows
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit tx: %w", err)
+	}
+	for _, p := range paths {
+		_ = os.Remove(p)
 	}
 	return nil
 }

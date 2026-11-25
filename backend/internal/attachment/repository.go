@@ -22,6 +22,8 @@ type Repository interface {
 	Create(ctx context.Context, a Attachment) (Attachment, error)
 	ListByEntity(ctx context.Context, entityType string, entityID int64) ([]Attachment, error)
 	GetByID(ctx context.Context, id int64) (Attachment, error)
+	Delete(ctx context.Context, id int64) error
+	EntityExists(ctx context.Context, entityType string, entityID int64) (bool, error)
 }
 
 type SQLiteRepository struct {
@@ -83,4 +85,32 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id int64) (Attachment, e
 		return Attachment{}, err
 	}
 	return a, nil
+}
+
+func (r *SQLiteRepository) Delete(ctx context.Context, id int64) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM attachments WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func (r *SQLiteRepository) EntityExists(ctx context.Context, entityType string, entityID int64) (bool, error) {
+	var q string
+	switch entityType {
+	case "test_case":
+		q = `SELECT COUNT(*) FROM test_cases WHERE id = ?`
+	case "test_execution":
+		q = `SELECT COUNT(*) FROM test_executions WHERE id = ?`
+	default:
+		return false, nil
+	}
+	var count int
+	if err := r.db.QueryRowContext(ctx, q, entityID).Scan(&count); err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }

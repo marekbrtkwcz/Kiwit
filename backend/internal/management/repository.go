@@ -10,6 +10,7 @@ import (
 // ProductRepository defines persistence operations for products, versions, builds, components, and tags.
 type ProductRepository interface {
 	ListProducts(ctx context.Context) ([]Product, error)
+	ListProductsForUser(ctx context.Context, userID int64) ([]Product, error)
 	CreateProduct(ctx context.Context, name, description string) (Product, error)
 	ListVersions(ctx context.Context, productID int64) ([]Version, error)
 	CreateVersion(ctx context.Context, productID int64, value string) (Version, error)
@@ -23,6 +24,7 @@ type ProductRepository interface {
 	CreateCategory(ctx context.Context, name string) (Category, error)
 	AddMember(ctx context.Context, productID, userID int64, role string) error
 	HasAccess(ctx context.Context, productID, userID int64) (bool, error)
+	CheckProductAccess(ctx context.Context, productID, userID int64, requireWrite bool) (bool, error)
 	ListPriorities(ctx context.Context) ([]Priority, error)
 	CreatePriority(ctx context.Context, value string) (Priority, error)
 	ListExecutionStatuses(ctx context.Context) ([]ExecutionStatus, error)
@@ -60,6 +62,29 @@ func (r *SQLiteRepository) ListProducts(ctx context.Context) ([]Product, error) 
 		return nil, fmt.Errorf("iterate products: %w", err)
 	}
 	return items, nil
+}
+
+func (r *SQLiteRepository) ListProductsForUser(ctx context.Context, userID int64) ([]Product, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT p.id, p.name, p.description, p.created_at
+		FROM products p
+		WHERE NOT EXISTS (SELECT 1 FROM product_members pm WHERE pm.product_id = p.id)
+		   OR EXISTS (SELECT 1 FROM product_members pm WHERE pm.product_id = p.id AND pm.user_id = ?)
+		ORDER BY p.id ASC`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("query products for user: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	items := make([]Product, 0)
+	for rows.Next() {
+		var p Product
+		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan product: %w", err)
+		}
+		items = append(items, p)
+	}
+	return items, rows.Err()
 }
 
 func (r *SQLiteRepository) CreateProduct(ctx context.Context, name, description string) (Product, error) {
@@ -275,6 +300,31 @@ func (r *SQLiteRepository) HasAccess(ctx context.Context, productID, userID int6
 		productID, userID,
 	).Scan(&count)
 	return count > 0, err
+}
+
+func (r *SQLiteRepository) CheckProductAccess(ctx context.Context, productID, userID int64, requireWrite bool) (bool, error) {
+	var memberCount int
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM product_members WHERE product_id = ?`, productID).Scan(&memberCount); err != nil {
+		return false, err
+	}
+	if memberCount == 0 {
+		return true, nil
+	}
+	var role string
+	err := r.db.QueryRowContext(ctx,
+		`SELECT role FROM product_members WHERE product_id = ? AND user_id = ?`,
+		productID, userID,
+	).Scan(&role)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		return false, err
+	}
+	if requireWrite && role == "viewer" {
+		return false, nil
+	}
+	return true, nil
 }
 
 func (r *SQLiteRepository) ListPriorities(ctx context.Context) ([]Priority, error) {

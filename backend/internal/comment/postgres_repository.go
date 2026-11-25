@@ -52,3 +52,20 @@ func (r *PostgresRepository) Create(ctx context.Context, entityType string, enti
 	}
 	return Comment{ID: id, EntityType: entityType, EntityID: entityID, AuthorID: authorID, Body: body, CreatedAt: now}, nil
 }
+
+func (r *PostgresRepository) EntityExists(ctx context.Context, entityType string, entityID int64) (bool, error) {
+	var q string
+	switch entityType {
+	case "test_case":
+		q = `SELECT COUNT(*) FROM test_cases WHERE id = $1`
+	case "test_execution":
+		q = `SELECT COUNT(*) FROM test_executions WHERE id = $1`
+	default:
+		return false, nil
+	}
+	var count int
+	if err := r.pool.QueryRow(ctx, q, entityID).Scan(&count); err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}

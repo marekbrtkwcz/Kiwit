@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/kiwit/kiwit/internal/auth"
 	"github.com/kiwit/kiwit/internal/notify"
 )
 
@@ -64,27 +65,21 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 	}) (*struct {
 		Body struct {
 			Items []TestRun `json:"items"`
+			Total int64     `json:"total"`
 		}
 	}, error) {
-		items, err := repo.List(ctx)
+		items, total, err := repo.ListPaginated(ctx, input.Limit, input.Offset)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to list test runs", err)
-		}
-		if input.Offset >= len(items) {
-			items = []TestRun{}
-		} else {
-			end := input.Offset + input.Limit
-			if end > len(items) {
-				end = len(items)
-			}
-			items = items[input.Offset:end]
 		}
 		out := &struct {
 			Body struct {
 				Items []TestRun `json:"items"`
+				Total int64     `json:"total"`
 			}
 		}{}
 		out.Body.Items = items
+		out.Body.Total = total
 		return out, nil
 	})
 
@@ -101,6 +96,9 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 			Stopped bool `json:"stopped"`
 		}
 	}, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
 		if err := repo.Stop(ctx, input.ID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, huma.Error404NotFound("test run not found")
@@ -130,6 +128,9 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 	}, func(ctx context.Context, input *struct {
 		ID int64 `path:"id"`
 	}) (*struct{}, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
 		if err := repo.Delete(ctx, input.ID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, huma.Error404NotFound("test run not found")
@@ -151,24 +152,25 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 			Summary string `json:"summary,omitempty"`
 		}
 	}) (*TestRunOutput, error) {
-		runs, err := repo.List(ctx)
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
+		r, err := repo.GetByID(ctx, input.ID)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("failed to list test runs", err)
-		}
-		for _, r := range runs {
-			if r.ID == input.ID {
-				sum := input.Body.Summary
-				if sum == "" {
-					sum = r.Summary + " (copy)"
-				}
-				cloned, err := repo.Create(ctx, r.TestPlanID, r.BuildID, sum, r.Notes)
-				if err != nil {
-					return nil, huma.Error400BadRequest("failed to clone test run", err)
-				}
-				return &TestRunOutput{Body: cloned}, nil
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, huma.Error404NotFound("test run not found")
 			}
+			return nil, huma.Error500InternalServerError("failed to load test run", err)
 		}
-		return nil, huma.Error404NotFound("test run not found")
+		sum := input.Body.Summary
+		if sum == "" {
+			sum = r.Summary + " (copy)"
+		}
+		cloned, err := repo.Create(ctx, r.TestPlanID, r.BuildID, sum, r.Notes)
+		if err != nil {
+			return nil, huma.Error400BadRequest("failed to clone test run", err)
+		}
+		return &TestRunOutput{Body: cloned}, nil
 	})
 
 	huma.Register(api, huma.Operation{
@@ -203,6 +205,9 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 		Summary:     "Create test run and snapshot test case steps",
 		Tags:        []string{"TestRuns"},
 	}, func(ctx context.Context, input *CreateTestRunInput) (*TestRunOutput, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
 		tr, err := repo.Create(ctx, input.Body.TestPlanID, input.Body.BuildID, input.Body.Summary, input.Body.Notes)
 		if err != nil {
 			return nil, huma.Error400BadRequest("failed to create test run", err)
@@ -229,6 +234,9 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 			Results []ParsedCaseResult `json:"results"`
 		}
 	}, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
 		results, err := ParseJUnitXML([]byte(input.Body.XML))
 		if err != nil {
 			return nil, huma.Error400BadRequest("invalid JUnit XML", err)
@@ -266,6 +274,9 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 		Summary:     "Update test execution status",
 		Tags:        []string{"TestRuns"},
 	}, func(ctx context.Context, input *UpdateExecutionInput) (*ExecutionOutput, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
 		res, err := repo.UpdateExecution(ctx, input.ID, input.Body.Status, input.Body.Comment)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {

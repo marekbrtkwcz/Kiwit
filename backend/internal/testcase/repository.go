@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 )
 
@@ -42,6 +44,8 @@ type Revision struct {
 // Repository defines persistence operations for test cases.
 type Repository interface {
 	List(ctx context.Context) ([]TestCase, error)
+	ListFiltered(ctx context.Context, q, priority string, limit, offset int) ([]TestCase, int64, error)
+	GetByID(ctx context.Context, id int64) (TestCase, error)
 	Create(ctx context.Context, p UpsertParams) (TestCase, error)
 	Update(ctx context.Context, id int64, p UpsertParams) (TestCase, error)
 	ListRevisions(ctx context.Context, testCaseID int64) ([]Revision, error)
@@ -61,47 +65,138 @@ func NewSQLiteRepository(db *sql.DB) *SQLiteRepository {
 }
 
 func (r *SQLiteRepository) List(ctx context.Context) ([]TestCase, error) {
-	rows, err := r.db.QueryContext(ctx, `
+	items, _, err := r.ListFiltered(ctx, "", "", 0, 0)
+	return items, err
+}
+
+func (r *SQLiteRepository) ListFiltered(ctx context.Context, q, priority string, limit, offset int) ([]TestCase, int64, error) {
+	where := make([]string, 0, 2)
+	args := make([]any, 0, 4)
+
+	if trimmed := strings.TrimSpace(q); trimmed != "" {
+		where = append(where, "LOWER(summary) LIKE ?")
+		args = append(args, "%"+strings.ToLower(trimmed)+"%")
+	}
+	if priority != "" {
+		where = append(where, "priority = ?")
+		args = append(args, priority)
+	}
+
+	whereClause := ""
+	if len(where) > 0 {
+		whereClause = " WHERE " + strings.Join(where, " AND ")
+	}
+
+	var total int64
+	if err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM test_cases"+whereClause, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count test cases: %w", err)
+	}
+
+	query := `
 		SELECT id, product_id, category_id, summary, preconditions, format, gherkin_body, priority, status, is_automated, script, arguments, created_at, updated_at
-		FROM test_cases
-		ORDER BY id ASC`)
+		FROM test_cases` + whereClause + ` ORDER BY id ASC`
+	queryArgs := append([]any(nil), args...)
+	if limit > 0 {
+		query += " LIMIT ? OFFSET ?"
+		queryArgs = append(queryArgs, limit, offset)
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
 	if err != nil {
-		return nil, fmt.Errorf("query test cases: %w", err)
+		return nil, 0, fmt.Errorf("query test cases: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
 	items := make([]TestCase, 0)
 	for rows.Next() {
-		var tc TestCase
-		var catID sql.NullInt64
-		var isAuto int
-		if err := rows.Scan(
-			&tc.ID, &tc.ProductID, &catID, &tc.Summary, &tc.Preconditions,
-			&tc.Format, &tc.GherkinBody, &tc.Priority, &tc.Status,
-			&isAuto, &tc.Script, &tc.Arguments,
-			&tc.CreatedAt, &tc.UpdatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("scan test case: %w", err)
+		tc, err := scanSQLiteTestCase(rows)
+		if err != nil {
+			return nil, 0, err
 		}
-		tc.IsAutomated = isAuto == 1
-		if catID.Valid {
-			tc.CategoryID = &catID.Int64
-		}
-		tc.Steps = []Step{}
 		items = append(items, tc)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate test cases: %w", err)
+		return nil, 0, fmt.Errorf("iterate test cases: %w", err)
 	}
 
-	for i := range items {
-		steps, err := r.loadSteps(ctx, items[i].ID)
-		if err != nil {
-			return nil, err
-		}
-		items[i].Steps = steps
+	if err := r.attachStepsBatch(ctx, items); err != nil {
+		return nil, 0, err
 	}
-	return items, nil
+	return items, total, nil
+}
+
+func (r *SQLiteRepository) GetByID(ctx context.Context, id int64) (TestCase, error) {
+	row := r.db.QueryRowContext(ctx, `
+		SELECT id, product_id, category_id, summary, preconditions, format, gherkin_body, priority, status, is_automated, script, arguments, created_at, updated_at
+		FROM test_cases WHERE id = ?`, id)
+	tc, err := scanSQLiteTestCase(row)
+	if err != nil {
+		return TestCase{}, err
+	}
+	steps, err := r.loadSteps(ctx, tc.ID)
+	if err != nil {
+		return TestCase{}, err
+	}
+	tc.Steps = steps
+	return tc, nil
+}
+
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanSQLiteTestCase(s rowScanner) (TestCase, error) {
+	var tc TestCase
+	var catID sql.NullInt64
+	var isAuto int
+	if err := s.Scan(
+		&tc.ID, &tc.ProductID, &catID, &tc.Summary, &tc.Preconditions,
+		&tc.Format, &tc.GherkinBody, &tc.Priority, &tc.Status,
+		&isAuto, &tc.Script, &tc.Arguments,
+		&tc.CreatedAt, &tc.UpdatedAt,
+	); err != nil {
+		return TestCase{}, err
+	}
+	tc.IsAutomated = isAuto == 1
+	if catID.Valid {
+		tc.CategoryID = &catID.Int64
+	}
+	tc.Steps = []Step{}
+	return tc, nil
+}
+
+func (r *SQLiteRepository) attachStepsBatch(ctx context.Context, items []TestCase) error {
+	if len(items) == 0 {
+		return nil
+	}
+	placeholders := make([]string, len(items))
+	args := make([]any, len(items))
+	byID := make(map[int64]int, len(items))
+	for i, tc := range items {
+		placeholders[i] = "?"
+		args[i] = tc.ID
+		byID[tc.ID] = i
+	}
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT test_case_id, position, action, expected_result FROM test_case_steps WHERE test_case_id IN (`+strings.Join(placeholders, ",")+`) ORDER BY test_case_id ASC, position ASC`,
+		args...,
+	)
+	if err != nil {
+		return fmt.Errorf("batch query steps: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var tcID int64
+		var st Step
+		if err := rows.Scan(&tcID, &st.Position, &st.Action, &st.ExpectedResult); err != nil {
+			return fmt.Errorf("scan step: %w", err)
+		}
+		if idx, ok := byID[tcID]; ok {
+			items[idx].Steps = append(items[idx].Steps, st)
+		}
+	}
+	return rows.Err()
 }
 
 func (r *SQLiteRepository) Create(ctx context.Context, p UpsertParams) (TestCase, error) {
@@ -153,6 +248,9 @@ func (r *SQLiteRepository) Create(ctx context.Context, p UpsertParams) (TestCase
 		GherkinBody:   p.GherkinBody,
 		Priority:      p.Priority,
 		Status:        p.Status,
+		IsAutomated:   p.IsAutomated,
+		Script:        p.Script,
+		Arguments:     p.Arguments,
 		Steps:         nonNilSteps(p.Steps),
 		CreatedAt:     now,
 		UpdatedAt:     now,
@@ -165,6 +263,11 @@ func (r *SQLiteRepository) Update(ctx context.Context, id int64, p UpsertParams)
 		return TestCase{}, fmt.Errorf("begin tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+
+	var createdAt time.Time
+	if err := tx.QueryRowContext(ctx, `SELECT created_at FROM test_cases WHERE id = ?`, id).Scan(&createdAt); err != nil {
+		return TestCase{}, err
+	}
 
 	now := time.Now().UTC()
 	isAutoInt := 0
@@ -215,8 +318,11 @@ func (r *SQLiteRepository) Update(ctx context.Context, id int64, p UpsertParams)
 		GherkinBody:   p.GherkinBody,
 		Priority:      p.Priority,
 		Status:        p.Status,
+		IsAutomated:   p.IsAutomated,
+		Script:        p.Script,
+		Arguments:     p.Arguments,
 		Steps:         nonNilSteps(p.Steps),
-		CreatedAt:     now,
+		CreatedAt:     createdAt,
 		UpdatedAt:     now,
 	}, nil
 }
@@ -343,42 +449,64 @@ func (r *SQLiteRepository) BulkUpdate(ctx context.Context, ids []int64, status, 
 }
 
 func (r *SQLiteRepository) Delete(ctx context.Context, id int64) error {
-	res, err := r.db.ExecContext(ctx, `DELETE FROM test_cases WHERE id = ?`, id)
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var paths []string
+	if rows, err := tx.QueryContext(ctx, `SELECT storage_path FROM attachments WHERE entity_type = 'test_case' AND entity_id = ?`, id); err == nil {
+		for rows.Next() {
+			var p string
+			if scanErr := rows.Scan(&p); scanErr == nil && p != "" {
+				paths = append(paths, p)
+			}
+		}
+		_ = rows.Close()
+	}
+
+	res, err := tx.ExecContext(ctx, `DELETE FROM test_cases WHERE id = ?`, id)
 	if err != nil {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return sql.ErrNoRows
 	}
+	_, _ = tx.ExecContext(ctx, `DELETE FROM attachments WHERE entity_type = 'test_case' AND entity_id = ?`, id)
+	_, _ = tx.ExecContext(ctx, `DELETE FROM comments WHERE entity_type = 'test_case' AND entity_id = ?`, id)
+	_, _ = tx.ExecContext(ctx, `DELETE FROM email_settings WHERE entity_type = 'test_case' AND entity_id = ?`, id)
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit tx: %w", err)
+	}
+	for _, p := range paths {
+		_ = os.Remove(p)
+	}
 	return nil
 }
 
 func (r *SQLiteRepository) Clone(ctx context.Context, id int64, newSummary string) (TestCase, error) {
-	items, err := r.List(ctx)
+	tc, err := r.GetByID(ctx, id)
 	if err != nil {
 		return TestCase{}, err
 	}
-	for _, tc := range items {
-		if tc.ID == id {
-			summary := newSummary
-			if summary == "" {
-				summary = tc.Summary + " (copy)"
-			}
-			return r.Create(ctx, UpsertParams{
-				ProductID:     tc.ProductID,
-				CategoryID:    tc.CategoryID,
-				Summary:       summary,
-				Preconditions: tc.Preconditions,
-				Format:        tc.Format,
-				GherkinBody:   tc.GherkinBody,
-				Priority:      tc.Priority,
-				Status:        tc.Status,
-				IsAutomated:   tc.IsAutomated,
-				Script:        tc.Script,
-				Arguments:     tc.Arguments,
-				Steps:         tc.Steps,
-			})
-		}
+	summary := newSummary
+	if summary == "" {
+		summary = tc.Summary + " (copy)"
 	}
-	return TestCase{}, sql.ErrNoRows
+	return r.Create(ctx, UpsertParams{
+		ProductID:     tc.ProductID,
+		CategoryID:    tc.CategoryID,
+		Summary:       summary,
+		Preconditions: tc.Preconditions,
+		Format:        tc.Format,
+		GherkinBody:   tc.GherkinBody,
+		Priority:      tc.Priority,
+		Status:        tc.Status,
+		IsAutomated:   tc.IsAutomated,
+		Script:        tc.Script,
+		Arguments:     tc.Arguments,
+		Steps:         tc.Steps,
+	})
 }

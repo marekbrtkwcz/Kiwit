@@ -2,33 +2,26 @@ package attachment
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/kiwit/kiwit/internal/auth"
 )
-
-func containsXSS(buf []byte) bool {
-	low := strings.ToLower(string(buf))
-	for _, pat := range []string{"<script", "onerror=", "onload=", "javascript:"} {
-		if strings.Contains(low, pat) {
-			return true
-		}
-	}
-	return false
-}
 
 const maxUploadBytes = 25 << 20 // 25 MiB
 
-// RegisterRoutes mounts multipart upload, list, and download endpoints on the chi router.
+// RegisterRoutes mounts multipart upload, list, download, and delete endpoints on the chi router.
 func RegisterRoutes(r chi.Router, repo Repository, uploadDir string) {
-	r.Post("/api/v1/attachments", func(w http.ResponseWriter, req *http.Request) {
+	r.With(auth.RequireRole("tester")).Post("/api/v1/attachments", func(w http.ResponseWriter, req *http.Request) {
 		req.Body = http.MaxBytesReader(w, req.Body, maxUploadBytes)
 		if err := req.ParseMultipartForm(maxUploadBytes); err != nil {
 			http.Error(w, `{"detail":"file too large or invalid multipart form"}`, http.StatusBadRequest)
@@ -43,6 +36,15 @@ func RegisterRoutes(r chi.Router, repo Repository, uploadDir string) {
 		entityID, err := strconv.ParseInt(req.FormValue("entity_id"), 10, 64)
 		if err != nil || entityID <= 0 {
 			http.Error(w, `{"detail":"invalid entity_id"}`, http.StatusBadRequest)
+			return
+		}
+		exists, err := repo.EntityExists(req.Context(), entityType, entityID)
+		if err != nil {
+			http.Error(w, `{"detail":"failed to verify target entity"}`, http.StatusInternalServerError)
+			return
+		}
+		if !exists {
+			http.Error(w, `{"detail":"target entity not found"}`, http.StatusNotFound)
 			return
 		}
 
@@ -61,6 +63,9 @@ func RegisterRoutes(r chi.Router, repo Repository, uploadDir string) {
 		rnd := make([]byte, 8)
 		_, _ = rand.Read(rnd)
 		safeName := filepath.Base(header.Filename)
+		if safeName == "." || safeName == "/" || safeName == "" {
+			safeName = "attachment"
+		}
 		storagePath := filepath.Join(uploadDir, hex.EncodeToString(rnd)+"_"+safeName)
 
 		dst, err := os.Create(storagePath)
@@ -75,20 +80,15 @@ func RegisterRoutes(r chi.Router, repo Repository, uploadDir string) {
 			http.Error(w, `{"detail":"failed to write file"}`, http.StatusInternalServerError)
 			return
 		}
+
+		ct := "application/octet-stream"
 		if fcheck, err := os.Open(storagePath); err == nil {
-			peek := make([]byte, 64*1024)
+			peek := make([]byte, 512)
 			n, _ := fcheck.Read(peek)
 			_ = fcheck.Close()
-			if containsXSS(peek[:n]) {
-				_ = os.Remove(storagePath)
-				http.Error(w, `{"detail":"file rejected by XSS validator"}`, http.StatusBadRequest)
-				return
+			if n > 0 {
+				ct = http.DetectContentType(peek[:n])
 			}
-		}
-
-		ct := header.Header.Get("Content-Type")
-		if ct == "" {
-			ct = "application/octet-stream"
 		}
 
 		saved, err := repo.Create(req.Context(), Attachment{
@@ -100,6 +100,7 @@ func RegisterRoutes(r chi.Router, repo Repository, uploadDir string) {
 			StoragePath: storagePath,
 		})
 		if err != nil {
+			_ = os.Remove(storagePath)
 			http.Error(w, `{"detail":"failed to save attachment metadata"}`, http.StatusInternalServerError)
 			return
 		}
@@ -138,7 +139,36 @@ func RegisterRoutes(r chi.Router, repo Repository, uploadDir string) {
 			return
 		}
 		w.Header().Set("Content-Type", a.ContentType)
-		w.Header().Set("Content-Disposition", `attachment; filename="`+a.Filename+`"`)
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Content-Security-Policy", "sandbox")
+		disp := mime.FormatMediaType("attachment", map[string]string{"filename": filepath.Base(a.Filename)})
+		if disp == "" {
+			disp = "attachment"
+		}
+		w.Header().Set("Content-Disposition", disp)
 		http.ServeFile(w, req, a.StoragePath)
+	})
+
+	r.With(auth.RequireRole("tester")).Delete("/api/v1/attachments/{id}", func(w http.ResponseWriter, req *http.Request) {
+		id, err := strconv.ParseInt(chi.URLParam(req, "id"), 10, 64)
+		if err != nil || id <= 0 {
+			http.Error(w, `{"detail":"invalid attachment id"}`, http.StatusBadRequest)
+			return
+		}
+		a, err := repo.GetByID(req.Context(), id)
+		if err != nil {
+			http.Error(w, `{"detail":"attachment not found"}`, http.StatusNotFound)
+			return
+		}
+		if err := repo.Delete(req.Context(), id); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				http.Error(w, `{"detail":"attachment not found"}`, http.StatusNotFound)
+				return
+			}
+			http.Error(w, `{"detail":"failed to delete attachment"}`, http.StatusInternalServerError)
+			return
+		}
+		_ = os.Remove(a.StoragePath)
+		w.WriteHeader(http.StatusNoContent)
 	})
 }

@@ -4,11 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/kiwit/kiwit/internal/auth"
+	"github.com/kiwit/kiwit/internal/notify"
 )
 
 type Step struct {
@@ -35,22 +37,28 @@ type TestCase struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+type TestCaseBody struct {
+	ProductID     int64  `json:"product_id"`
+	CategoryID    *int64 `json:"category_id,omitempty"`
+	Summary       string `json:"summary" minLength:"1" maxLength:"255"`
+	Preconditions string `json:"preconditions,omitempty"`
+	Format        string `json:"format,omitempty" default:"steps" enum:"steps,gherkin"`
+	GherkinBody   string `json:"gherkin_body,omitempty"`
+	Priority      string `json:"priority,omitempty" default:"medium" enum:"low,medium,high,critical"`
+	Status        string `json:"status,omitempty" default:"confirmed" enum:"draft,confirmed,disabled"`
+	IsAutomated   bool   `json:"is_automated,omitempty"`
+	Script        string `json:"script,omitempty"`
+	Arguments     string `json:"arguments,omitempty"`
+	Steps         []Step `json:"steps,omitempty"`
+}
+
+type CreateTestCaseInput struct {
+	Body TestCaseBody
+}
+
 type UpsertTestCaseInput struct {
-	ID   int64 `path:"id" required:"false"`
-	Body struct {
-		ProductID     int64  `json:"product_id"`
-		CategoryID    *int64 `json:"category_id,omitempty"`
-		Summary       string `json:"summary" minLength:"1" maxLength:"255"`
-		Preconditions string `json:"preconditions,omitempty"`
-		Format        string `json:"format,omitempty" default:"steps" enum:"steps,gherkin"`
-		GherkinBody   string `json:"gherkin_body,omitempty"`
-		Priority      string `json:"priority,omitempty" default:"medium" enum:"low,medium,high,critical"`
-		Status        string `json:"status,omitempty" default:"confirmed" enum:"draft,confirmed,disabled"`
-		IsAutomated   bool   `json:"is_automated,omitempty"`
-		Script        string `json:"script,omitempty"`
-		Arguments     string `json:"arguments,omitempty"`
-		Steps         []Step `json:"steps,omitempty"`
-	}
+	ID   int64 `path:"id"`
+	Body TestCaseBody
 }
 
 type TestCaseOutput struct {
@@ -60,11 +68,12 @@ type TestCaseOutput struct {
 type ListTestCasesOutput struct {
 	Body struct {
 		Items []TestCase `json:"items"`
+		Total int64      `json:"total"`
 	}
 }
 
 // RegisterRoutes registers TestCase OpenAPI endpoints.
-func RegisterRoutes(api huma.API, repo Repository) {
+func RegisterRoutes(api huma.API, repo Repository, emailSettings *notify.SettingsStore, emailClient *notify.EmailClient) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-testcases",
 		Method:      http.MethodGet,
@@ -77,32 +86,13 @@ func RegisterRoutes(api huma.API, repo Repository) {
 		Limit    int    `query:"limit" default:"50" minimum:"1" maximum:"200"`
 		Offset   int    `query:"offset" default:"0" minimum:"0"`
 	}) (*ListTestCasesOutput, error) {
-		items, err := repo.List(ctx)
+		items, total, err := repo.ListFiltered(ctx, input.Q, input.Priority, input.Limit, input.Offset)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to list test cases", err)
 		}
-		filtered := make([]TestCase, 0, len(items))
-		qLower := strings.ToLower(strings.TrimSpace(input.Q))
-		for _, tc := range items {
-			if qLower != "" && !strings.Contains(strings.ToLower(tc.Summary), qLower) {
-				continue
-			}
-			if input.Priority != "" && tc.Priority != input.Priority {
-				continue
-			}
-			filtered = append(filtered, tc)
-		}
-		if input.Offset >= len(filtered) {
-			filtered = []TestCase{}
-		} else {
-			end := input.Offset + input.Limit
-			if end > len(filtered) {
-				end = len(filtered)
-			}
-			filtered = filtered[input.Offset:end]
-		}
 		out := &ListTestCasesOutput{}
-		out.Body.Items = filtered
+		out.Body.Items = items
+		out.Body.Total = total
 		return out, nil
 	})
 
@@ -112,7 +102,10 @@ func RegisterRoutes(api huma.API, repo Repository) {
 		Path:        "/api/v1/testcases",
 		Summary:     "Create test case with structured steps",
 		Tags:        []string{"TestCases"},
-	}, func(ctx context.Context, input *UpsertTestCaseInput) (*TestCaseOutput, error) {
+	}, func(ctx context.Context, input *CreateTestCaseInput) (*TestCaseOutput, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
 		tc, err := repo.Create(ctx, UpsertParams{
 			ProductID:     input.Body.ProductID,
 			CategoryID:    input.Body.CategoryID,
@@ -140,6 +133,9 @@ func RegisterRoutes(api huma.API, repo Repository) {
 		Summary:     "Update test case and replace steps atomically",
 		Tags:        []string{"TestCases"},
 	}, func(ctx context.Context, input *UpsertTestCaseInput) (*TestCaseOutput, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
 		tc, err := repo.Update(ctx, input.ID, UpsertParams{
 			ProductID:     input.Body.ProductID,
 			CategoryID:    input.Body.CategoryID,
@@ -160,6 +156,10 @@ func RegisterRoutes(api huma.API, repo Repository) {
 			}
 			return nil, huma.Error400BadRequest("failed to update test case", err)
 		}
+		emailSettings.NotifyIfEnabled(emailClient, "test_case", tc.ID,
+			fmt.Sprintf("[Kiwit] TestCase #%d updated", tc.ID),
+			fmt.Sprintf("TestCase #%d (%s) was updated.", tc.ID, tc.Summary),
+		)
 		return &TestCaseOutput{Body: tc}, nil
 	})
 
@@ -206,6 +206,9 @@ func RegisterRoutes(api huma.API, repo Repository) {
 			Updated int64 `json:"updated"`
 		}
 	}, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
 		n, err := repo.BulkUpdate(ctx, input.Body.IDs, input.Body.Status, input.Body.Priority)
 		if err != nil {
 			return nil, huma.Error400BadRequest("failed to bulk update test cases", err)
@@ -228,6 +231,9 @@ func RegisterRoutes(api huma.API, repo Repository) {
 	}, func(ctx context.Context, input *struct {
 		ID int64 `path:"id"`
 	}) (*struct{}, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
 		if err := repo.Delete(ctx, input.ID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, huma.Error404NotFound("test case not found")
@@ -249,6 +255,9 @@ func RegisterRoutes(api huma.API, repo Repository) {
 			Summary string `json:"summary,omitempty"`
 		}
 	}) (*TestCaseOutput, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
 		tc, err := repo.Clone(ctx, input.ID, input.Body.Summary)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {

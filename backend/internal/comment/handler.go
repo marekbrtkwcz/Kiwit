@@ -49,6 +49,16 @@ func RegisterRoutes(api huma.API, repo Repository) {
 			Body       string `json:"body" minLength:"1"`
 		}
 	}) (*struct{ Body Comment }, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
+		exists, err := repo.EntityExists(ctx, input.Body.EntityType, input.Body.EntityID)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to verify target entity", err)
+		}
+		if !exists {
+			return nil, huma.Error404NotFound("target entity not found")
+		}
 		var authorID *int64
 		if u, ok := auth.UserFromContext(ctx); ok {
 			authorID = &u.ID

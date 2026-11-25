@@ -11,6 +11,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/kiwit/kiwit/internal/auth"
 )
 
 type EmailSettings struct {
@@ -123,6 +124,9 @@ func RegisterEmailRoutes(api huma.API, store *SettingsStore, emailClient *EmailC
 			CCList         []string `json:"cc_list"`
 		}
 	}) (*struct{ Body EmailSettings }, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
 		saved, err := store.Upsert(ctx, EmailSettings{
 			EntityType:     input.Body.EntityType,
 			EntityID:       input.Body.EntityID,
@@ -152,6 +156,9 @@ func RegisterEmailRoutes(api huma.API, store *SettingsStore, emailClient *EmailC
 			Sent bool `json:"sent"`
 		}
 	}, error) {
+		if err := auth.CheckRole(ctx, "admin"); err != nil {
+			return nil, err
+		}
 		if !emailClient.Enabled() {
 			return nil, huma.Error400BadRequest("KIWIT_SMTP_HOST is not configured")
 		}
@@ -166,6 +173,22 @@ func RegisterEmailRoutes(api huma.API, store *SettingsStore, emailClient *EmailC
 		out.Body.Sent = true
 		return out, nil
 	})
+}
+
+// NotifyIfEnabled asynchronously sends an SMTP notification when settings allow and CCList is non-empty.
+func (s *SettingsStore) NotifyIfEnabled(client *EmailClient, entityType string, entityID int64, subject, body string) {
+	if s == nil || client == nil || !client.Enabled() {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		cfg, err := s.Get(ctx, entityType, entityID)
+		if err != nil || !cfg.NotifyOnUpdate || len(cfg.CCList) == 0 {
+			return
+		}
+		_ = client.Send(cfg.CCList, subject, body)
+	}()
 }
 
 func splitCC(raw string) []string {

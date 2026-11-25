@@ -19,6 +19,7 @@ type Comment struct {
 type Repository interface {
 	List(ctx context.Context, entityType string, entityID int64) ([]Comment, error)
 	Create(ctx context.Context, entityType string, entityID int64, authorID *int64, body string) (Comment, error)
+	EntityExists(ctx context.Context, entityType string, entityID int64) (bool, error)
 }
 
 type SQLiteRepository struct {
@@ -66,4 +67,21 @@ func (r *SQLiteRepository) Create(ctx context.Context, entityType string, entity
 		return Comment{}, fmt.Errorf("last insert id: %w", err)
 	}
 	return Comment{ID: id, EntityType: entityType, EntityID: entityID, AuthorID: authorID, Body: body, CreatedAt: now}, nil
+}
+
+func (r *SQLiteRepository) EntityExists(ctx context.Context, entityType string, entityID int64) (bool, error) {
+	var q string
+	switch entityType {
+	case "test_case":
+		q = `SELECT COUNT(*) FROM test_cases WHERE id = ?`
+	case "test_execution":
+		q = `SELECT COUNT(*) FROM test_executions WHERE id = ?`
+	default:
+		return false, nil
+	}
+	var count int
+	if err := r.db.QueryRowContext(ctx, q, entityID).Scan(&count); err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }

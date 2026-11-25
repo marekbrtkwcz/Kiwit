@@ -43,6 +43,10 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}))
+	if err := cfg.Validate(); err != nil {
+		logger.Error("invalid configuration", "err", err)
+		os.Exit(1)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -91,12 +95,19 @@ func main() {
 		testPlanRepo = testplan.NewPostgresRepository(pgPool)
 		testRunRepo = testrun.NewPostgresRepository(pgPool)
 		logger.Info("postgres database ready")
+	} else {
+		logger.Error("unsupported KIWIT_DATABASE_URL scheme (expected sqlite:// or postgres://)", "url", cfg.DatabaseURL)
+		os.Exit(1)
 	}
+
+	authSvc.SetAllowRegistration(cfg.AllowRegistration)
 
 	router := chi.NewMux()
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
 	router.Use(middleware.Recoverer)
+	router.Use(requestLogger(logger))
+	router.Use(auth.NewRateLimiter(20, time.Minute).LimitAuthRoutes)
 	if authSvc != nil {
 		router.Use(authSvc.RequireAuth)
 	}
@@ -110,13 +121,16 @@ func main() {
 		})
 	})
 
+	emailSettings := notify.NewSettingsStore(sqlDBConn, pgPoolConn)
+	emailClient := notify.NewEmailClient(notify.LoadSMTPConfigFromEnv())
+
 	api := humachi.New(router, huma.DefaultConfig("Kiwit TCMS API", "0.1.0"))
 	auth.RegisterRoutes(api, authSvc)
 	management.RegisterRoutes(api, productRepo)
 	management.RegisterRelationRoutes(api, management.NewRelationStore(sqlDBConn, pgPoolConn))
-	testcase.RegisterRoutes(api, testCaseRepo)
+	testcase.RegisterRoutes(api, testCaseRepo, emailSettings, emailClient)
 	testcase.RegisterTemplateRoutes(api, sqlDBConn, pgPoolConn)
-	testplan.RegisterRoutes(api, testPlanRepo)
+	testplan.RegisterRoutes(api, testPlanRepo, emailSettings, emailClient)
 	notifier := notify.NewWebhookClient(os.Getenv("KIWIT_WEBHOOK_URL"))
 	testrun.RegisterRoutes(api, testRunRepo, notifier)
 	testrun.RegisterExportRoutes(router, testRunRepo)
@@ -124,12 +138,12 @@ func main() {
 	telemetry.RegisterRoutes(api, sqlDBConn, pgPoolConn)
 	comment.RegisterRoutes(api, commentRepo)
 	notify.RegisterRoutes(api, notifier)
-	notify.RegisterEmailRoutes(api, notify.NewSettingsStore(sqlDBConn, pgPoolConn), notify.NewEmailClient(notify.LoadSMTPConfigFromEnv()))
+	notify.RegisterEmailRoutes(api, emailSettings, emailClient)
 	environment.RegisterRoutes(api, environment.NewStore(sqlDBConn, pgPoolConn))
 	pluginReg := plugin.NewRegistry()
 	pluginReg.InitAll(api)
 	plugin.RegisterRoutes(api, pluginReg)
-	attachment.RegisterRoutes(router, attachmentRepo, "./uploads")
+	attachment.RegisterRoutes(router, attachmentRepo, cfg.UploadDir)
 
 	router.Handle("/*", web.SPAHandler())
 
@@ -175,4 +189,23 @@ func listenWithFallback(defaultAddr string, explicit bool) (net.Listener, string
 		}
 	}
 	return nil, "", fmt.Errorf("no free port found in range 8080-8180")
+}
+
+func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+			next.ServeHTTP(ww, r)
+			logger.Info("http request",
+				"method", r.Method,
+				"path", r.URL.Path,
+				"status", ww.Status(),
+				"bytes", ww.BytesWritten(),
+				"duration_ms", time.Since(start).Milliseconds(),
+				"request_id", middleware.GetReqID(r.Context()),
+				"remote_addr", r.RemoteAddr,
+			)
+		})
+	}
 }

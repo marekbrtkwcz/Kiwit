@@ -2,10 +2,13 @@ package issuetracker
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"net/http"
 	"os"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/kiwit/kiwit/internal/auth"
 )
 
 func RegisterRoutes(api huma.API, repo Repository) {
@@ -46,6 +49,12 @@ func RegisterRoutes(api huma.API, repo Repository) {
 			BaseURL  string `json:"base_url" minLength:"1"`
 		}
 	}) (*struct{ Body Tracker }, error) {
+		if err := auth.CheckRole(ctx, "admin"); err != nil {
+			return nil, err
+		}
+		if err := ValidateTrackerURL(input.Body.BaseURL); err != nil {
+			return nil, huma.Error400BadRequest(err.Error())
+		}
 		t, err := repo.CreateTracker(ctx, input.Body.Name, input.Body.Provider, input.Body.BaseURL)
 		if err != nil {
 			return nil, huma.Error409Conflict("failed to create tracker", err)
@@ -94,6 +103,9 @@ func RegisterRoutes(api huma.API, repo Repository) {
 			Title       string `json:"title,omitempty"`
 		}
 	}) (*struct{ Body Bug }, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
 		b, err := repo.LinkBug(ctx, input.ExecutionID, input.Body.TrackerID, input.Body.ExternalKey, input.Body.URL, input.Body.Title)
 		if err != nil {
 			return nil, huma.Error400BadRequest("failed to link bug", err)
@@ -117,25 +129,21 @@ func RegisterRoutes(api huma.API, repo Repository) {
 			Body       string `json:"body,omitempty"`
 		}
 	}) (*struct{ Body Bug }, error) {
-		trackers, err := repo.ListTrackers(ctx)
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
+		target, err := repo.GetTrackerByID(ctx, input.Body.TrackerID)
 		if err != nil {
-			return nil, huma.Error500InternalServerError("failed to list trackers", err)
-		}
-		var target *Tracker
-		for i := range trackers {
-			if trackers[i].ID == input.Body.TrackerID {
-				target = &trackers[i]
-				break
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, huma.Error404NotFound("issue tracker not found")
 			}
-		}
-		if target == nil {
-			return nil, huma.Error404NotFound("issue tracker not found")
+			return nil, huma.Error500InternalServerError("failed to load tracker", err)
 		}
 		token := input.Body.APIToken
 		if token == "" {
 			token = os.Getenv("KIWIT_TRACKER_TOKEN")
 		}
-		reported, err := ReportIssue(ctx, *target, token, input.Body.ProjectKey, input.Body.Title, input.Body.Body)
+		reported, err := ReportIssue(ctx, target, token, input.Body.ProjectKey, input.Body.Title, input.Body.Body)
 		if err != nil {
 			return nil, huma.Error502BadGateway("failed to report issue to tracker", err)
 		}

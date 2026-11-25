@@ -12,7 +12,7 @@ WORKDIR /app/backend
 COPY backend/go.mod backend/go.sum* ./
 RUN go mod download
 COPY backend/ ./
-# COPY --from=frontend-builder /app/frontend/dist ./internal/web/dist
+COPY --from=frontend-builder /app/frontend/dist ./internal/web/dist
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /kiwit ./cmd/server
 
 # Stage 3: Runtime

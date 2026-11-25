@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -21,51 +23,154 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 }
 
 func (r *PostgresRepository) List(ctx context.Context) ([]TestCase, error) {
-	rows, err := r.pool.Query(ctx, `
+	items, _, err := r.ListFiltered(ctx, "", "", 0, 0)
+	return items, err
+}
+
+func (r *PostgresRepository) ListFiltered(ctx context.Context, q, priority string, limit, offset int) ([]TestCase, int64, error) {
+	where := make([]string, 0, 2)
+	args := make([]any, 0, 4)
+	argIdx := 1
+
+	if trimmed := strings.TrimSpace(q); trimmed != "" {
+		where = append(where, fmt.Sprintf("summary ILIKE $%d", argIdx))
+		args = append(args, "%"+trimmed+"%")
+		argIdx++
+	}
+	if priority != "" {
+		where = append(where, fmt.Sprintf("priority = $%d", argIdx))
+		args = append(args, priority)
+		argIdx++
+	}
+
+	whereClause := ""
+	if len(where) > 0 {
+		whereClause = " WHERE " + strings.Join(where, " AND ")
+	}
+
+	var total int64
+	if err := r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM test_cases"+whereClause, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count test cases: %w", err)
+	}
+
+	query := `
 		SELECT id, product_id, category_id, summary, preconditions, format, gherkin_body, priority, status, is_automated, script, arguments, created_at, updated_at
-		FROM test_cases ORDER BY id ASC`)
+		FROM test_cases` + whereClause + ` ORDER BY id ASC`
+	queryArgs := append([]any(nil), args...)
+	if limit > 0 {
+		query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
+		queryArgs = append(queryArgs, limit, offset)
+	}
+
+	rows, err := r.pool.Query(ctx, query, queryArgs...)
 	if err != nil {
-		return nil, fmt.Errorf("query test cases: %w", err)
+		return nil, 0, fmt.Errorf("query test cases: %w", err)
 	}
 	defer rows.Close()
 
 	items := make([]TestCase, 0)
 	for rows.Next() {
-		var tc TestCase
-		var catID sql.NullInt64
-		if err := rows.Scan(
-			&tc.ID, &tc.ProductID, &catID, &tc.Summary, &tc.Preconditions,
-			&tc.Format, &tc.GherkinBody, &tc.Priority, &tc.Status,
-			&tc.IsAutomated, &tc.Script, &tc.Arguments,
-			&tc.CreatedAt, &tc.UpdatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("scan test case: %w", err)
+		tc, err := scanPostgresTestCase(rows)
+		if err != nil {
+			return nil, 0, fmt.Errorf("scan test case: %w", err)
 		}
-		if catID.Valid {
-			tc.CategoryID = &catID.Int64
-		}
-		tc.Steps = []Step{}
 		items = append(items, tc)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	for i := range items {
-		sRows, err := r.pool.Query(ctx, `SELECT position, action, expected_result FROM test_case_steps WHERE test_case_id = $1 ORDER BY position ASC`, items[i].ID)
-		if err != nil {
-			return nil, fmt.Errorf("query steps: %w", err)
-		}
-		for sRows.Next() {
-			var st Step
-			if err := sRows.Scan(&st.Position, &st.Action, &st.ExpectedResult); err != nil {
-				sRows.Close()
-				return nil, fmt.Errorf("scan step: %w", err)
-			}
-			items[i].Steps = append(items[i].Steps, st)
-		}
-		sRows.Close()
+
+	if err := r.attachStepsBatch(ctx, items); err != nil {
+		return nil, 0, err
 	}
-	return items, nil
+	return items, total, nil
+}
+
+func (r *PostgresRepository) GetByID(ctx context.Context, id int64) (TestCase, error) {
+	row := r.pool.QueryRow(ctx, `
+		SELECT id, product_id, category_id, summary, preconditions, format, gherkin_body, priority, status, is_automated, script, arguments, created_at, updated_at
+		FROM test_cases WHERE id = $1`, id)
+	tc, err := scanPostgresTestCase(row)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return TestCase{}, sql.ErrNoRows
+		}
+		return TestCase{}, err
+	}
+	items := []TestCase{tc}
+	if err := r.attachStepsBatch(ctx, items); err != nil {
+		return TestCase{}, err
+	}
+	return items[0], nil
+}
+
+func scanPostgresTestCase(s rowScanner) (TestCase, error) {
+	var tc TestCase
+	var catID sql.NullInt64
+	if err := s.Scan(
+		&tc.ID, &tc.ProductID, &catID, &tc.Summary, &tc.Preconditions,
+		&tc.Format, &tc.GherkinBody, &tc.Priority, &tc.Status,
+		&tc.IsAutomated, &tc.Script, &tc.Arguments,
+		&tc.CreatedAt, &tc.UpdatedAt,
+	); err != nil {
+		return TestCase{}, err
+	}
+	if catID.Valid {
+		tc.CategoryID = &catID.Int64
+	}
+	tc.Steps = []Step{}
+	return tc, nil
+}
+
+func (r *PostgresRepository) attachStepsBatch(ctx context.Context, items []TestCase) error {
+	if len(items) == 0 {
+		return nil
+	}
+	ids := make([]int64, len(items))
+	byID := make(map[int64]int, len(items))
+	for i, tc := range items {
+		ids[i] = tc.ID
+		byID[tc.ID] = i
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT test_case_id, position, action, expected_result FROM test_case_steps WHERE test_case_id = ANY($1) ORDER BY test_case_id ASC, position ASC`,
+		ids,
+	)
+	if err != nil {
+		return fmt.Errorf("batch query steps: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var tcID int64
+		var st Step
+		if err := rows.Scan(&tcID, &st.Position, &st.Action, &st.ExpectedResult); err != nil {
+			return fmt.Errorf("scan step: %w", err)
+		}
+		if idx, ok := byID[tcID]; ok {
+			items[idx].Steps = append(items[idx].Steps, st)
+		}
+	}
+	return rows.Err()
+}
+
+func savePostgresRevision(ctx context.Context, tx pgx.Tx, testCaseID int64, p UpsertParams, now time.Time) error {
+	var nextVer int
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(MAX(version), 0) + 1 FROM test_case_revisions WHERE test_case_id = $1`, testCaseID).Scan(&nextVer); err != nil {
+		return fmt.Errorf("next revision version: %w", err)
+	}
+	snap, err := json.Marshal(nonNilSteps(p.Steps))
+	if err != nil {
+		return fmt.Errorf("marshal revision steps: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO test_case_revisions (test_case_id, version, summary, preconditions, format, gherkin_body, priority, status, steps_snapshot, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		testCaseID, nextVer, p.Summary, p.Preconditions, p.Format, p.GherkinBody, p.Priority, p.Status, snap, now,
+	); err != nil {
+		return fmt.Errorf("insert revision: %w", err)
+	}
+	return nil
 }
 
 func (r *PostgresRepository) Create(ctx context.Context, p UpsertParams) (TestCase, error) {
@@ -98,14 +203,18 @@ func (r *PostgresRepository) Create(ctx context.Context, p UpsertParams) (TestCa
 		}
 	}
 
+	if err := savePostgresRevision(ctx, tx, id, p, now); err != nil {
+		return TestCase{}, err
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return TestCase{}, fmt.Errorf("commit tx: %w", err)
 	}
 	return TestCase{
 		ID: id, ProductID: p.ProductID, CategoryID: p.CategoryID, Summary: p.Summary,
 		Preconditions: p.Preconditions, Format: p.Format, GherkinBody: p.GherkinBody,
-		Priority: p.Priority, Status: p.Status, Steps: nonNilSteps(p.Steps),
-		CreatedAt: now, UpdatedAt: now,
+		Priority: p.Priority, Status: p.Status, IsAutomated: p.IsAutomated, Script: p.Script, Arguments: p.Arguments,
+		Steps: nonNilSteps(p.Steps), CreatedAt: now, UpdatedAt: now,
 	}, nil
 }
 
@@ -117,17 +226,18 @@ func (r *PostgresRepository) Update(ctx context.Context, id int64, p UpsertParam
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	now := time.Now().UTC()
-	tag, err := tx.Exec(ctx, `
+	var createdAt time.Time
+	err = tx.QueryRow(ctx, `
 		UPDATE test_cases
 		SET product_id = $1, category_id = $2, summary = $3, preconditions = $4, format = $5, gherkin_body = $6, priority = $7, status = $8, is_automated = $9, script = $10, arguments = $11, updated_at = $12
-		WHERE id = $13`,
+		WHERE id = $13 RETURNING created_at`,
 		p.ProductID, p.CategoryID, p.Summary, p.Preconditions, p.Format, p.GherkinBody, p.Priority, p.Status, p.IsAutomated, p.Script, p.Arguments, now, id,
-	)
+	).Scan(&createdAt)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return TestCase{}, sql.ErrNoRows
+		}
 		return TestCase{}, fmt.Errorf("update test case: %w", err)
-	}
-	if tag.RowsAffected() == 0 {
-		return TestCase{}, sql.ErrNoRows
 	}
 
 	if _, err := tx.Exec(ctx, `DELETE FROM test_case_steps WHERE test_case_id = $1`, id); err != nil {
@@ -145,14 +255,18 @@ func (r *PostgresRepository) Update(ctx context.Context, id int64, p UpsertParam
 		}
 	}
 
+	if err := savePostgresRevision(ctx, tx, id, p, now); err != nil {
+		return TestCase{}, err
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return TestCase{}, fmt.Errorf("commit tx: %w", err)
 	}
 	return TestCase{
 		ID: id, ProductID: p.ProductID, CategoryID: p.CategoryID, Summary: p.Summary,
 		Preconditions: p.Preconditions, Format: p.Format, GherkinBody: p.GherkinBody,
-		Priority: p.Priority, Status: p.Status, Steps: nonNilSteps(p.Steps),
-		CreatedAt: now, UpdatedAt: now,
+		Priority: p.Priority, Status: p.Status, IsAutomated: p.IsAutomated, Script: p.Script, Arguments: p.Arguments,
+		Steps: nonNilSteps(p.Steps), CreatedAt: createdAt, UpdatedAt: now,
 	}, nil
 }
 
@@ -216,42 +330,64 @@ func (r *PostgresRepository) BulkUpdate(ctx context.Context, ids []int64, status
 }
 
 func (r *PostgresRepository) Delete(ctx context.Context, id int64) error {
-	tag, err := r.pool.Exec(ctx, `DELETE FROM test_cases WHERE id = $1`, id)
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var paths []string
+	if rows, err := tx.Query(ctx, `SELECT storage_path FROM attachments WHERE entity_type = 'test_case' AND entity_id = $1`, id); err == nil {
+		for rows.Next() {
+			var p string
+			if scanErr := rows.Scan(&p); scanErr == nil && p != "" {
+				paths = append(paths, p)
+			}
+		}
+		rows.Close()
+	}
+
+	tag, err := tx.Exec(ctx, `DELETE FROM test_cases WHERE id = $1`, id)
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() == 0 {
 		return sql.ErrNoRows
 	}
+	_, _ = tx.Exec(ctx, `DELETE FROM attachments WHERE entity_type = 'test_case' AND entity_id = $1`, id)
+	_, _ = tx.Exec(ctx, `DELETE FROM comments WHERE entity_type = 'test_case' AND entity_id = $1`, id)
+	_, _ = tx.Exec(ctx, `DELETE FROM email_settings WHERE entity_type = 'test_case' AND entity_id = $1`, id)
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit tx: %w", err)
+	}
+	for _, p := range paths {
+		_ = os.Remove(p)
+	}
 	return nil
 }
 
 func (r *PostgresRepository) Clone(ctx context.Context, id int64, newSummary string) (TestCase, error) {
-	items, err := r.List(ctx)
+	tc, err := r.GetByID(ctx, id)
 	if err != nil {
 		return TestCase{}, err
 	}
-	for _, tc := range items {
-		if tc.ID == id {
-			summary := newSummary
-			if summary == "" {
-				summary = tc.Summary + " (copy)"
-			}
-			return r.Create(ctx, UpsertParams{
-				ProductID:     tc.ProductID,
-				CategoryID:    tc.CategoryID,
-				Summary:       summary,
-				Preconditions: tc.Preconditions,
-				Format:        tc.Format,
-				GherkinBody:   tc.GherkinBody,
-				Priority:      tc.Priority,
-				Status:        tc.Status,
-				IsAutomated:   tc.IsAutomated,
-				Script:        tc.Script,
-				Arguments:     tc.Arguments,
-				Steps:         tc.Steps,
-			})
-		}
+	summary := newSummary
+	if summary == "" {
+		summary = tc.Summary + " (copy)"
 	}
-	return TestCase{}, sql.ErrNoRows
+	return r.Create(ctx, UpsertParams{
+		ProductID:     tc.ProductID,
+		CategoryID:    tc.CategoryID,
+		Summary:       summary,
+		Preconditions: tc.Preconditions,
+		Format:        tc.Format,
+		GherkinBody:   tc.GherkinBody,
+		Priority:      tc.Priority,
+		Status:        tc.Status,
+		IsAutomated:   tc.IsAutomated,
+		Script:        tc.Script,
+		Arguments:     tc.Arguments,
+		Steps:         tc.Steps,
+	})
 }

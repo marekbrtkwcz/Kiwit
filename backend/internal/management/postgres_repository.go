@@ -2,9 +2,11 @@ package management
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -21,6 +23,29 @@ func (r *PostgresRepository) ListProducts(ctx context.Context) ([]Product, error
 	rows, err := r.pool.Query(ctx, `SELECT id, name, description, created_at FROM products ORDER BY id ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("query products: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]Product, 0)
+	for rows.Next() {
+		var p Product
+		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan product: %w", err)
+		}
+		items = append(items, p)
+	}
+	return items, rows.Err()
+}
+
+func (r *PostgresRepository) ListProductsForUser(ctx context.Context, userID int64) ([]Product, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT p.id, p.name, p.description, p.created_at
+		FROM products p
+		WHERE NOT EXISTS (SELECT 1 FROM product_members pm WHERE pm.product_id = p.id)
+		   OR EXISTS (SELECT 1 FROM product_members pm WHERE pm.product_id = p.id AND pm.user_id = $1)
+		ORDER BY p.id ASC`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("query products for user: %w", err)
 	}
 	defer rows.Close()
 
@@ -217,6 +242,31 @@ func (r *PostgresRepository) HasAccess(ctx context.Context, productID, userID in
 		productID, userID,
 	).Scan(&count)
 	return count > 0, err
+}
+
+func (r *PostgresRepository) CheckProductAccess(ctx context.Context, productID, userID int64, requireWrite bool) (bool, error) {
+	var memberCount int
+	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM product_members WHERE product_id = $1`, productID).Scan(&memberCount); err != nil {
+		return false, err
+	}
+	if memberCount == 0 {
+		return true, nil
+	}
+	var role string
+	err := r.pool.QueryRow(ctx,
+		`SELECT role FROM product_members WHERE product_id = $1 AND user_id = $2`,
+		productID, userID,
+	).Scan(&role)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	if requireWrite && role == "viewer" {
+		return false, nil
+	}
+	return true, nil
 }
 
 func (r *PostgresRepository) ListPriorities(ctx context.Context) ([]Priority, error) {

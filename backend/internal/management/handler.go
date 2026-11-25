@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/kiwit/kiwit/internal/auth"
 )
 
 // Product represents a tested software product.
@@ -167,6 +168,24 @@ type ExecutionStatus struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+func enforceProductAccess(ctx context.Context, repo ProductRepository, productID int64, requireWrite bool) error {
+	u, ok := auth.UserFromContext(ctx)
+	if !ok {
+		return huma.Error401Unauthorized("unauthorized")
+	}
+	if u.Role == "admin" {
+		return nil
+	}
+	allowed, err := repo.CheckProductAccess(ctx, productID, u.ID, requireWrite)
+	if err != nil {
+		return huma.Error500InternalServerError("failed to verify product access", err)
+	}
+	if !allowed {
+		return huma.Error403Forbidden("no access to this product")
+	}
+	return nil
+}
+
 // RegisterRoutes registers management OpenAPI endpoints.
 func RegisterRoutes(api huma.API, repo ProductRepository) {
 	huma.Register(api, huma.Operation{
@@ -176,7 +195,13 @@ func RegisterRoutes(api huma.API, repo ProductRepository) {
 		Summary:     "List products",
 		Tags:        []string{"Management"},
 	}, func(ctx context.Context, input *struct{}) (*ListProductsOutput, error) {
-		items, err := repo.ListProducts(ctx)
+		var items []Product
+		var err error
+		if u, ok := auth.UserFromContext(ctx); ok && u.Role != "admin" {
+			items, err = repo.ListProductsForUser(ctx, u.ID)
+		} else {
+			items, err = repo.ListProducts(ctx)
+		}
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to list products", err)
 		}
@@ -192,6 +217,9 @@ func RegisterRoutes(api huma.API, repo ProductRepository) {
 		Summary:     "Create product",
 		Tags:        []string{"Management"},
 	}, func(ctx context.Context, input *CreateProductInput) (*ProductOutput, error) {
+		if err := auth.CheckRole(ctx, "admin"); err != nil {
+			return nil, err
+		}
 		p, err := repo.CreateProduct(ctx, input.Body.Name, input.Body.Description)
 		if err != nil {
 			return nil, huma.Error409Conflict("failed to create product", err)
@@ -208,6 +236,9 @@ func RegisterRoutes(api huma.API, repo ProductRepository) {
 	}, func(ctx context.Context, input *struct {
 		ProductID int64 `path:"product_id"`
 	}) (*ListVersionsOutput, error) {
+		if err := enforceProductAccess(ctx, repo, input.ProductID, false); err != nil {
+			return nil, err
+		}
 		items, err := repo.ListVersions(ctx, input.ProductID)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to list versions", err)
@@ -224,6 +255,12 @@ func RegisterRoutes(api huma.API, repo ProductRepository) {
 		Summary:     "Create product version",
 		Tags:        []string{"Management"},
 	}, func(ctx context.Context, input *CreateVersionInput) (*VersionOutput, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
+		if err := enforceProductAccess(ctx, repo, input.ProductID, true); err != nil {
+			return nil, err
+		}
 		v, err := repo.CreateVersion(ctx, input.ProductID, input.Body.Value)
 		if err != nil {
 			return nil, huma.Error409Conflict("failed to create version", err)
@@ -256,6 +293,9 @@ func RegisterRoutes(api huma.API, repo ProductRepository) {
 		Summary:     "Create version build",
 		Tags:        []string{"Management"},
 	}, func(ctx context.Context, input *CreateBuildInput) (*BuildOutput, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
 		b, err := repo.CreateBuild(ctx, input.VersionID, input.Body.Name)
 		if err != nil {
 			return nil, huma.Error409Conflict("failed to create build", err)
@@ -272,6 +312,9 @@ func RegisterRoutes(api huma.API, repo ProductRepository) {
 	}, func(ctx context.Context, input *struct {
 		ProductID int64 `path:"product_id"`
 	}) (*ListComponentsOutput, error) {
+		if err := enforceProductAccess(ctx, repo, input.ProductID, false); err != nil {
+			return nil, err
+		}
 		items, err := repo.ListComponents(ctx, input.ProductID)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to list components", err)
@@ -288,6 +331,12 @@ func RegisterRoutes(api huma.API, repo ProductRepository) {
 		Summary:     "Create product component",
 		Tags:        []string{"Management"},
 	}, func(ctx context.Context, input *CreateComponentInput) (*ComponentOutput, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
+		if err := enforceProductAccess(ctx, repo, input.ProductID, true); err != nil {
+			return nil, err
+		}
 		c, err := repo.CreateComponent(ctx, input.ProductID, input.Body.Name, input.Body.Description)
 		if err != nil {
 			return nil, huma.Error409Conflict("failed to create component", err)
@@ -318,6 +367,9 @@ func RegisterRoutes(api huma.API, repo ProductRepository) {
 		Summary:     "Create tag",
 		Tags:        []string{"Management"},
 	}, func(ctx context.Context, input *CreateTagInput) (*TagOutput, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
 		t, err := repo.CreateTag(ctx, input.Body.Name)
 		if err != nil {
 			return nil, huma.Error409Conflict("failed to create tag", err)
@@ -348,6 +400,9 @@ func RegisterRoutes(api huma.API, repo ProductRepository) {
 		Summary:     "Create test case category",
 		Tags:        []string{"Management"},
 	}, func(ctx context.Context, input *CreateCategoryInput) (*CategoryOutput, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
 		c, err := repo.CreateCategory(ctx, input.Body.Name)
 		if err != nil {
 			return nil, huma.Error409Conflict("failed to create category", err)
@@ -372,6 +427,9 @@ func RegisterRoutes(api huma.API, repo ProductRepository) {
 			OK bool `json:"ok"`
 		}
 	}, error) {
+		if err := auth.CheckRole(ctx, "admin"); err != nil {
+			return nil, err
+		}
 		if err := repo.AddMember(ctx, input.ProductID, input.Body.UserID, input.Body.Role); err != nil {
 			return nil, huma.Error400BadRequest("failed to assign member", err)
 		}
@@ -419,6 +477,9 @@ func RegisterRoutes(api huma.API, repo ProductRepository) {
 			Value string `json:"value" minLength:"1"`
 		}
 	}) (*struct{ Body Priority }, error) {
+		if err := auth.CheckRole(ctx, "admin"); err != nil {
+			return nil, err
+		}
 		p, err := repo.CreatePriority(ctx, input.Body.Value)
 		if err != nil {
 			return nil, huma.Error409Conflict("failed to create priority", err)
@@ -463,6 +524,9 @@ func RegisterRoutes(api huma.API, repo ProductRepository) {
 			Weight int    `json:"weight,omitempty"`
 		}
 	}) (*struct{ Body ExecutionStatus }, error) {
+		if err := auth.CheckRole(ctx, "admin"); err != nil {
+			return nil, err
+		}
 		s, err := repo.CreateExecutionStatus(ctx, input.Body.Name, input.Body.Color, input.Body.Weight)
 		if err != nil {
 			return nil, huma.Error409Conflict("failed to create execution status", err)

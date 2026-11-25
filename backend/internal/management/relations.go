@@ -7,6 +7,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/kiwit/kiwit/internal/auth"
 )
 
 type RelationStore struct {
@@ -162,6 +163,9 @@ func RegisterRelationRoutes(api huma.API, s *RelationStore) {
 				OK bool `json:"ok"`
 			}
 		}, error) {
+			if err := auth.CheckRole(ctx, "tester"); err != nil {
+				return nil, err
+			}
 			if err := s.AttachTag(ctx, table, fkCol, input.ID, input.Body.TagID); err != nil {
 				return nil, huma.Error400BadRequest("failed to attach tag", err)
 			}
@@ -213,6 +217,9 @@ func RegisterRelationRoutes(api huma.API, s *RelationStore) {
 			OK bool `json:"ok"`
 		}
 	}, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
 		if err := s.AttachComponentToCase(ctx, input.ID, input.Body.ComponentID); err != nil {
 			return nil, huma.Error400BadRequest("failed to attach component", err)
 		}
