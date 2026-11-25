@@ -1,40 +1,54 @@
 import { useEffect, useState } from 'react'
-import { api, PlanCaseItem, Product, TestCase, TestPlan, Version } from '../../api/client'
+import { useNavigate, useParams } from 'react-router-dom'
+import { ChevronDown, ChevronUp, Copy, ExternalLink, FolderKanban, Plus, Search, Trash2, Unlink } from 'lucide-react'
+import { api, PlanCaseItem, TestCase, TestPlan, Version } from '../../api/client'
+import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 import { EntityTagsBar } from '../management/EntityTagsBar'
 
 export function TestPlansView() {
   const { t } = useI18n()
-  const [products, setProducts] = useState<Product[]>([])
+  const { products, activeProductId, notify } = useWorkspace()
+  const { id: routePlanId } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+
   const [versions, setVersions] = useState<Version[]>([])
   const [plans, setPlans] = useState<TestPlan[]>([])
   const [cases, setCases] = useState<TestCase[]>([])
   const [attachedCases, setAttachedCases] = useState<PlanCaseItem[]>([])
-  const [productId, setProductId] = useState<number>(1)
+  const [productId, setProductId] = useState<number>(activeProductId ?? 1)
   const [versionId, setVersionId] = useState<number>(0)
-  const [selectedPlanId, setSelectedPlanId] = useState<number>(0)
+  const [selectedPlanId, setSelectedPlanId] = useState<number>(routePlanId ? Number(routePlanId) : 0)
   const [parentId, setParentId] = useState<number | undefined>(undefined)
   const [selectedCaseIds, setSelectedCaseIds] = useState<number[]>([])
   const [name, setName] = useState('')
+  const [filterQ, setFilterQ] = useState('')
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (activeProductId) setProductId(activeProductId)
+    else if (products.length > 0 && !products.some((p) => p.id === productId)) setProductId(products[0].id)
+  }, [activeProductId, products])
 
   const load = async () => {
     try {
-      const [pRes, tpRes, tcRes] = await Promise.all([api.listProducts(), api.listTestPlans(), api.listTestCases({ limit: 200 })])
-      setProducts(pRes.items)
+      const [tpRes, tcRes] = await Promise.all([
+        api.listTestPlans({ product_id: activeProductId ?? undefined, q: filterQ || undefined }),
+        api.listTestCases({ product_id: activeProductId ?? undefined, limit: 200 }),
+      ])
       setPlans(tpRes.items)
       setCases(tcRes.items)
-      if (tpRes.items.length > 0 && !selectedPlanId) {
+      if (routePlanId) {
+        setSelectedPlanId(Number(routePlanId))
+      } else if (tpRes.items.length > 0 && (!selectedPlanId || !tpRes.items.some((p) => p.id === selectedPlanId))) {
         setSelectedPlanId(tpRes.items[0].id)
       }
-      const activePid = pRes.items.length > 0 ? pRes.items[0].id : 0
-      if (activePid && productId !== activePid && !pRes.items.some((p) => p.id === productId)) {
-        setProductId(activePid)
-      }
-      if (activePid) {
-        const vRes = await api.listVersions(productId || activePid)
+      if (productId > 0) {
+        const vRes = await api.listVersions(productId)
         setVersions(vRes.items)
-        if (vRes.items.length > 0) setVersionId(vRes.items[0].id)
+        if (vRes.items.length > 0 && !vRes.items.some((v) => v.id === versionId)) {
+          setVersionId(vRes.items[0].id)
+        }
       }
       setError(null)
     } catch (e) {
@@ -53,14 +67,11 @@ export function TestPlansView() {
 
   useEffect(() => {
     void load()
-  }, [productId])
+  }, [activeProductId, productId, filterQ])
 
   useEffect(() => {
-    if (selectedPlanId > 0) {
-      void loadAttached(selectedPlanId)
-    } else {
-      setAttachedCases([])
-    }
+    if (selectedPlanId > 0) void loadAttached(selectedPlanId)
+    else setAttachedCases([])
   }, [selectedPlanId])
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -71,6 +82,8 @@ export function TestPlansView() {
       setName('')
       setParentId(undefined)
       setSelectedPlanId(created.id)
+      navigate(`/plans/${created.id}`, { replace: true })
+      notify(`Created TestPlan #${created.id}`)
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : t.errors.createTestPlan)
@@ -84,153 +97,220 @@ export function TestPlansView() {
   const handleAttach = async () => {
     if (!selectedPlanId || selectedCaseIds.length === 0) return
     try {
-      await api.addTestPlanCases(selectedPlanId, selectedCaseIds)
+      const res = await api.addTestPlanCases(selectedPlanId, selectedCaseIds)
       setSelectedCaseIds([])
+      notify(`Attached ${res.added} case(s) to Plan #${selectedPlanId}`)
       await loadAttached(selectedPlanId)
-      setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : t.errors.createTestPlan)
     }
   }
 
   const attachedSet = new Set(attachedCases.map((c) => c.test_case_id))
+  const selectedPlan = plans.find((p) => p.id === selectedPlanId) ?? null
 
   return (
-    <section>
-      <h2>{t.testplans.title}</h2>
+    <section style={{ display: 'grid', gap: '1rem' }}>
       {error && <p className="alert-error">{error}</p>}
 
-      <form onSubmit={handleCreate} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+      <form onSubmit={handleCreate} className="filter-bar" style={{ marginBottom: 0 }}>
         <select className="select" value={productId} onChange={(e) => setProductId(Number(e.target.value))}>
           {products.map((p) => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
         </select>
         <select className="select" value={versionId} onChange={(e) => setVersionId(Number(e.target.value))}>
+          {versions.length === 0 && <option value={0}>No versions</option>}
           {versions.map((v) => (
             <option key={v.id} value={v.id}>{v.value}</option>
           ))}
         </select>
         <select className="select" value={parentId ?? ''} onChange={(e) => setParentId(e.target.value ? Number(e.target.value) : undefined)}>
-          <option value="">No parent</option>
+          <option value="">Root plan</option>
           {plans.map((p) => (
             <option key={p.id} value={p.id}>Parent: {p.name}</option>
           ))}
         </select>
         <input className="input" placeholder={t.testplans.namePlaceholder} value={name} onChange={(e) => setName(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
-        <button type="submit" disabled={!versionId} className="btn btn-primary">{t.testplans.create}</button>
+        <button type="submit" disabled={!versionId} className="btn btn-primary">
+          <Plus size={15} /> {t.testplans.create}
+        </button>
       </form>
 
-      <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: '0.5rem', marginBottom: '1.25rem' }}>
-        {plans.map((tp) => (
-          <li
-            key={tp.id}
-            className="card"
-            onClick={() => setSelectedPlanId(tp.id)}
-            style={{
-              border: selectedPlanId === tp.id ? '2px solid var(--primary)' : undefined,
-              cursor: 'pointer',
-            }}
-          >
-            <strong>{tp.name}</strong>
-            <span style={{ marginLeft: '0.5rem', fontSize: '0.85rem', color: 'var(--muted)' }}>
-              Product #{tp.product_id} · Version #{tp.version_id}{tp.parent_id ? ` · Parent #${tp.parent_id}` : ''}
-            </span>
-            <span style={{ float: 'right', display: 'inline-flex', gap: '0.35rem' }}>
-              <button
-                type="button"
-                className="btn btn-sm"
-                onClick={async (e) => {
-                  e.stopPropagation()
-                  try {
+      <div className="split-layout">
+        <div className="card" style={{ padding: '0.75rem', display: 'grid', gap: '0.45rem' }}>
+          <div style={{ position: 'relative' }}>
+            <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
+            <input className="input" placeholder="Filter plans…" value={filterQ} onChange={(e) => setFilterQ(e.target.value)} style={{ width: '100%', paddingLeft: 30 }} />
+          </div>
+          {plans.map((tp) => (
+            <div
+              key={tp.id}
+              onClick={() => {
+                setSelectedPlanId(tp.id)
+                navigate(`/plans/${tp.id}`, { replace: true })
+              }}
+              style={{
+                padding: '0.6rem 0.7rem',
+                marginLeft: tp.parent_id ? 14 : 0,
+                borderRadius: 8,
+                border: selectedPlanId === tp.id ? '1px solid var(--primary)' : '1px solid var(--border)',
+                background: selectedPlanId === tp.id ? 'var(--primary-soft)' : 'var(--surface)',
+                cursor: 'pointer',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: '0.4rem',
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: '0.86rem', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <FolderKanban size={14} /> {tp.name}
+                </div>
+                <div style={{ fontSize: '0.74rem', color: 'var(--muted)' }}>
+                  #{tp.id} · v#{tp.version_id}{tp.parent_id ? ` · parent #${tp.parent_id}` : ''}
+                </div>
+              </div>
+              <div style={{ display: 'inline-flex', gap: '0.2rem' }} onClick={(e) => e.stopPropagation()}>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  title="Clone"
+                  onClick={async () => {
                     await api.cloneTestPlan(tp.id, `${tp.name} (copy)`)
+                    notify(`Cloned plan #${tp.id}`)
                     await load()
-                  } catch (err) {
-                    setError(err instanceof Error ? err.message : t.errors.createTestPlan)
-                  }
-                }}
-              >
-                Clone
-              </button>
-              <button
-                type="button"
-                className="btn btn-danger btn-sm"
-                onClick={async (e) => {
-                  e.stopPropagation()
-                  if (!window.confirm(`Delete TestPlan #${tp.id}?`)) return
-                  try {
+                  }}
+                >
+                  <Copy size={13} />
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  style={{ color: 'var(--danger)' }}
+                  title="Delete"
+                  onClick={async () => {
+                    if (!window.confirm(`Delete TestPlan #${tp.id}?`)) return
                     await api.deleteTestPlan(tp.id)
                     if (selectedPlanId === tp.id) setSelectedPlanId(0)
+                    notify(`Deleted plan #${tp.id}`)
                     await load()
-                  } catch (err) {
-                    setError(err instanceof Error ? err.message : t.errors.loadTestPlans)
-                  }
-                }}
-              >
-                ×
-              </button>
-            </span>
-          </li>
-        ))}
-        {plans.length === 0 && <li style={{ color: 'var(--muted)' }}>{t.testplans.empty}</li>}
-      </ul>
+                  }}
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </div>
+          ))}
+          {plans.length === 0 && <p style={{ color: 'var(--muted)', margin: '0.5rem', fontSize: '0.84rem' }}>{t.testplans.empty}</p>}
+        </div>
 
-      {selectedPlanId > 0 && (
-        <div className="card" style={{ display: 'grid', gap: '1rem' }}>
-          <div>
-            <h3 style={{ margin: '0 0 0.4rem' }}>TestPlan #{selectedPlanId} — Attached Cases ({attachedCases.length})</h3>
-            <EntityTagsBar entity="testplans" entityId={selectedPlanId} />
-            {attachedCases.length === 0 ? (
-              <p style={{ color: 'var(--muted)', margin: '0.5rem 0 0', fontSize: '0.85rem' }}>No test cases attached yet.</p>
-            ) : (
-              <table className="data-table" style={{ marginTop: '0.5rem' }}>
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Summary</th>
-                    <th>Priority</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {attachedCases.map((ac) => (
-                    <tr key={ac.test_case_id}>
-                      <td>#{ac.test_case_id}</td>
-                      <td>{ac.summary}</td>
-                      <td><span className="badge">{ac.priority}</span></td>
-                      <td><span className="badge">{ac.status}</span></td>
-                    </tr>
+        {selectedPlan ? (
+          <div className="card" style={{ display: 'grid', gap: '1rem' }}>
+            <div>
+              <h3 style={{ margin: '0 0 0.45rem' }}>
+                #{selectedPlan.id} {selectedPlan.name} — {t.testplans.attachedCases} ({attachedCases.length})
+              </h3>
+              <EntityTagsBar entity="testplans" entityId={selectedPlan.id} />
+              {attachedCases.length === 0 ? (
+                <p style={{ color: 'var(--muted)', margin: '0.6rem 0 0', fontSize: '0.84rem' }}>{t.testplans.noCasesAttached}</p>
+              ) : (
+                <div className="table-wrap" style={{ marginTop: '0.65rem' }}>
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Summary</th>
+                        <th>Priority</th>
+                        <th>Status</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {attachedCases.map((ac, idx) => (
+                        <tr key={ac.test_case_id} className="clickable" onClick={() => navigate(`/cases/${ac.test_case_id}`)}>
+                          <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--muted)' }}>#{ac.test_case_id}</td>
+                          <td>{ac.summary}</td>
+                          <td><span className={`badge pill-${ac.priority}`}>{ac.priority}</span></td>
+                          <td><span className={`badge pill-${ac.status}`}>{ac.status}</span></td>
+                          <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
+                            <div style={{ display: 'inline-flex', gap: '0.2rem', alignItems: 'center' }}>
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                disabled={idx === 0}
+                                title="Move up"
+                                onClick={async () => {
+                                  const next = [...attachedCases]
+                                  ;[next[idx - 1], next[idx]] = [next[idx], next[idx - 1]]
+                                  setAttachedCases(next)
+                                  await api.reorderTestPlanCases(selectedPlan.id, next.map((x) => x.test_case_id))
+                                }}
+                              >
+                                <ChevronUp size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                disabled={idx === attachedCases.length - 1}
+                                title="Move down"
+                                onClick={async () => {
+                                  const next = [...attachedCases]
+                                  ;[next[idx + 1], next[idx]] = [next[idx], next[idx + 1]]
+                                  setAttachedCases(next)
+                                  await api.reorderTestPlanCases(selectedPlan.id, next.map((x) => x.test_case_id))
+                                }}
+                              >
+                                <ChevronDown size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                style={{ color: 'var(--danger)' }}
+                                title="Detach from plan"
+                                onClick={async () => {
+                                  await api.removeTestPlanCase(selectedPlan.id, ac.test_case_id)
+                                  notify(`Detached #${ac.test_case_id}`)
+                                  await loadAttached(selectedPlan.id)
+                                }}
+                              >
+                                <Unlink size={13} />
+                              </button>
+                              <ExternalLink size={13} color="var(--muted)" />
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {cases.length > 0 && (
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.9rem' }}>
+                <h4 style={{ margin: '0 0 0.55rem' }}>{t.testplans.attachTitle} #{selectedPlan.id}</h4>
+                <div style={{ display: 'grid', gap: '0.35rem', maxHeight: 240, overflowY: 'auto', marginBottom: '0.75rem' }}>
+                  {cases.map((tc) => (
+                    <label key={tc.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.84rem' }}>
+                      <input type="checkbox" checked={selectedCaseIds.includes(tc.id)} disabled={attachedSet.has(tc.id)} onChange={() => toggleCase(tc.id)} />
+                      <span style={{ color: attachedSet.has(tc.id) ? 'var(--muted)' : undefined }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', marginRight: 5 }}>#{tc.id}</span>
+                        {tc.summary} {attachedSet.has(tc.id) ? '(attached)' : ''}
+                      </span>
+                    </label>
                   ))}
-                </tbody>
-              </table>
+                </div>
+                <button type="button" onClick={() => void handleAttach()} disabled={selectedCaseIds.length === 0} className="btn btn-primary btn-sm">
+                  {t.testplans.attachBtn}
+                </button>
+              </div>
             )}
           </div>
-
-          {cases.length > 0 && (
-            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.9rem' }}>
-              <h4 style={{ margin: '0 0 0.5rem' }}>{t.testplans.attachTitle} #{selectedPlanId}</h4>
-              <div style={{ display: 'grid', gap: '0.35rem', marginBottom: '0.75rem' }}>
-                {cases.map((tc) => (
-                  <label key={tc.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem' }}>
-                    <input
-                      type="checkbox"
-                      checked={selectedCaseIds.includes(tc.id)}
-                      disabled={attachedSet.has(tc.id)}
-                      onChange={() => toggleCase(tc.id)}
-                    />
-                    <span style={{ color: attachedSet.has(tc.id) ? 'var(--muted)' : undefined }}>
-                      #{tc.id} {tc.summary} {attachedSet.has(tc.id) ? '(attached)' : ''}
-                    </span>
-                  </label>
-                ))}
-              </div>
-              <button type="button" onClick={() => void handleAttach()} disabled={selectedCaseIds.length === 0} className="btn btn-primary btn-sm">
-                {t.testplans.attachBtn}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+        ) : (
+          <div className="card" style={{ color: 'var(--muted)' }}>{t.testplans.empty}</div>
+        )}
+      </div>
     </section>
   )
 }

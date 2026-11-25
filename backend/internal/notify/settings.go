@@ -92,7 +92,7 @@ func (s *SettingsStore) Upsert(ctx context.Context, in EmailSettings) (EmailSett
 	return in, err
 }
 
-func RegisterEmailRoutes(api huma.API, store *SettingsStore, emailClient *EmailClient) {
+func RegisterEmailRoutes(api huma.API, store *SettingsStore, emailClient *EmailClient, guard *auth.AccessGuard) {
 	huma.Register(api, huma.Operation{
 		OperationID: "get-email-settings",
 		Method:      http.MethodGet,
@@ -103,6 +103,9 @@ func RegisterEmailRoutes(api huma.API, store *SettingsStore, emailClient *EmailC
 		EntityType string `query:"entity_type" enum:"test_case,test_plan"`
 		EntityID   int64  `query:"entity_id" minimum:"1"`
 	}) (*struct{ Body EmailSettings }, error) {
+		if err := guard.EnforceEntity(ctx, input.EntityType, input.EntityID, false); err != nil {
+			return nil, err
+		}
 		res, err := store.Get(ctx, input.EntityType, input.EntityID)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to load email settings", err)
@@ -125,6 +128,9 @@ func RegisterEmailRoutes(api huma.API, store *SettingsStore, emailClient *EmailC
 		}
 	}) (*struct{ Body EmailSettings }, error) {
 		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
+		if err := guard.EnforceEntity(ctx, input.Body.EntityType, input.Body.EntityID, true); err != nil {
 			return nil, err
 		}
 		saved, err := store.Upsert(ctx, EmailSettings{

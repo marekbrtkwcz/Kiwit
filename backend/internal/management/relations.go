@@ -127,8 +127,8 @@ func (s *RelationStore) ListComponentsForCase(ctx context.Context, caseID int64)
 	return items, rows.Err()
 }
 
-func RegisterRelationRoutes(api huma.API, s *RelationStore) {
-	registerTagPair := func(opPrefix, path, table, fkCol string) {
+func RegisterRelationRoutes(api huma.API, s *RelationStore, guard *auth.AccessGuard) {
+	registerTagPair := func(opPrefix, entityType, path, table, fkCol string) {
 		huma.Register(api, huma.Operation{
 			OperationID: "list-" + opPrefix + "-tags",
 			Method:      http.MethodGet,
@@ -138,6 +138,9 @@ func RegisterRelationRoutes(api huma.API, s *RelationStore) {
 		}, func(ctx context.Context, input *struct {
 			ID int64 `path:"id"`
 		}) (*ListTagsOutput, error) {
+			if err := guard.EnforceEntity(ctx, entityType, input.ID, false); err != nil {
+				return nil, err
+			}
 			items, err := s.ListTagsForEntity(ctx, table, fkCol, input.ID)
 			if err != nil {
 				return nil, huma.Error500InternalServerError("failed to list tags", err)
@@ -166,6 +169,9 @@ func RegisterRelationRoutes(api huma.API, s *RelationStore) {
 			if err := auth.CheckRole(ctx, "tester"); err != nil {
 				return nil, err
 			}
+			if err := guard.EnforceEntity(ctx, entityType, input.ID, true); err != nil {
+				return nil, err
+			}
 			if err := s.AttachTag(ctx, table, fkCol, input.ID, input.Body.TagID); err != nil {
 				return nil, huma.Error400BadRequest("failed to attach tag", err)
 			}
@@ -179,9 +185,9 @@ func RegisterRelationRoutes(api huma.API, s *RelationStore) {
 		})
 	}
 
-	registerTagPair("testcase", "/api/v1/testcases/{id}/tags", "test_case_tags", "test_case_id")
-	registerTagPair("testplan", "/api/v1/testplans/{id}/tags", "test_plan_tags", "test_plan_id")
-	registerTagPair("testrun", "/api/v1/testruns/{id}/tags", "test_run_tags", "test_run_id")
+	registerTagPair("testcase", "test_case", "/api/v1/testcases/{id}/tags", "test_case_tags", "test_case_id")
+	registerTagPair("testplan", "test_plan", "/api/v1/testplans/{id}/tags", "test_plan_tags", "test_plan_id")
+	registerTagPair("testrun", "test_run", "/api/v1/testruns/{id}/tags", "test_run_tags", "test_run_id")
 
 	huma.Register(api, huma.Operation{
 		OperationID: "list-testcase-components",
@@ -192,6 +198,9 @@ func RegisterRelationRoutes(api huma.API, s *RelationStore) {
 	}, func(ctx context.Context, input *struct {
 		ID int64 `path:"id"`
 	}) (*ListComponentsOutput, error) {
+		if err := guard.EnforceTestCase(ctx, input.ID, false); err != nil {
+			return nil, err
+		}
 		items, err := s.ListComponentsForCase(ctx, input.ID)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to list components", err)
@@ -218,6 +227,9 @@ func RegisterRelationRoutes(api huma.API, s *RelationStore) {
 		}
 	}, error) {
 		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
+		if err := guard.EnforceTestCase(ctx, input.ID, true); err != nil {
 			return nil, err
 		}
 		if err := s.AttachComponentToCase(ctx, input.ID, input.Body.ComponentID); err != nil {

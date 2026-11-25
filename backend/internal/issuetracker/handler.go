@@ -11,7 +11,7 @@ import (
 	"github.com/kiwit/kiwit/internal/auth"
 )
 
-func RegisterRoutes(api huma.API, repo Repository) {
+func RegisterRoutes(api huma.API, repo Repository, guard *auth.AccessGuard) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-issue-trackers",
 		Method:      http.MethodGet,
@@ -75,6 +75,9 @@ func RegisterRoutes(api huma.API, repo Repository) {
 			Items []Bug `json:"items"`
 		}
 	}, error) {
+		if err := guard.EnforceExecution(ctx, input.ExecutionID, false); err != nil {
+			return nil, err
+		}
 		items, err := repo.ListBugsByExecution(ctx, input.ExecutionID)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to list bugs", err)
@@ -106,6 +109,9 @@ func RegisterRoutes(api huma.API, repo Repository) {
 		if err := auth.CheckRole(ctx, "tester"); err != nil {
 			return nil, err
 		}
+		if err := guard.EnforceExecution(ctx, input.ExecutionID, true); err != nil {
+			return nil, err
+		}
 		b, err := repo.LinkBug(ctx, input.ExecutionID, input.Body.TrackerID, input.Body.ExternalKey, input.Body.URL, input.Body.Title)
 		if err != nil {
 			return nil, huma.Error400BadRequest("failed to link bug", err)
@@ -130,6 +136,9 @@ func RegisterRoutes(api huma.API, repo Repository) {
 		}
 	}) (*struct{ Body Bug }, error) {
 		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
+		if err := guard.EnforceExecution(ctx, input.ExecutionID, true); err != nil {
 			return nil, err
 		}
 		target, err := repo.GetTrackerByID(ctx, input.Body.TrackerID)

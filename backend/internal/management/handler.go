@@ -187,7 +187,7 @@ func enforceProductAccess(ctx context.Context, repo ProductRepository, productID
 }
 
 // RegisterRoutes registers management OpenAPI endpoints.
-func RegisterRoutes(api huma.API, repo ProductRepository) {
+func RegisterRoutes(api huma.API, repo ProductRepository, guard *auth.AccessGuard) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-products",
 		Method:      http.MethodGet,
@@ -277,6 +277,9 @@ func RegisterRoutes(api huma.API, repo ProductRepository) {
 	}, func(ctx context.Context, input *struct {
 		VersionID int64 `path:"version_id"`
 	}) (*ListBuildsOutput, error) {
+		if err := guard.EnforceVersion(ctx, input.VersionID, false); err != nil {
+			return nil, err
+		}
 		items, err := repo.ListBuilds(ctx, input.VersionID)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to list builds", err)
@@ -294,6 +297,9 @@ func RegisterRoutes(api huma.API, repo ProductRepository) {
 		Tags:        []string{"Management"},
 	}, func(ctx context.Context, input *CreateBuildInput) (*BuildOutput, error) {
 		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
+		if err := guard.EnforceVersion(ctx, input.VersionID, true); err != nil {
 			return nil, err
 		}
 		b, err := repo.CreateBuild(ctx, input.VersionID, input.Body.Name)

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { api, ApiTokenInfo, getAuthToken, setAuthToken, User } from '../../api/client'
+import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 
 export function AuthView() {
   const { t } = useI18n()
+  const { refreshProducts, notify } = useWorkspace()
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
@@ -55,6 +57,8 @@ export function AuthView() {
       setAuthToken(res.access_token)
       setJwt(res.access_token)
       setPassword('')
+      notify(t.auth.loggedIn)
+      await refreshProducts()
     } catch (err) {
       setError(err instanceof Error ? err.message : t.errors.authFailed)
     }
@@ -117,6 +121,7 @@ export function AuthView() {
     setTokens([])
     setUsers([])
     setIsAdmin(false)
+    void refreshProducts()
   }
 
   return (
@@ -216,7 +221,7 @@ export function AuthView() {
                 <button type="submit" className="btn btn-primary btn-sm">{t.auth.generate}</button>
               </div>
               {generatedToken && (
-                <div style={{ padding: '0.5rem', background: '#f1f5f9', borderRadius: 6, fontFamily: 'monospace', fontSize: '0.8rem', wordBreak: 'break-all' }}>
+                <div style={{ padding: '0.55rem', background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: '0.8rem', wordBreak: 'break-all' }}>
                   {generatedToken}
                 </div>
               )}

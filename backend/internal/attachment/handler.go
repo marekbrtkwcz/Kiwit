@@ -20,7 +20,7 @@ import (
 const maxUploadBytes = 25 << 20 // 25 MiB
 
 // RegisterRoutes mounts multipart upload, list, download, and delete endpoints on the chi router.
-func RegisterRoutes(r chi.Router, repo Repository, uploadDir string) {
+func RegisterRoutes(r chi.Router, repo Repository, uploadDir string, guard *auth.AccessGuard) {
 	r.With(auth.RequireRole("tester")).Post("/api/v1/attachments", func(w http.ResponseWriter, req *http.Request) {
 		req.Body = http.MaxBytesReader(w, req.Body, maxUploadBytes)
 		if err := req.ParseMultipartForm(maxUploadBytes); err != nil {
@@ -36,6 +36,9 @@ func RegisterRoutes(r chi.Router, repo Repository, uploadDir string) {
 		entityID, err := strconv.ParseInt(req.FormValue("entity_id"), 10, 64)
 		if err != nil || entityID <= 0 {
 			http.Error(w, `{"detail":"invalid entity_id"}`, http.StatusBadRequest)
+			return
+		}
+		if auth.WriteAccessError(w, guard.EnforceEntity(req.Context(), entityType, entityID, true)) {
 			return
 		}
 		exists, err := repo.EntityExists(req.Context(), entityType, entityID)
@@ -117,6 +120,9 @@ func RegisterRoutes(r chi.Router, repo Repository, uploadDir string) {
 			http.Error(w, `{"detail":"invalid entity_type or entity_id"}`, http.StatusBadRequest)
 			return
 		}
+		if auth.WriteAccessError(w, guard.EnforceEntity(req.Context(), entityType, entityID, false)) {
+			return
+		}
 
 		items, err := repo.ListByEntity(req.Context(), entityType, entityID)
 		if err != nil {
@@ -136,6 +142,9 @@ func RegisterRoutes(r chi.Router, repo Repository, uploadDir string) {
 		a, err := repo.GetByID(req.Context(), id)
 		if err != nil {
 			http.Error(w, `{"detail":"attachment not found"}`, http.StatusNotFound)
+			return
+		}
+		if auth.WriteAccessError(w, guard.EnforceEntity(req.Context(), a.EntityType, a.EntityID, false)) {
 			return
 		}
 		w.Header().Set("Content-Type", a.ContentType)
@@ -158,6 +167,9 @@ func RegisterRoutes(r chi.Router, repo Repository, uploadDir string) {
 		a, err := repo.GetByID(req.Context(), id)
 		if err != nil {
 			http.Error(w, `{"detail":"attachment not found"}`, http.StatusNotFound)
+			return
+		}
+		if auth.WriteAccessError(w, guard.EnforceEntity(req.Context(), a.EntityType, a.EntityID, true)) {
 			return
 		}
 		if err := repo.Delete(req.Context(), id); err != nil {

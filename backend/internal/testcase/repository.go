@@ -12,18 +12,24 @@ import (
 
 // UpsertParams holds fields for creating or updating a test case and its steps.
 type UpsertParams struct {
-	ProductID     int64
-	CategoryID    *int64
-	Summary       string
-	Preconditions string
-	Format        string
-	GherkinBody   string
-	Priority      string
-	Status        string
-	IsAutomated   bool
-	Script        string
-	Arguments     string
-	Steps         []Step
+	ProductID       int64
+	CategoryID      *int64
+	AuthorID        *int64
+	DefaultTesterID *int64
+	ReviewerID      *int64
+	Summary         string
+	Preconditions   string
+	Requirement     string
+	ExtraLink       string
+	Notes           string
+	Format          string
+	GherkinBody     string
+	Priority        string
+	Status          string
+	IsAutomated     bool
+	Script          string
+	Arguments       string
+	Steps           []Step
 }
 
 // Revision represents a historical snapshot of a test case.
@@ -41,10 +47,27 @@ type Revision struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
+// ListFilter defines SQL filter and pagination criteria for listing test cases.
+type ListFilter struct {
+	Q           string
+	ProductID   int64
+	CategoryID  int64
+	ComponentID int64
+	TagID       int64
+	Priority    string
+	Status      string
+	IsAutomated *bool
+	AuthorID    int64
+	UserID      *int64
+	Limit       int
+	Offset      int
+}
+
 // Repository defines persistence operations for test cases.
 type Repository interface {
 	List(ctx context.Context) ([]TestCase, error)
 	ListFiltered(ctx context.Context, q, priority string, limit, offset int) ([]TestCase, int64, error)
+	ListWithFilter(ctx context.Context, f ListFilter) ([]TestCase, int64, error)
 	GetByID(ctx context.Context, id int64) (TestCase, error)
 	Create(ctx context.Context, p UpsertParams) (TestCase, error)
 	Update(ctx context.Context, id int64, p UpsertParams) (TestCase, error)
@@ -65,21 +88,60 @@ func NewSQLiteRepository(db *sql.DB) *SQLiteRepository {
 }
 
 func (r *SQLiteRepository) List(ctx context.Context) ([]TestCase, error) {
-	items, _, err := r.ListFiltered(ctx, "", "", 0, 0)
+	items, _, err := r.ListWithFilter(ctx, ListFilter{})
 	return items, err
 }
 
 func (r *SQLiteRepository) ListFiltered(ctx context.Context, q, priority string, limit, offset int) ([]TestCase, int64, error) {
-	where := make([]string, 0, 2)
-	args := make([]any, 0, 4)
+	return r.ListWithFilter(ctx, ListFilter{Q: q, Priority: priority, Limit: limit, Offset: offset})
+}
 
-	if trimmed := strings.TrimSpace(q); trimmed != "" {
-		where = append(where, "LOWER(summary) LIKE ?")
+func (r *SQLiteRepository) ListWithFilter(ctx context.Context, f ListFilter) ([]TestCase, int64, error) {
+	where := make([]string, 0, 10)
+	args := make([]any, 0, 12)
+
+	if trimmed := strings.TrimSpace(f.Q); trimmed != "" {
+		where = append(where, "LOWER(tc.summary) LIKE ?")
 		args = append(args, "%"+strings.ToLower(trimmed)+"%")
 	}
-	if priority != "" {
-		where = append(where, "priority = ?")
-		args = append(args, priority)
+	if f.ProductID > 0 {
+		where = append(where, "tc.product_id = ?")
+		args = append(args, f.ProductID)
+	}
+	if f.CategoryID > 0 {
+		where = append(where, "tc.category_id = ?")
+		args = append(args, f.CategoryID)
+	}
+	if f.ComponentID > 0 {
+		where = append(where, "EXISTS (SELECT 1 FROM test_case_components tcc WHERE tcc.test_case_id = tc.id AND tcc.component_id = ?)")
+		args = append(args, f.ComponentID)
+	}
+	if f.TagID > 0 {
+		where = append(where, "EXISTS (SELECT 1 FROM test_case_tags tct WHERE tct.test_case_id = tc.id AND tct.tag_id = ?)")
+		args = append(args, f.TagID)
+	}
+	if f.Priority != "" {
+		where = append(where, "tc.priority = ?")
+		args = append(args, f.Priority)
+	}
+	if f.Status != "" {
+		where = append(where, "tc.status = ?")
+		args = append(args, f.Status)
+	}
+	if f.IsAutomated != nil {
+		if *f.IsAutomated {
+			where = append(where, "tc.is_automated = 1")
+		} else {
+			where = append(where, "tc.is_automated = 0")
+		}
+	}
+	if f.AuthorID > 0 {
+		where = append(where, "tc.author_id = ?")
+		args = append(args, f.AuthorID)
+	}
+	if f.UserID != nil {
+		where = append(where, "(NOT EXISTS (SELECT 1 FROM product_members pm WHERE pm.product_id = tc.product_id) OR EXISTS (SELECT 1 FROM product_members pm WHERE pm.product_id = tc.product_id AND pm.user_id = ?))")
+		args = append(args, *f.UserID)
 	}
 
 	whereClause := ""
@@ -88,17 +150,20 @@ func (r *SQLiteRepository) ListFiltered(ctx context.Context, q, priority string,
 	}
 
 	var total int64
-	if err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM test_cases"+whereClause, args...).Scan(&total); err != nil {
+	if err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM test_cases tc"+whereClause, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count test cases: %w", err)
 	}
 
 	query := `
-		SELECT id, product_id, category_id, summary, preconditions, format, gherkin_body, priority, status, is_automated, script, arguments, created_at, updated_at
-		FROM test_cases` + whereClause + ` ORDER BY id ASC`
+		SELECT tc.id, tc.product_id, tc.category_id, tc.author_id, tc.default_tester_id, tc.reviewer_id,
+		       tc.summary, tc.preconditions, tc.requirement, tc.extra_link, tc.notes,
+		       tc.format, tc.gherkin_body, tc.priority, tc.status, tc.is_automated, tc.script, tc.arguments,
+		       tc.created_at, tc.updated_at
+		FROM test_cases tc` + whereClause + ` ORDER BY tc.id ASC`
 	queryArgs := append([]any(nil), args...)
-	if limit > 0 {
+	if f.Limit > 0 {
 		query += " LIMIT ? OFFSET ?"
-		queryArgs = append(queryArgs, limit, offset)
+		queryArgs = append(queryArgs, f.Limit, f.Offset)
 	}
 
 	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
@@ -127,7 +192,10 @@ func (r *SQLiteRepository) ListFiltered(ctx context.Context, q, priority string,
 
 func (r *SQLiteRepository) GetByID(ctx context.Context, id int64) (TestCase, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, product_id, category_id, summary, preconditions, format, gherkin_body, priority, status, is_automated, script, arguments, created_at, updated_at
+		SELECT id, product_id, category_id, author_id, default_tester_id, reviewer_id,
+		       summary, preconditions, requirement, extra_link, notes,
+		       format, gherkin_body, priority, status, is_automated, script, arguments,
+		       created_at, updated_at
 		FROM test_cases WHERE id = ?`, id)
 	tc, err := scanSQLiteTestCase(row)
 	if err != nil {
@@ -147,10 +215,11 @@ type rowScanner interface {
 
 func scanSQLiteTestCase(s rowScanner) (TestCase, error) {
 	var tc TestCase
-	var catID sql.NullInt64
+	var catID, authorID, testerID, reviewerID sql.NullInt64
 	var isAuto int
 	if err := s.Scan(
-		&tc.ID, &tc.ProductID, &catID, &tc.Summary, &tc.Preconditions,
+		&tc.ID, &tc.ProductID, &catID, &authorID, &testerID, &reviewerID,
+		&tc.Summary, &tc.Preconditions, &tc.Requirement, &tc.ExtraLink, &tc.Notes,
 		&tc.Format, &tc.GherkinBody, &tc.Priority, &tc.Status,
 		&isAuto, &tc.Script, &tc.Arguments,
 		&tc.CreatedAt, &tc.UpdatedAt,
@@ -160,6 +229,15 @@ func scanSQLiteTestCase(s rowScanner) (TestCase, error) {
 	tc.IsAutomated = isAuto == 1
 	if catID.Valid {
 		tc.CategoryID = &catID.Int64
+	}
+	if authorID.Valid {
+		tc.AuthorID = &authorID.Int64
+	}
+	if testerID.Valid {
+		tc.DefaultTesterID = &testerID.Int64
+	}
+	if reviewerID.Valid {
+		tc.ReviewerID = &reviewerID.Int64
 	}
 	tc.Steps = []Step{}
 	return tc, nil
@@ -212,9 +290,14 @@ func (r *SQLiteRepository) Create(ctx context.Context, p UpsertParams) (TestCase
 		isAutoInt = 1
 	}
 	res, err := tx.ExecContext(ctx, `
-		INSERT INTO test_cases (product_id, category_id, summary, preconditions, format, gherkin_body, priority, status, is_automated, script, arguments, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.ProductID, p.CategoryID, p.Summary, p.Preconditions, p.Format, p.GherkinBody, p.Priority, p.Status, isAutoInt, p.Script, p.Arguments, now, now,
+		INSERT INTO test_cases (
+			product_id, category_id, author_id, default_tester_id, reviewer_id,
+			summary, preconditions, requirement, extra_link, notes,
+			format, gherkin_body, priority, status, is_automated, script, arguments, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.ProductID, p.CategoryID, p.AuthorID, p.DefaultTesterID, p.ReviewerID,
+		p.Summary, p.Preconditions, p.Requirement, p.ExtraLink, p.Notes,
+		p.Format, p.GherkinBody, p.Priority, p.Status, isAutoInt, p.Script, p.Arguments, now, now,
 	)
 	if err != nil {
 		return TestCase{}, fmt.Errorf("insert test case: %w", err)
@@ -239,21 +322,27 @@ func (r *SQLiteRepository) Create(ctx context.Context, p UpsertParams) (TestCase
 	}
 
 	return TestCase{
-		ID:            id,
-		ProductID:     p.ProductID,
-		CategoryID:    p.CategoryID,
-		Summary:       p.Summary,
-		Preconditions: p.Preconditions,
-		Format:        p.Format,
-		GherkinBody:   p.GherkinBody,
-		Priority:      p.Priority,
-		Status:        p.Status,
-		IsAutomated:   p.IsAutomated,
-		Script:        p.Script,
-		Arguments:     p.Arguments,
-		Steps:         nonNilSteps(p.Steps),
-		CreatedAt:     now,
-		UpdatedAt:     now,
+		ID:              id,
+		ProductID:       p.ProductID,
+		CategoryID:      p.CategoryID,
+		AuthorID:        p.AuthorID,
+		DefaultTesterID: p.DefaultTesterID,
+		ReviewerID:      p.ReviewerID,
+		Summary:         p.Summary,
+		Preconditions:   p.Preconditions,
+		Requirement:     p.Requirement,
+		ExtraLink:       p.ExtraLink,
+		Notes:           p.Notes,
+		Format:          p.Format,
+		GherkinBody:     p.GherkinBody,
+		Priority:        p.Priority,
+		Status:          p.Status,
+		IsAutomated:     p.IsAutomated,
+		Script:          p.Script,
+		Arguments:       p.Arguments,
+		Steps:           nonNilSteps(p.Steps),
+		CreatedAt:       now,
+		UpdatedAt:       now,
 	}, nil
 }
 
@@ -276,9 +365,13 @@ func (r *SQLiteRepository) Update(ctx context.Context, id int64, p UpsertParams)
 	}
 	res, err := tx.ExecContext(ctx, `
 		UPDATE test_cases
-		SET product_id = ?, category_id = ?, summary = ?, preconditions = ?, format = ?, gherkin_body = ?, priority = ?, status = ?, is_automated = ?, script = ?, arguments = ?, updated_at = ?
+		SET product_id = ?, category_id = ?, default_tester_id = ?, reviewer_id = ?,
+		    summary = ?, preconditions = ?, requirement = ?, extra_link = ?, notes = ?,
+		    format = ?, gherkin_body = ?, priority = ?, status = ?, is_automated = ?, script = ?, arguments = ?, updated_at = ?
 		WHERE id = ?`,
-		p.ProductID, p.CategoryID, p.Summary, p.Preconditions, p.Format, p.GherkinBody, p.Priority, p.Status, isAutoInt, p.Script, p.Arguments, now, id,
+		p.ProductID, p.CategoryID, p.DefaultTesterID, p.ReviewerID,
+		p.Summary, p.Preconditions, p.Requirement, p.ExtraLink, p.Notes,
+		p.Format, p.GherkinBody, p.Priority, p.Status, isAutoInt, p.Script, p.Arguments, now, id,
 	)
 	if err != nil {
 		return TestCase{}, fmt.Errorf("update test case: %w", err)
@@ -309,21 +402,26 @@ func (r *SQLiteRepository) Update(ctx context.Context, id int64, p UpsertParams)
 	}
 
 	return TestCase{
-		ID:            id,
-		ProductID:     p.ProductID,
-		CategoryID:    p.CategoryID,
-		Summary:       p.Summary,
-		Preconditions: p.Preconditions,
-		Format:        p.Format,
-		GherkinBody:   p.GherkinBody,
-		Priority:      p.Priority,
-		Status:        p.Status,
-		IsAutomated:   p.IsAutomated,
-		Script:        p.Script,
-		Arguments:     p.Arguments,
-		Steps:         nonNilSteps(p.Steps),
-		CreatedAt:     createdAt,
-		UpdatedAt:     now,
+		ID:              id,
+		ProductID:       p.ProductID,
+		CategoryID:      p.CategoryID,
+		DefaultTesterID: p.DefaultTesterID,
+		ReviewerID:      p.ReviewerID,
+		Summary:         p.Summary,
+		Preconditions:   p.Preconditions,
+		Requirement:     p.Requirement,
+		ExtraLink:       p.ExtraLink,
+		Notes:           p.Notes,
+		Format:          p.Format,
+		GherkinBody:     p.GherkinBody,
+		Priority:        p.Priority,
+		Status:          p.Status,
+		IsAutomated:     p.IsAutomated,
+		Script:          p.Script,
+		Arguments:       p.Arguments,
+		Steps:           nonNilSteps(p.Steps),
+		CreatedAt:       createdAt,
+		UpdatedAt:       now,
 	}, nil
 }
 

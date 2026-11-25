@@ -8,14 +8,18 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/kiwit/kiwit/internal/auth"
 )
 
 // RegisterExportRoutes mounts CSV and HTML export endpoints for a TestRun.
-func RegisterExportRoutes(r chi.Router, repo Repository) {
+func RegisterExportRoutes(r chi.Router, repo Repository, guard *auth.AccessGuard) {
 	r.Get("/api/v1/testruns/{id}/export", func(w http.ResponseWriter, req *http.Request) {
 		runID, err := strconv.ParseInt(chi.URLParam(req, "id"), 10, 64)
 		if err != nil || runID <= 0 {
 			http.Error(w, `{"detail":"invalid testrun id"}`, http.StatusBadRequest)
+			return
+		}
+		if auth.WriteAccessError(w, guard.EnforceTestRun(req.Context(), runID, false)) {
 			return
 		}
 

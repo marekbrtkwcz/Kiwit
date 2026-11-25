@@ -8,7 +8,7 @@ import (
 	"github.com/kiwit/kiwit/internal/auth"
 )
 
-func RegisterRoutes(api huma.API, repo Repository) {
+func RegisterRoutes(api huma.API, repo Repository, guard *auth.AccessGuard) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-comments",
 		Method:      http.MethodGet,
@@ -23,6 +23,9 @@ func RegisterRoutes(api huma.API, repo Repository) {
 			Items []Comment `json:"items"`
 		}
 	}, error) {
+		if err := guard.EnforceEntity(ctx, input.EntityType, input.EntityID, false); err != nil {
+			return nil, err
+		}
 		items, err := repo.List(ctx, input.EntityType, input.EntityID)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to list comments", err)
@@ -50,6 +53,9 @@ func RegisterRoutes(api huma.API, repo Repository) {
 		}
 	}) (*struct{ Body Comment }, error) {
 		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
+		if err := guard.EnforceEntity(ctx, input.Body.EntityType, input.Body.EntityID, true); err != nil {
 			return nil, err
 		}
 		exists, err := repo.EntityExists(ctx, input.Body.EntityType, input.Body.EntityID)

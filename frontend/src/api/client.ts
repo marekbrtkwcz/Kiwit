@@ -20,11 +20,17 @@ export interface TestCase {
   id: number
   product_id: number
   category_id?: number
+  author_id?: number
+  default_tester_id?: number
+  reviewer_id?: number
   summary: string
   preconditions?: string
+  requirement?: string
+  extra_link?: string
+  notes?: string
   format: 'steps' | 'gherkin'
   gherkin_body?: string
-  priority: 'low' | 'medium' | 'high' | 'critical'
+  priority: string
   status: 'draft' | 'confirmed' | 'disabled'
   is_automated?: boolean
   script?: string
@@ -114,6 +120,8 @@ export interface TestPlan {
   parent_id?: number
   name: string
   description?: string
+  plan_type?: string
+  extra_link?: string
   is_active: boolean
   created_at: string
 }
@@ -130,9 +138,15 @@ export interface TestRun {
   id: number
   test_plan_id: number
   build_id: number
+  environment_id?: number
+  manager_id?: number
+  default_tester_id?: number
   summary: string
   notes?: string
+  planned_start?: string
+  planned_stop?: string
   started_at: string
+  stopped_at?: string
 }
 
 export interface TestExecution {
@@ -140,8 +154,23 @@ export interface TestExecution {
   test_run_id: number
   test_case_id: number
   summary: string
-  status: 'idle' | 'running' | 'passed' | 'failed' | 'blocked' | 'skipped'
+  status: string
   comment?: string
+  assignee_id?: number
+  tested_by_id?: number
+  environment_id?: number
+  case_text_version?: number
+  latest_case_version?: number
+  started_at?: string
+  stopped_at?: string
+}
+
+export interface ExecutionLinkItem {
+  id: number
+  test_execution_id: number
+  name: string
+  url: string
+  created_at: string
 }
 
 export interface User {
@@ -203,6 +232,40 @@ export interface CaseHealth {
   total: number
   failed: number
   fail_rate: number
+}
+
+export interface NamedCount {
+  name: string
+  count: number
+}
+
+export interface TelemetryBreakdown {
+  automated: number
+  manual: number
+  by_priority: NamedCount[]
+  by_status: NamedCount[]
+  by_category: NamedCount[]
+}
+
+export interface TelemetryFilterParams {
+  product_id?: number
+  version_id?: number
+  build_id?: number
+  test_plan_id?: number
+  from?: string
+  to?: string
+}
+
+function buildTelemetryQuery(params?: TelemetryFilterParams): string {
+  if (!params) return ''
+  const qs = new URLSearchParams()
+  if (params.product_id) qs.set('product_id', String(params.product_id))
+  if (params.version_id) qs.set('version_id', String(params.version_id))
+  if (params.build_id) qs.set('build_id', String(params.build_id))
+  if (params.test_plan_id) qs.set('test_plan_id', String(params.test_plan_id))
+  if (params.from) qs.set('from', params.from)
+  if (params.to) qs.set('to', params.to)
+  return qs.toString() ? `?${qs.toString()}` : ''
 }
 
 export interface BugItem {
@@ -319,15 +382,35 @@ export const api = {
   createCategory: (name: string) =>
     request<Category>('/api/v1/categories', { method: 'POST', body: JSON.stringify({ name }) }),
 
-  listTestCases: (params?: { q?: string; priority?: string; limit?: number; offset?: number }) => {
+  listTestCases: (params?: {
+    q?: string
+    product_id?: number
+    category_id?: number
+    component_id?: number
+    tag_id?: number
+    priority?: string
+    status?: string
+    is_automated?: 'true' | 'false'
+    author_id?: number
+    limit?: number
+    offset?: number
+  }) => {
     const qs = new URLSearchParams()
     if (params?.q) qs.set('q', params.q)
+    if (params?.product_id) qs.set('product_id', String(params.product_id))
+    if (params?.category_id) qs.set('category_id', String(params.category_id))
+    if (params?.component_id) qs.set('component_id', String(params.component_id))
+    if (params?.tag_id) qs.set('tag_id', String(params.tag_id))
     if (params?.priority) qs.set('priority', params.priority)
+    if (params?.status) qs.set('status', params.status)
+    if (params?.is_automated) qs.set('is_automated', params.is_automated)
+    if (params?.author_id) qs.set('author_id', String(params.author_id))
     if (params?.limit !== undefined) qs.set('limit', String(params.limit))
     if (params?.offset !== undefined) qs.set('offset', String(params.offset))
     const suffix = qs.toString() ? `?${qs.toString()}` : ''
     return request<{ items: TestCase[]; total?: number }>(`/api/v1/testcases${suffix}`)
   },
+  getTestCase: (id: number) => request<TestCase>(`/api/v1/testcases/${id}`),
   createTestCase: (body: Omit<TestCase, 'id' | 'created_at' | 'updated_at'>) =>
     request<TestCase>('/api/v1/testcases', { method: 'POST', body: JSON.stringify(body) }),
   updateTestCase: (id: number, body: Omit<TestCase, 'id' | 'created_at' | 'updated_at'>) =>
@@ -337,14 +420,32 @@ export const api = {
   bulkUpdateTestCases: (body: { ids: number[]; status?: string; priority?: string }) =>
     request<{ updated: number }>('/api/v1/testcases/bulk', { method: 'PATCH', body: JSON.stringify(body) }),
 
-  listTestPlans: () => request<{ items: TestPlan[] }>('/api/v1/testplans'),
+  listTestPlans: (params?: { product_id?: number; version_id?: number; is_active?: 'true' | 'false'; tag_id?: number; q?: string }) => {
+    const qs = new URLSearchParams()
+    if (params?.product_id) qs.set('product_id', String(params.product_id))
+    if (params?.version_id) qs.set('version_id', String(params.version_id))
+    if (params?.is_active) qs.set('is_active', params.is_active)
+    if (params?.tag_id) qs.set('tag_id', String(params.tag_id))
+    if (params?.q) qs.set('q', params.q)
+    const suffix = qs.toString() ? `?${qs.toString()}` : ''
+    return request<{ items: TestPlan[] }>(`/api/v1/testplans${suffix}`)
+  },
   listTestPlanCases: (planId: number) => request<{ items: PlanCaseItem[] }>(`/api/v1/testplans/${planId}/cases`),
-  createTestPlan: (body: { product_id: number; version_id: number; parent_id?: number; name: string; description?: string }) =>
+  createTestPlan: (body: { product_id: number; version_id: number; parent_id?: number; name: string; description?: string; plan_type?: string; extra_link?: string }) =>
     request<TestPlan>('/api/v1/testplans', { method: 'POST', body: JSON.stringify(body) }),
+  updateTestPlan: (id: number, body: { name: string; description?: string; version_id?: number; parent_id?: number; plan_type?: string; extra_link?: string; is_active?: boolean }) =>
+    request<TestPlan>(`/api/v1/testplans/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteTestPlan: (id: number) => request<void>(`/api/v1/testplans/${id}`, { method: 'DELETE' }),
   addTestPlanCases: (planId: number, caseIds: number[]) =>
     request<{ plan_id: number; added: number }>(`/api/v1/testplans/${planId}/cases`, {
       method: 'POST',
+      body: JSON.stringify({ case_ids: caseIds }),
+    }),
+  removeTestPlanCase: (planId: number, caseId: number) =>
+    request<void>(`/api/v1/testplans/${planId}/cases/${caseId}`, { method: 'DELETE' }),
+  reorderTestPlanCases: (planId: number, caseIds: number[]) =>
+    request<{ ok: boolean }>(`/api/v1/testplans/${planId}/cases/order`, {
+      method: 'PUT',
       body: JSON.stringify({ case_ids: caseIds }),
     }),
   cloneTestPlan: (planId: number, name: string) =>
@@ -353,9 +454,37 @@ export const api = {
       body: JSON.stringify({ name }),
     }),
 
-  listTestRuns: () => request<{ items: TestRun[]; total?: number }>('/api/v1/testruns'),
-  createTestRun: (body: { test_plan_id: number; build_id: number; summary: string; notes?: string }) =>
+  listTestRuns: (params?: {
+    product_id?: number
+    test_plan_id?: number
+    build_id?: number
+    status?: 'running' | 'stopped'
+    q?: string
+    limit?: number
+    offset?: number
+  }) => {
+    const qs = new URLSearchParams()
+    if (params?.product_id) qs.set('product_id', String(params.product_id))
+    if (params?.test_plan_id) qs.set('test_plan_id', String(params.test_plan_id))
+    if (params?.build_id) qs.set('build_id', String(params.build_id))
+    if (params?.status) qs.set('status', params.status)
+    if (params?.q) qs.set('q', params.q)
+    if (params?.limit !== undefined) qs.set('limit', String(params.limit))
+    if (params?.offset !== undefined) qs.set('offset', String(params.offset))
+    const suffix = qs.toString() ? `?${qs.toString()}` : ''
+    return request<{ items: TestRun[]; total?: number }>(`/api/v1/testruns${suffix}`)
+  },
+  createTestRun: (body: { test_plan_id: number; build_id: number; environment_id?: number; default_tester_id?: number; summary: string; notes?: string }) =>
     request<TestRun>('/api/v1/testruns', { method: 'POST', body: JSON.stringify(body) }),
+  updateTestRun: (id: number, body: { summary: string; notes?: string; build_id?: number; environment_id?: number; default_tester_id?: number }) =>
+    request<TestRun>(`/api/v1/testruns/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  addTestRunCases: (runId: number, caseIds: number[], environmentId?: number) =>
+    request<{ added: number }>(`/api/v1/testruns/${runId}/cases`, {
+      method: 'POST',
+      body: JSON.stringify({ case_ids: caseIds, environment_id: environmentId }),
+    }),
+  deleteTestRunExecution: (runId: number, execId: number) =>
+    request<void>(`/api/v1/testruns/${runId}/executions/${execId}`, { method: 'DELETE' }),
   stopTestRun: (runId: number) =>
     request<{ stopped: boolean }>(`/api/v1/testruns/${runId}/stop`, { method: 'POST' }),
   deleteTestRun: (runId: number) =>
@@ -367,8 +496,21 @@ export const api = {
       format === 'html',
     ),
   listExecutions: (runId: number) => request<{ items: TestExecution[] }>(`/api/v1/testruns/${runId}/executions`),
-  updateExecution: (id: number, body: { status: TestExecution['status']; comment?: string }) =>
-    request<{ id: number; status: string; comment?: string }>(`/api/v1/executions/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  updateExecution: (id: number, body: { status?: string; comment?: string; assignee_id?: number; environment_id?: number }) =>
+    request<{ id: number; status: string; comment?: string; assignee_id?: number; tested_by_id?: number; environment_id?: number }>(`/api/v1/executions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  bulkUpdateExecutions: (body: { ids: number[]; status?: string; assignee_id?: number }) =>
+    request<{ updated: number }>('/api/v1/executions/bulk', { method: 'PATCH', body: JSON.stringify(body) }),
+  syncExecutionCase: (id: number) =>
+    request<TestExecution>(`/api/v1/executions/${id}/sync-case`, { method: 'POST' }),
+  listExecutionLinks: (id: number) =>
+    request<{ items: ExecutionLinkItem[] }>(`/api/v1/executions/${id}/links`),
+  addExecutionLink: (id: number, body: { name: string; url: string }) =>
+    request<ExecutionLinkItem>(`/api/v1/executions/${id}/links`, { method: 'POST', body: JSON.stringify(body) }),
+  deleteExecutionLink: (id: number, linkId: number) =>
+    request<void>(`/api/v1/executions/${id}/links/${linkId}`, { method: 'DELETE' }),
 
   listAttachments: (entityType: 'test_case' | 'test_execution', entityId: number) =>
     request<{ items: AttachmentItem[] }>(`/api/v1/attachments?entity_type=${entityType}&entity_id=${entityId}`),
@@ -376,10 +518,16 @@ export const api = {
     downloadAuthenticated(`/api/v1/attachments/${id}/download`, filename),
   deleteAttachment: (id: number) =>
     request<void>(`/api/v1/attachments/${id}`, { method: 'DELETE' }),
-  getTelemetrySummary: () => request<TelemetrySummary>('/api/v1/telemetry/summary'),
-  getExecutionTrends: () => request<{ items: TrendPoint[] }>('/api/v1/telemetry/execution-trends'),
-  getStatusMatrix: () => request<{ items: MatrixRow[] }>('/api/v1/telemetry/status-matrix'),
-  getTestCaseHealth: () => request<{ items: CaseHealth[] }>('/api/v1/telemetry/test-case-health'),
+  getTelemetrySummary: (params?: TelemetryFilterParams) =>
+    request<TelemetrySummary>(`/api/v1/telemetry/summary${buildTelemetryQuery(params)}`),
+  getExecutionTrends: (params?: TelemetryFilterParams) =>
+    request<{ items: TrendPoint[] }>(`/api/v1/telemetry/execution-trends${buildTelemetryQuery(params)}`),
+  getStatusMatrix: (params?: TelemetryFilterParams) =>
+    request<{ items: MatrixRow[] }>(`/api/v1/telemetry/status-matrix${buildTelemetryQuery(params)}`),
+  getTestCaseHealth: (params?: TelemetryFilterParams) =>
+    request<{ items: CaseHealth[] }>(`/api/v1/telemetry/test-case-health${buildTelemetryQuery(params)}`),
+  getTelemetryBreakdown: (params?: TelemetryFilterParams) =>
+    request<TelemetryBreakdown>(`/api/v1/telemetry/breakdown${buildTelemetryQuery(params)}`),
   uploadAttachment: async (entityType: 'test_case' | 'test_execution', entityId: number, file: File) => {
     const form = new FormData()
     form.append('entity_type', entityType)

@@ -74,4 +74,14 @@ func TestTelemetryEndpoints(t *testing.T) {
 		_ = res.Body.Close()
 		require.NotEmpty(t, out.Items)
 	}
+
+	// Verify breakdown endpoint
+	res, err := http.Get(srv.URL + "/api/v1/telemetry/breakdown")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	var bd telemetry.Breakdown
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&bd))
+	_ = res.Body.Close()
+	require.Equal(t, int64(1), bd.Manual)
+	require.NotEmpty(t, bd.ByPriority)
 }

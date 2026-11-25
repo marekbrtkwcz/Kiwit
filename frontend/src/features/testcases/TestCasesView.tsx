@@ -1,5 +1,29 @@
 import { useEffect, useState } from 'react'
-import { api, Category, ComponentItem, Product, RevisionItem, TestCase, TestStep } from '../../api/client'
+import { useNavigate, useParams } from 'react-router-dom'
+import {
+  Bot,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  History,
+  Link2,
+  MessageSquare,
+  Paperclip,
+  Plus,
+  Search,
+  Trash2,
+  X,
+} from 'lucide-react'
+import {
+  api,
+  Category,
+  ComponentItem,
+  RevisionItem,
+  TemplateItem,
+  TestCase,
+  TestStep,
+} from '../../api/client'
+import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 import { AttachmentsPanel } from '../attachments/AttachmentsPanel'
 import { CommentsPanel } from '../comments/CommentsPanel'
@@ -17,7 +41,7 @@ function TestCaseComponentsBar({ caseId, productId }: { caseId: number; productI
       setAllComps(all.items)
       if (!compId && all.items.length > 0) setCompId(all.items[0].id)
     } catch {
-      // Ignore when unauthenticated
+      // ignore
     }
   }
 
@@ -26,7 +50,7 @@ function TestCaseComponentsBar({ caseId, productId }: { caseId: number; productI
   }, [caseId, productId])
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.45rem', fontSize: '0.82rem' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', fontSize: '0.82rem' }}>
       <span style={{ color: 'var(--muted)' }}>Components:</span>
       {attached.map((c) => (
         <span key={c.id} className="badge">{c.name}</span>
@@ -34,7 +58,7 @@ function TestCaseComponentsBar({ caseId, productId }: { caseId: number; productI
       {attached.length === 0 && <span style={{ color: 'var(--muted)' }}>—</span>}
       {allComps.length > 0 && (
         <>
-          <select className="select" value={compId} onChange={(e) => setCompId(Number(e.target.value))} style={{ padding: '0.18rem 0.4rem', fontSize: '0.8rem' }}>
+          <select className="select" value={compId} onChange={(e) => setCompId(Number(e.target.value))} style={{ padding: '0.2rem 0.45rem', fontSize: '0.78rem' }}>
             {allComps.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
@@ -60,18 +84,33 @@ const PAGE_SIZE = 20
 
 export function TestCasesView() {
   const { t } = useI18n()
-  const [products, setProducts] = useState<Product[]>([])
+  const { products, activeProductId, notify } = useWorkspace()
+  const { id: routeCaseId } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+
   const [categories, setCategories] = useState<Category[]>([])
+  const [templates, setTemplates] = useState<TemplateItem[]>([])
   const [cases, setCases] = useState<TestCase[]>([])
   const [total, setTotal] = useState(0)
   const [offset, setOffset] = useState(0)
-  const [productId, setProductId] = useState<number>(1)
-  const [categoryId, setCategoryId] = useState<number | undefined>(undefined)
-  const [newCategory, setNewCategory] = useState('')
-  const [editingId, setEditingId] = useState<number | null>(null)
-  const [revisions, setRevisions] = useState<RevisionItem[]>([])
+
+  // Filters
   const [filterQ, setFilterQ] = useState('')
   const [filterPriority, setFilterPriority] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
+  const [filterCategory, setFilterCategory] = useState<number>(0)
+  const [filterAutomated, setFilterAutomated] = useState<'' | 'true' | 'false'>('')
+
+  // Drawer state
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [drawerTab, setDrawerTab] = useState<'details' | 'comments' | 'attachments' | 'revisions'>('details')
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [revisions, setRevisions] = useState<RevisionItem[]>([])
+
+  // Form fields
+  const [productId, setProductId] = useState<number>(activeProductId ?? 1)
+  const [categoryId, setCategoryId] = useState<number | undefined>(undefined)
+  const [newCategory, setNewCategory] = useState('')
   const [summary, setSummary] = useState('')
   const [preconditions, setPreconditions] = useState('')
   const [format, setFormat] = useState<'steps' | 'gherkin'>('steps')
@@ -82,40 +121,36 @@ export function TestCasesView() {
   const [script, setScript] = useState('')
   const [scriptArgs, setScriptArgs] = useState('')
   const [steps, setSteps] = useState<TestStep[]>([{ position: 1, action: '', expected_result: '' }])
+
+  // Bulk selection
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [bulkStatus, setBulkStatus] = useState('')
   const [bulkPriority, setBulkPriority] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  const load = async () => {
-    try {
-      const [pRes, cRes, tcRes] = await Promise.all([
-        api.listProducts(),
-        api.listCategories(),
-        api.listTestCases({ q: filterQ, priority: filterPriority, limit: PAGE_SIZE, offset }),
-      ])
-      setProducts(pRes.items)
-      setCategories(cRes.items)
-      if (cRes.items.length > 0 && categoryId === undefined) {
-        setCategoryId(cRes.items[0].id)
-      }
-      if (pRes.items.length > 0 && !pRes.items.some((p) => p.id === productId)) {
-        setProductId(pRes.items[0].id)
-      }
-      setCases(tcRes.items)
-      setTotal(tcRes.total ?? tcRes.items.length)
-      setError(null)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t.errors.loadTestCases)
-    }
+  const populateForm = (tc: TestCase) => {
+    setEditingId(tc.id)
+    setProductId(tc.product_id)
+    setCategoryId(tc.category_id)
+    setSummary(tc.summary)
+    setPreconditions(tc.preconditions ?? '')
+    setFormat(tc.format)
+    setGherkinBody(tc.gherkin_body ?? '')
+    setPriority(tc.priority)
+    setStatus(tc.status)
+    setIsAutomated(Boolean(tc.is_automated))
+    setScript(tc.script ?? '')
+    setScriptArgs(tc.arguments ?? '')
+    setSteps(tc.steps.length > 0 ? tc.steps : [{ position: 1, action: '', expected_result: '' }])
+    setDrawerTab('details')
+    setDrawerOpen(true)
+    void api.listTestCaseRevisions(tc.id).then((r) => setRevisions(r.items)).catch(() => setRevisions([]))
   }
 
-  useEffect(() => {
-    void load()
-  }, [filterQ, filterPriority, offset])
-
-  const resetForm = () => {
+  const openNewDrawer = () => {
     setEditingId(null)
+    setProductId(activeProductId ?? products[0]?.id ?? 1)
+    setCategoryId(categories[0]?.id)
     setSummary('')
     setPreconditions('')
     setFormat('steps')
@@ -126,14 +161,69 @@ export function TestCasesView() {
     setScript('')
     setScriptArgs('')
     setSteps([{ position: 1, action: '', expected_result: '' }])
+    setRevisions([])
+    setDrawerTab('details')
+    setDrawerOpen(true)
+    if (routeCaseId) navigate('/cases', { replace: true })
   }
+
+  const closeDrawer = () => {
+    setDrawerOpen(false)
+    if (routeCaseId) navigate('/cases', { replace: true })
+  }
+
+  const load = async () => {
+    try {
+      const [cRes, tplRes, tcRes] = await Promise.all([
+        api.listCategories(),
+        api.listTemplates().catch(() => ({ items: [] as TemplateItem[] })),
+        api.listTestCases({
+          q: filterQ || undefined,
+          product_id: activeProductId ?? undefined,
+          category_id: filterCategory || undefined,
+          priority: filterPriority || undefined,
+          status: filterStatus || undefined,
+          is_automated: filterAutomated || undefined,
+          limit: PAGE_SIZE,
+          offset,
+        }),
+      ])
+      setCategories(cRes.items)
+      setTemplates(tplRes.items)
+      setCases(tcRes.items)
+      setTotal(tcRes.total ?? tcRes.items.length)
+      setError(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t.errors.loadTestCases)
+    }
+  }
+
+  useEffect(() => {
+    setOffset(0)
+  }, [activeProductId, filterQ, filterPriority, filterStatus, filterCategory, filterAutomated])
+
+  useEffect(() => {
+    void load()
+  }, [activeProductId, filterQ, filterPriority, filterStatus, filterCategory, filterAutomated, offset])
+
+  // Deep-link support: /cases/:id
+  useEffect(() => {
+    if (!routeCaseId) return
+    const numId = Number(routeCaseId)
+    if (!Number.isFinite(numId) || numId <= 0) return
+    const existing = cases.find((c) => c.id === numId)
+    if (existing) {
+      if (editingId !== existing.id || !drawerOpen) populateForm(existing)
+      return
+    }
+    void api
+      .getTestCase(numId)
+      .then((tc) => populateForm(tc))
+      .catch((e) => setError(e instanceof Error ? e.message : t.errors.loadTestCases))
+  }, [routeCaseId])
 
   const updateStep = (idx: number, field: keyof TestStep, value: string) => {
     setSteps((prev) => prev.map((s, i) => (i === idx ? { ...s, [field]: value } : s)))
-  }
-
-  const addStep = () => {
-    setSteps((prev) => [...prev, { position: prev.length + 1, action: '', expected_result: '' }])
   }
 
   const moveStep = (idx: number, dir: -1 | 1) => {
@@ -167,29 +257,29 @@ export function TestCasesView() {
         steps: validSteps,
       }
       if (editingId !== null) {
-        await api.updateTestCase(editingId, payload)
+        const updated = await api.updateTestCase(editingId, payload)
+        notify(`TestCase #${updated.id} saved`)
+        void api.listTestCaseRevisions(updated.id).then((r) => setRevisions(r.items)).catch(() => {})
       } else {
-        await api.createTestCase(payload)
+        const created = await api.createTestCase(payload)
+        notify(`TestCase #${created.id} created`)
+        closeDrawer()
       }
-      resetForm()
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : t.errors.saveTestCase)
     }
   }
 
-  const toggleSelect = (id: number) => {
-    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
-  }
-
   const handleBulkUpdate = async () => {
     if (selectedIds.length === 0 || (!bulkStatus && !bulkPriority)) return
     try {
-      await api.bulkUpdateTestCases({
+      const res = await api.bulkUpdateTestCases({
         ids: selectedIds,
         status: bulkStatus || undefined,
         priority: bulkPriority || undefined,
       })
+      notify(`Updated ${res.updated} test case(s)`)
       setSelectedIds([])
       setBulkStatus('')
       setBulkPriority('')
@@ -199,255 +289,218 @@ export function TestCasesView() {
     }
   }
 
+  const applyTemplate = (tplId: number) => {
+    const tpl = templates.find((x) => x.id === tplId)
+    if (!tpl) return
+    if (tpl.body.includes('Scenario:') || tpl.body.includes('Feature:') || tpl.body.includes('Given ')) {
+      setFormat('gherkin')
+      setGherkinBody(tpl.body)
+    } else {
+      setPreconditions(tpl.body)
+    }
+  }
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }
+
+  const productMap = new Map(products.map((p) => [p.id, p.name]))
+  const categoryMap = new Map(categories.map((c) => [c.id, c.name]))
+
   return (
     <section>
-      <h2>{t.testcases.title}</h2>
       {error && <p className="alert-error">{error}</p>}
 
-      <form onSubmit={handleSubmit} className="card" style={{ marginBottom: '1.25rem', display: 'grid', gap: '0.75rem' }}>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <select className="select" value={productId} onChange={(e) => setProductId(Number(e.target.value))}>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
+      {/* Filter & action bar */}
+      <div className="filter-bar">
+        <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+          <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
           <input
             className="input"
             placeholder={t.testcases.summaryPlaceholder}
-            value={summary}
-            onChange={(e) => setSummary(e.target.value)}
-            style={{ flex: 1, minWidth: 220 }}
+            value={filterQ}
+            onChange={(e) => setFilterQ(e.target.value)}
+            style={{ width: '100%', paddingLeft: 30 }}
           />
-          <select className="select" value={categoryId ?? ''} onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : undefined)}>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
+        </div>
+
+        <select className="select" value={filterCategory} onChange={(e) => setFilterCategory(Number(e.target.value))}>
+          <option value={0}>{t.testcases.allCategories}</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+
+        <select className="select" value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
+          <option value="">{t.testcases.allPriorities}</option>
+          <option value="critical">critical</option>
+          <option value="high">high</option>
+          <option value="medium">medium</option>
+          <option value="low">low</option>
+        </select>
+
+        <select className="select" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+          <option value="">{t.testcases.allStatuses}</option>
+          <option value="confirmed">confirmed</option>
+          <option value="draft">draft</option>
+          <option value="disabled">disabled</option>
+        </select>
+
+        <select className="select" value={filterAutomated} onChange={(e) => setFilterAutomated(e.target.value as '' | 'true' | 'false')}>
+          <option value="">{t.testcases.allTypes}</option>
+          <option value="true">{t.testcases.automatedOnly}</option>
+          <option value="false">{t.testcases.manualOnly}</option>
+        </select>
+
+        <button type="button" className="btn btn-primary" onClick={openNewDrawer}>
+          <Plus size={15} />
+          {t.testcases.newCase}
+        </button>
+      </div>
+
+      {/* Bulk action bar */}
+      {selectedIds.length > 0 && (
+        <div className="filter-bar" style={{ background: 'var(--primary-soft)', borderColor: 'var(--primary)' }}>
+          <strong>{selectedIds.length} selected</strong>
+          <select className="select" value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)}>
+            <option value="">Status…</option>
+            <option value="draft">draft</option>
+            <option value="confirmed">confirmed</option>
+            <option value="disabled">disabled</option>
           </select>
-          <select className="select" value={priority} onChange={(e) => setPriority(e.target.value as TestCase['priority'])}>
+          <select className="select" value={bulkPriority} onChange={(e) => setBulkPriority(e.target.value)}>
+            <option value="">Priority…</option>
             <option value="low">low</option>
             <option value="medium">medium</option>
             <option value="high">high</option>
             <option value="critical">critical</option>
           </select>
-          <select className="select" value={status} onChange={(e) => setStatus(e.target.value as TestCase['status'])}>
-            <option value="draft">draft</option>
-            <option value="confirmed">confirmed</option>
-            <option value="disabled">disabled</option>
-          </select>
-          <select className="select" value={format} onChange={(e) => setFormat(e.target.value as 'steps' | 'gherkin')}>
-            <option value="steps">Steps</option>
-            <option value="gherkin">Gherkin</option>
-          </select>
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => void handleBulkUpdate()} disabled={!bulkStatus && !bulkPriority}>
+            Apply bulk
+          </button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelectedIds([])}>
+            Clear
+          </button>
         </div>
+      )}
 
-        <input
-          className="input"
-          placeholder="Preconditions (optional)"
-          value={preconditions}
-          onChange={(e) => setPreconditions(e.target.value)}
-        />
-
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}>
-            <input type="checkbox" checked={isAutomated} onChange={(e) => setIsAutomated(e.target.checked)} />
-            Automated
-          </label>
-          {isAutomated && (
-            <>
-              <input className="input" placeholder="Script path (e.g. tests/login.spec.ts)" value={script} onChange={(e) => setScript(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
-              <input className="input" placeholder="Arguments (optional)" value={scriptArgs} onChange={(e) => setScriptArgs(e.target.value)} style={{ flex: 1, minWidth: 160 }} />
-            </>
-          )}
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.35rem' }}>
-            <input className="input" placeholder={t.testcases.newCategoryPlaceholder} value={newCategory} onChange={(e) => setNewCategory(e.target.value)} style={{ fontSize: '0.8rem' }} />
-            <button
-              type="button"
-              className="btn btn-sm"
-              onClick={async () => {
-                if (!newCategory.trim()) return
-                try {
-                  const created = await api.createCategory(newCategory.trim())
-                  setNewCategory('')
-                  setCategoryId(created.id)
-                  await load()
-                } catch (err) {
-                  setError(err instanceof Error ? err.message : t.errors.saveTestCase)
-                }
-              }}
-            >
-              {t.testcases.addCategory}
-            </button>
-          </div>
-        </div>
-
-        {format === 'gherkin' ? (
-          <textarea
-            className="textarea"
-            rows={5}
-            placeholder={"Feature: Login\n  Scenario: Valid credentials\n    Given user is on /login\n    When user submits valid credentials\n    Then user sees dashboard"}
-            value={gherkinBody}
-            onChange={(e) => setGherkinBody(e.target.value)}
-          />
-        ) : (
-          <div style={{ display: 'grid', gap: '0.4rem' }}>
-            <strong>{t.testcases.stepsLabel}</strong>
-            {steps.map((s, idx) => (
-              <div key={idx} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                <span style={{ width: 24, color: 'var(--muted)' }}>{idx + 1}.</span>
-                <input className="input" placeholder={t.testcases.actionPlaceholder} value={s.action} onChange={(e) => updateStep(idx, 'action', e.target.value)} style={{ flex: 1 }} />
-                <input className="input" placeholder={t.testcases.expectedPlaceholder} value={s.expected_result ?? ''} onChange={(e) => updateStep(idx, 'expected_result', e.target.value)} style={{ flex: 1 }} />
-                <button type="button" className="btn btn-sm" onClick={() => moveStep(idx, -1)} disabled={idx === 0}>↑</button>
-                <button type="button" className="btn btn-sm" onClick={() => moveStep(idx, 1)} disabled={idx === steps.length - 1}>↓</button>
-              </div>
-            ))}
-            <div>
-              <button type="button" className="btn btn-sm" onClick={addStep}>{t.testcases.addStep}</button>
-            </div>
-          </div>
-        )}
-
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button type="submit" className="btn btn-primary">{editingId !== null ? `Update #${editingId}` : t.testcases.save}</button>
-          {editingId !== null && (
-            <button type="button" className="btn" onClick={resetForm}>Cancel</button>
-          )}
-        </div>
-      </form>
-
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        <input
-          className="input"
-          placeholder="Search..."
-          value={filterQ}
-          onChange={(e) => {
-            setOffset(0)
-            setFilterQ(e.target.value)
-          }}
-          style={{ width: 240 }}
-        />
-        <select
-          className="select"
-          value={filterPriority}
-          onChange={(e) => {
-            setOffset(0)
-            setFilterPriority(e.target.value)
-          }}
-        >
-          <option value="">All priorities</option>
-          <option value="low">low</option>
-          <option value="medium">medium</option>
-          <option value="high">high</option>
-          <option value="critical">critical</option>
-        </select>
-
-        {selectedIds.length > 0 && (
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-            <span className="badge">{selectedIds.length} selected</span>
-            <select className="select" value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)}>
-              <option value="">Status...</option>
-              <option value="draft">draft</option>
-              <option value="confirmed">confirmed</option>
-              <option value="disabled">disabled</option>
-            </select>
-            <select className="select" value={bulkPriority} onChange={(e) => setBulkPriority(e.target.value)}>
-              <option value="">Priority...</option>
-              <option value="low">low</option>
-              <option value="medium">medium</option>
-              <option value="high">high</option>
-              <option value="critical">critical</option>
-            </select>
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => void handleBulkUpdate()} disabled={!bulkStatus && !bulkPriority}>
-              Apply bulk
-            </button>
-          </div>
-        )}
-      </div>
-
-      <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: '0.5rem' }}>
-        {cases.map((tc) => (
-          <li
-            key={tc.id}
-            className="card"
-            onClick={() => {
-              setEditingId(tc.id)
-              setProductId(tc.product_id)
-              setCategoryId(tc.category_id)
-              setSummary(tc.summary)
-              setPreconditions(tc.preconditions ?? '')
-              setFormat(tc.format)
-              setGherkinBody(tc.gherkin_body ?? '')
-              setPriority(tc.priority)
-              setStatus(tc.status)
-              setIsAutomated(Boolean(tc.is_automated))
-              setScript(tc.script ?? '')
-              setScriptArgs(tc.arguments ?? '')
-              setSteps(tc.steps.length > 0 ? tc.steps : [{ position: 1, action: '', expected_result: '' }])
-              void api.listTestCaseRevisions(tc.id).then((r) => setRevisions(r.items)).catch(() => setRevisions([]))
-            }}
-            style={{
-              border: editingId === tc.id ? '2px solid var(--primary)' : undefined,
-              cursor: 'pointer',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+      {/* Main table */}
+      <div className="table-wrap">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th style={{ width: 36 }}>
                 <input
                   type="checkbox"
-                  checked={selectedIds.includes(tc.id)}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={() => toggleSelect(tc.id)}
+                  checked={cases.length > 0 && selectedIds.length === cases.length}
+                  onChange={(e) => setSelectedIds(e.target.checked ? cases.map((c) => c.id) : [])}
                 />
-                <strong>{tc.summary}</strong>
-                <span className="badge">{tc.format}</span>
-                {tc.is_automated && <span className="badge">auto</span>}
-              </div>
-              <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
-                  {tc.priority} · {tc.status} · {tc.steps.length} {t.testcases.stepsCount}
-                </span>
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  onClick={async (e) => {
-                    e.stopPropagation()
-                    try {
-                      await api.cloneTestCase(tc.id)
-                      await load()
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : t.errors.saveTestCase)
-                    }
-                  }}
-                >
-                  Clone
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-danger btn-sm"
-                  onClick={async (e) => {
-                    e.stopPropagation()
-                    if (!window.confirm(`Delete TestCase #${tc.id}?`)) return
-                    try {
-                      await api.deleteTestCase(tc.id)
-                      if (editingId === tc.id) resetForm()
-                      await load()
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : t.errors.saveTestCase)
-                    }
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-          </li>
-        ))}
-        {cases.length === 0 && <li style={{ color: 'var(--muted)' }}>{t.testcases.empty}</li>}
-      </ul>
+              </th>
+              <th style={{ width: 70 }}>ID</th>
+              <th>Summary</th>
+              <th>Product / Category</th>
+              <th>Priority</th>
+              <th>Status</th>
+              <th>Type</th>
+              <th style={{ textAlign: 'right' }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cases.map((tc) => (
+              <tr
+                key={tc.id}
+                className={`clickable ${editingId === tc.id && drawerOpen ? 'selected' : ''}`}
+                onClick={() => {
+                  populateForm(tc)
+                  navigate(`/cases/${tc.id}`, { replace: true })
+                }}
+              >
+                <td onClick={(e) => e.stopPropagation()}>
+                  <input type="checkbox" checked={selectedIds.includes(tc.id)} onChange={() => toggleSelect(tc.id)} />
+                </td>
+                <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--muted)' }}>#{tc.id}</td>
+                <td>
+                  <div style={{ fontWeight: 500 }}>{tc.summary}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+                    {tc.format === 'gherkin' ? 'Gherkin' : `${tc.steps.length} ${t.testcases.stepsCount}`}
+                  </div>
+                </td>
+                <td style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
+                  {productMap.get(tc.product_id) ?? `#${tc.product_id}`}
+                  {tc.category_id ? ` · ${categoryMap.get(tc.category_id) ?? `#${tc.category_id}`}` : ''}
+                </td>
+                <td>
+                  <span className={`badge pill-${tc.priority}`}>{tc.priority}</span>
+                </td>
+                <td>
+                  <span className={`badge pill-${tc.status}`}>{tc.status}</span>
+                </td>
+                <td>
+                  {tc.is_automated ? (
+                    <span className="badge pill-running">
+                      <Bot size={12} /> Auto
+                    </span>
+                  ) : (
+                    <span className="badge">Manual</span>
+                  )}
+                </td>
+                <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
+                  <div style={{ display: 'inline-flex', gap: '0.25rem' }}>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      title="Clone"
+                      onClick={async () => {
+                        try {
+                          await api.cloneTestCase(tc.id)
+                          notify(`Cloned #${tc.id}`)
+                          await load()
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : t.errors.saveTestCase)
+                        }
+                      }}
+                    >
+                      <Copy size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      style={{ color: 'var(--danger)' }}
+                      title="Delete"
+                      onClick={async () => {
+                        if (!window.confirm(`Delete TestCase #${tc.id}?`)) return
+                        try {
+                          await api.deleteTestCase(tc.id)
+                          notify(`Deleted #${tc.id}`)
+                          if (editingId === tc.id) closeDrawer()
+                          await load()
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : t.errors.saveTestCase)
+                        }
+                      }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {cases.length === 0 && (
+              <tr>
+                <td colSpan={8} style={{ textAlign: 'center', color: 'var(--muted)', padding: '2rem' }}>
+                  {t.testcases.empty}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
+      {/* Pagination */}
       {total > PAGE_SIZE && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem', fontSize: '0.85rem' }}>
-          <span style={{ color: 'var(--muted)' }}>
-            Showing {offset + 1}–{Math.min(offset + cases.length, total)} of {total}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.85rem', fontSize: '0.82rem', color: 'var(--muted)' }}>
+          <span>
+            Showing {offset + 1}–{Math.min(offset + PAGE_SIZE, total)} of {total}
           </span>
           <div style={{ display: 'flex', gap: '0.4rem' }}>
             <button type="button" className="btn btn-sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>
@@ -460,18 +513,241 @@ export function TestCasesView() {
         </div>
       )}
 
-      {editingId !== null && (
-        <div className="card" style={{ marginTop: '1rem' }}>
-          <h4 style={{ margin: '0 0 0.5rem' }}>TestCase #{editingId} — Revisions ({revisions.length})</h4>
-          <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 0.75rem', fontSize: '0.85rem', color: 'var(--muted)' }}>
-            {revisions.map((r) => (
-              <li key={r.id}>v{r.version}: {r.summary} ({r.priority}, {r.status})</li>
-            ))}
-          </ul>
-          <EntityTagsBar entity="testcases" entityId={editingId} />
-          <TestCaseComponentsBar caseId={editingId} productId={productId} />
-          <AttachmentsPanel entityType="test_case" entityId={editingId} />
-          <CommentsPanel entityType="test_case" entityId={editingId} />
+      {/* Slide-over Drawer */}
+      {drawerOpen && (
+        <div className="drawer-backdrop" onClick={closeDrawer}>
+          <div className="drawer-panel" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <div className="drawer-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <h3 style={{ margin: 0, fontSize: '1rem' }}>
+                  {editingId !== null ? `${t.testcases.editCase} #${editingId}` : t.testcases.newCase}
+                </h3>
+                {editingId !== null && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    title={t.testcases.copyLink}
+                    onClick={() => {
+                      void navigator.clipboard?.writeText(`${window.location.origin}/cases/${editingId}`)
+                      notify(t.testcases.linkCopied)
+                    }}
+                  >
+                    <Link2 size={14} />
+                  </button>
+                )}
+              </div>
+              <button type="button" className="btn btn-ghost btn-icon" onClick={closeDrawer} aria-label="Close">
+                <X size={17} />
+              </button>
+            </div>
+
+            {editingId !== null && (
+              <div className="tabs-bar" style={{ padding: '0 1.25rem', marginBottom: 0 }}>
+                <button type="button" className={`tab-btn ${drawerTab === 'details' ? 'active' : ''}`} onClick={() => setDrawerTab('details')}>
+                  Details
+                </button>
+                <button type="button" className={`tab-btn ${drawerTab === 'comments' ? 'active' : ''}`} onClick={() => setDrawerTab('comments')}>
+                  <MessageSquare size={14} /> Comments
+                </button>
+                <button type="button" className={`tab-btn ${drawerTab === 'attachments' ? 'active' : ''}`} onClick={() => setDrawerTab('attachments')}>
+                  <Paperclip size={14} /> {t.attachments.title}
+                </button>
+                <button type="button" className={`tab-btn ${drawerTab === 'revisions' ? 'active' : ''}`} onClick={() => setDrawerTab('revisions')}>
+                  <History size={14} /> {t.testcases.revisions} ({revisions.length})
+                </button>
+              </div>
+            )}
+
+            <div className="drawer-body">
+              {drawerTab === 'details' && (
+                <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '0.85rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                    <select className="select" value={productId} onChange={(e) => setProductId(Number(e.target.value))}>
+                      {products.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                    <select className="select" value={categoryId ?? ''} onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : undefined)}>
+                      <option value="">No category</option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <input
+                    className="input"
+                    placeholder={t.testcases.summaryPlaceholder}
+                    value={summary}
+                    onChange={(e) => setSummary(e.target.value)}
+                    required
+                  />
+
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <select className="select" value={priority} onChange={(e) => setPriority(e.target.value as TestCase['priority'])}>
+                      <option value="low">low</option>
+                      <option value="medium">medium</option>
+                      <option value="high">high</option>
+                      <option value="critical">critical</option>
+                    </select>
+                    <select className="select" value={status} onChange={(e) => setStatus(e.target.value as TestCase['status'])}>
+                      <option value="draft">draft</option>
+                      <option value="confirmed">confirmed</option>
+                      <option value="disabled">disabled</option>
+                    </select>
+                    <select className="select" value={format} onChange={(e) => setFormat(e.target.value as 'steps' | 'gherkin')}>
+                      <option value="steps">Steps</option>
+                      <option value="gherkin">Gherkin</option>
+                    </select>
+                    {templates.length > 0 && (
+                      <select
+                        className="select"
+                        defaultValue=""
+                        onChange={(e) => {
+                          if (e.target.value) applyTemplate(Number(e.target.value))
+                          e.target.value = ''
+                        }}
+                      >
+                        <option value="">{t.testcases.applyTemplate}</option>
+                        {templates.map((tpl) => (
+                          <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  <textarea
+                    className="textarea"
+                    rows={2}
+                    placeholder="Preconditions (optional)"
+                    value={preconditions}
+                    onChange={(e) => setPreconditions(e.target.value)}
+                  />
+
+                  <div style={{ display: 'grid', gap: '0.45rem' }}>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.84rem' }}>
+                      <input type="checkbox" checked={isAutomated} onChange={(e) => setIsAutomated(e.target.checked)} />
+                      Automated test
+                    </label>
+                    {isAutomated && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.45rem' }}>
+                        <input className="input" placeholder="Script path (e.g. tests/login.spec.ts)" value={script} onChange={(e) => setScript(e.target.value)} />
+                        <input className="input" placeholder="Arguments (optional)" value={scriptArgs} onChange={(e) => setScriptArgs(e.target.value)} />
+                      </div>
+                    )}
+                  </div>
+
+                  {format === 'gherkin' ? (
+                    <textarea
+                      className="textarea"
+                      rows={7}
+                      placeholder={"Feature: Login\n  Scenario: Valid credentials\n    Given user is on /login\n    When user submits valid credentials\n    Then user sees dashboard"}
+                      value={gherkinBody}
+                      onChange={(e) => setGherkinBody(e.target.value)}
+                    />
+                  ) : (
+                    <div style={{ display: 'grid', gap: '0.45rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <strong style={{ fontSize: '0.85rem' }}>{t.testcases.stepsLabel}</strong>
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          onClick={() => setSteps((prev) => [...prev, { position: prev.length + 1, action: '', expected_result: '' }])}
+                        >
+                          <Plus size={13} /> {t.testcases.addStep}
+                        </button>
+                      </div>
+                      {steps.map((s, idx) => (
+                        <div key={idx} style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                          <span style={{ width: 22, color: 'var(--muted)', fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }}>{idx + 1}.</span>
+                          <input className="input" placeholder={t.testcases.actionPlaceholder} value={s.action} onChange={(e) => updateStep(idx, 'action', e.target.value)} style={{ flex: 1 }} />
+                          <input className="input" placeholder={t.testcases.expectedPlaceholder} value={s.expected_result ?? ''} onChange={(e) => updateStep(idx, 'expected_result', e.target.value)} style={{ flex: 1 }} />
+                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => moveStep(idx, -1)} disabled={idx === 0}>
+                            <ChevronUp size={14} />
+                          </button>
+                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => moveStep(idx, 1)} disabled={idx === steps.length - 1}>
+                            <ChevronDown size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', paddingTop: '0.4rem', borderTop: '1px solid var(--border)' }}>
+                    <button type="submit" className="btn btn-primary">{t.testcases.save}</button>
+                    <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.35rem' }}>
+                      <input className="input" placeholder={t.testcases.newCategoryPlaceholder} value={newCategory} onChange={(e) => setNewCategory(e.target.value)} style={{ width: 170, fontSize: '0.8rem' }} />
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={async () => {
+                          if (!newCategory.trim()) return
+                          try {
+                            const created = await api.createCategory(newCategory.trim())
+                            setNewCategory('')
+                            setCategoryId(created.id)
+                            await load()
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : t.errors.saveTestCase)
+                          }
+                        }}
+                      >
+                        {t.testcases.addCategory}
+                      </button>
+                    </div>
+                  </div>
+
+                  {editingId !== null && (
+                    <div style={{ display: 'grid', gap: '0.5rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border)' }}>
+                      <EntityTagsBar entity="testcases" entityId={editingId} />
+                      <TestCaseComponentsBar caseId={editingId} productId={productId} />
+                    </div>
+                  )}
+                </form>
+              )}
+
+              {editingId !== null && drawerTab === 'comments' && (
+                <CommentsPanel entityType="test_case" entityId={editingId} />
+              )}
+
+              {editingId !== null && drawerTab === 'attachments' && (
+                <AttachmentsPanel entityType="test_case" entityId={editingId} />
+              )}
+
+              {editingId !== null && drawerTab === 'revisions' && (
+                <div style={{ display: 'grid', gap: '0.6rem' }}>
+                  {revisions.length === 0 ? (
+                    <p style={{ color: 'var(--muted)', margin: 0 }}>No revision history yet.</p>
+                  ) : (
+                    revisions.map((rev, idx) => {
+                      const prev = revisions[idx + 1]
+                      const changedSummary = prev && prev.summary !== rev.summary
+                      const changedPriority = prev && prev.priority !== rev.priority
+                      const changedStatus = prev && prev.status !== rev.status
+                      return (
+                        <div key={rev.id} className="card" style={{ padding: '0.8rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                            <strong>v{rev.version}</strong>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+                              {new Date(rev.created_at).toLocaleString()}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 500 }}>{rev.summary}</div>
+                          <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
+                            <span className={`badge pill-${rev.priority}`}>{rev.priority}</span>
+                            <span className={`badge pill-${rev.status}`}>{rev.status}</span>
+                            {changedSummary && <span className="badge pill-blocked">summary changed</span>}
+                            {changedPriority && <span className="badge pill-blocked">priority: {prev.priority} → {rev.priority}</span>}
+                            {changedStatus && <span className="badge pill-blocked">status: {prev.status} → {rev.status}</span>}
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </section>

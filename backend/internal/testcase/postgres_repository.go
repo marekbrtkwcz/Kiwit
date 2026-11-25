@@ -23,23 +23,67 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 }
 
 func (r *PostgresRepository) List(ctx context.Context) ([]TestCase, error) {
-	items, _, err := r.ListFiltered(ctx, "", "", 0, 0)
+	items, _, err := r.ListWithFilter(ctx, ListFilter{})
 	return items, err
 }
 
 func (r *PostgresRepository) ListFiltered(ctx context.Context, q, priority string, limit, offset int) ([]TestCase, int64, error) {
-	where := make([]string, 0, 2)
-	args := make([]any, 0, 4)
+	return r.ListWithFilter(ctx, ListFilter{Q: q, Priority: priority, Limit: limit, Offset: offset})
+}
+
+func (r *PostgresRepository) ListWithFilter(ctx context.Context, f ListFilter) ([]TestCase, int64, error) {
+	where := make([]string, 0, 10)
+	args := make([]any, 0, 12)
 	argIdx := 1
 
-	if trimmed := strings.TrimSpace(q); trimmed != "" {
-		where = append(where, fmt.Sprintf("summary ILIKE $%d", argIdx))
+	if trimmed := strings.TrimSpace(f.Q); trimmed != "" {
+		where = append(where, fmt.Sprintf("tc.summary ILIKE $%d", argIdx))
 		args = append(args, "%"+trimmed+"%")
 		argIdx++
 	}
-	if priority != "" {
-		where = append(where, fmt.Sprintf("priority = $%d", argIdx))
-		args = append(args, priority)
+	if f.ProductID > 0 {
+		where = append(where, fmt.Sprintf("tc.product_id = $%d", argIdx))
+		args = append(args, f.ProductID)
+		argIdx++
+	}
+	if f.CategoryID > 0 {
+		where = append(where, fmt.Sprintf("tc.category_id = $%d", argIdx))
+		args = append(args, f.CategoryID)
+		argIdx++
+	}
+	if f.ComponentID > 0 {
+		where = append(where, fmt.Sprintf("EXISTS (SELECT 1 FROM test_case_components tcc WHERE tcc.test_case_id = tc.id AND tcc.component_id = $%d)", argIdx))
+		args = append(args, f.ComponentID)
+		argIdx++
+	}
+	if f.TagID > 0 {
+		where = append(where, fmt.Sprintf("EXISTS (SELECT 1 FROM test_case_tags tct WHERE tct.test_case_id = tc.id AND tct.tag_id = $%d)", argIdx))
+		args = append(args, f.TagID)
+		argIdx++
+	}
+	if f.Priority != "" {
+		where = append(where, fmt.Sprintf("tc.priority = $%d", argIdx))
+		args = append(args, f.Priority)
+		argIdx++
+	}
+	if f.Status != "" {
+		where = append(where, fmt.Sprintf("tc.status = $%d", argIdx))
+		args = append(args, f.Status)
+		argIdx++
+	}
+	if f.IsAutomated != nil {
+		where = append(where, fmt.Sprintf("tc.is_automated = $%d", argIdx))
+		args = append(args, *f.IsAutomated)
+		argIdx++
+	}
+	if f.AuthorID > 0 {
+		where = append(where, fmt.Sprintf("tc.author_id = $%d", argIdx))
+		args = append(args, f.AuthorID)
+		argIdx++
+	}
+	if f.UserID != nil {
+		where = append(where, fmt.Sprintf("(NOT EXISTS (SELECT 1 FROM product_members pm WHERE pm.product_id = tc.product_id) OR EXISTS (SELECT 1 FROM product_members pm WHERE pm.product_id = tc.product_id AND pm.user_id = $%d))", argIdx))
+		args = append(args, *f.UserID)
 		argIdx++
 	}
 
@@ -49,17 +93,20 @@ func (r *PostgresRepository) ListFiltered(ctx context.Context, q, priority strin
 	}
 
 	var total int64
-	if err := r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM test_cases"+whereClause, args...).Scan(&total); err != nil {
+	if err := r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM test_cases tc"+whereClause, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count test cases: %w", err)
 	}
 
 	query := `
-		SELECT id, product_id, category_id, summary, preconditions, format, gherkin_body, priority, status, is_automated, script, arguments, created_at, updated_at
-		FROM test_cases` + whereClause + ` ORDER BY id ASC`
+		SELECT tc.id, tc.product_id, tc.category_id, tc.author_id, tc.default_tester_id, tc.reviewer_id,
+		       tc.summary, tc.preconditions, tc.requirement, tc.extra_link, tc.notes,
+		       tc.format, tc.gherkin_body, tc.priority, tc.status, tc.is_automated, tc.script, tc.arguments,
+		       tc.created_at, tc.updated_at
+		FROM test_cases tc` + whereClause + ` ORDER BY tc.id ASC`
 	queryArgs := append([]any(nil), args...)
-	if limit > 0 {
+	if f.Limit > 0 {
 		query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
-		queryArgs = append(queryArgs, limit, offset)
+		queryArgs = append(queryArgs, f.Limit, f.Offset)
 	}
 
 	rows, err := r.pool.Query(ctx, query, queryArgs...)
@@ -88,7 +135,10 @@ func (r *PostgresRepository) ListFiltered(ctx context.Context, q, priority strin
 
 func (r *PostgresRepository) GetByID(ctx context.Context, id int64) (TestCase, error) {
 	row := r.pool.QueryRow(ctx, `
-		SELECT id, product_id, category_id, summary, preconditions, format, gherkin_body, priority, status, is_automated, script, arguments, created_at, updated_at
+		SELECT id, product_id, category_id, author_id, default_tester_id, reviewer_id,
+		       summary, preconditions, requirement, extra_link, notes,
+		       format, gherkin_body, priority, status, is_automated, script, arguments,
+		       created_at, updated_at
 		FROM test_cases WHERE id = $1`, id)
 	tc, err := scanPostgresTestCase(row)
 	if err != nil {
@@ -106,9 +156,10 @@ func (r *PostgresRepository) GetByID(ctx context.Context, id int64) (TestCase, e
 
 func scanPostgresTestCase(s rowScanner) (TestCase, error) {
 	var tc TestCase
-	var catID sql.NullInt64
+	var catID, authorID, testerID, reviewerID sql.NullInt64
 	if err := s.Scan(
-		&tc.ID, &tc.ProductID, &catID, &tc.Summary, &tc.Preconditions,
+		&tc.ID, &tc.ProductID, &catID, &authorID, &testerID, &reviewerID,
+		&tc.Summary, &tc.Preconditions, &tc.Requirement, &tc.ExtraLink, &tc.Notes,
 		&tc.Format, &tc.GherkinBody, &tc.Priority, &tc.Status,
 		&tc.IsAutomated, &tc.Script, &tc.Arguments,
 		&tc.CreatedAt, &tc.UpdatedAt,
@@ -117,6 +168,15 @@ func scanPostgresTestCase(s rowScanner) (TestCase, error) {
 	}
 	if catID.Valid {
 		tc.CategoryID = &catID.Int64
+	}
+	if authorID.Valid {
+		tc.AuthorID = &authorID.Int64
+	}
+	if testerID.Valid {
+		tc.DefaultTesterID = &testerID.Int64
+	}
+	if reviewerID.Valid {
+		tc.ReviewerID = &reviewerID.Int64
 	}
 	tc.Steps = []Step{}
 	return tc, nil
@@ -183,9 +243,14 @@ func (r *PostgresRepository) Create(ctx context.Context, p UpsertParams) (TestCa
 	now := time.Now().UTC()
 	var id int64
 	err = tx.QueryRow(ctx, `
-		INSERT INTO test_cases (product_id, category_id, summary, preconditions, format, gherkin_body, priority, status, is_automated, script, arguments, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
-		p.ProductID, p.CategoryID, p.Summary, p.Preconditions, p.Format, p.GherkinBody, p.Priority, p.Status, p.IsAutomated, p.Script, p.Arguments, now, now,
+		INSERT INTO test_cases (
+			product_id, category_id, author_id, default_tester_id, reviewer_id,
+			summary, preconditions, requirement, extra_link, notes,
+			format, gherkin_body, priority, status, is_automated, script, arguments, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING id`,
+		p.ProductID, p.CategoryID, p.AuthorID, p.DefaultTesterID, p.ReviewerID,
+		p.Summary, p.Preconditions, p.Requirement, p.ExtraLink, p.Notes,
+		p.Format, p.GherkinBody, p.Priority, p.Status, p.IsAutomated, p.Script, p.Arguments, now, now,
 	).Scan(&id)
 	if err != nil {
 		return TestCase{}, fmt.Errorf("insert test case: %w", err)
@@ -211,8 +276,9 @@ func (r *PostgresRepository) Create(ctx context.Context, p UpsertParams) (TestCa
 		return TestCase{}, fmt.Errorf("commit tx: %w", err)
 	}
 	return TestCase{
-		ID: id, ProductID: p.ProductID, CategoryID: p.CategoryID, Summary: p.Summary,
-		Preconditions: p.Preconditions, Format: p.Format, GherkinBody: p.GherkinBody,
+		ID: id, ProductID: p.ProductID, CategoryID: p.CategoryID, AuthorID: p.AuthorID, DefaultTesterID: p.DefaultTesterID, ReviewerID: p.ReviewerID,
+		Summary: p.Summary, Preconditions: p.Preconditions, Requirement: p.Requirement, ExtraLink: p.ExtraLink, Notes: p.Notes,
+		Format: p.Format, GherkinBody: p.GherkinBody,
 		Priority: p.Priority, Status: p.Status, IsAutomated: p.IsAutomated, Script: p.Script, Arguments: p.Arguments,
 		Steps: nonNilSteps(p.Steps), CreatedAt: now, UpdatedAt: now,
 	}, nil
@@ -229,9 +295,13 @@ func (r *PostgresRepository) Update(ctx context.Context, id int64, p UpsertParam
 	var createdAt time.Time
 	err = tx.QueryRow(ctx, `
 		UPDATE test_cases
-		SET product_id = $1, category_id = $2, summary = $3, preconditions = $4, format = $5, gherkin_body = $6, priority = $7, status = $8, is_automated = $9, script = $10, arguments = $11, updated_at = $12
-		WHERE id = $13 RETURNING created_at`,
-		p.ProductID, p.CategoryID, p.Summary, p.Preconditions, p.Format, p.GherkinBody, p.Priority, p.Status, p.IsAutomated, p.Script, p.Arguments, now, id,
+		SET product_id = $1, category_id = $2, default_tester_id = $3, reviewer_id = $4,
+		    summary = $5, preconditions = $6, requirement = $7, extra_link = $8, notes = $9,
+		    format = $10, gherkin_body = $11, priority = $12, status = $13, is_automated = $14, script = $15, arguments = $16, updated_at = $17
+		WHERE id = $18 RETURNING created_at`,
+		p.ProductID, p.CategoryID, p.DefaultTesterID, p.ReviewerID,
+		p.Summary, p.Preconditions, p.Requirement, p.ExtraLink, p.Notes,
+		p.Format, p.GherkinBody, p.Priority, p.Status, p.IsAutomated, p.Script, p.Arguments, now, id,
 	).Scan(&createdAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -263,8 +333,9 @@ func (r *PostgresRepository) Update(ctx context.Context, id int64, p UpsertParam
 		return TestCase{}, fmt.Errorf("commit tx: %w", err)
 	}
 	return TestCase{
-		ID: id, ProductID: p.ProductID, CategoryID: p.CategoryID, Summary: p.Summary,
-		Preconditions: p.Preconditions, Format: p.Format, GherkinBody: p.GherkinBody,
+		ID: id, ProductID: p.ProductID, CategoryID: p.CategoryID, DefaultTesterID: p.DefaultTesterID, ReviewerID: p.ReviewerID,
+		Summary: p.Summary, Preconditions: p.Preconditions, Requirement: p.Requirement, ExtraLink: p.ExtraLink, Notes: p.Notes,
+		Format: p.Format, GherkinBody: p.GherkinBody,
 		Priority: p.Priority, Status: p.Status, IsAutomated: p.IsAutomated, Script: p.Script, Arguments: p.Arguments,
 		Steps: nonNilSteps(p.Steps), CreatedAt: createdAt, UpdatedAt: now,
 	}, nil
