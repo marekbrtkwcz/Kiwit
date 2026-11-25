@@ -42,6 +42,7 @@ type Repository interface {
 	Create(ctx context.Context, p UpsertParams) (TestCase, error)
 	Update(ctx context.Context, id int64, p UpsertParams) (TestCase, error)
 	ListRevisions(ctx context.Context, testCaseID int64) ([]Revision, error)
+	BulkUpdate(ctx context.Context, ids []int64, status, priority string) (int64, error)
 }
 
 // SQLiteRepository implements Repository using database/sql (SQLite).
@@ -291,4 +292,36 @@ func (r *SQLiteRepository) ListRevisions(ctx context.Context, testCaseID int64) 
 		items = append(items, rev)
 	}
 	return items, rows.Err()
+}
+
+func (r *SQLiteRepository) BulkUpdate(ctx context.Context, ids []int64, status, priority string) (int64, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var updated int64
+	now := time.Now().UTC()
+	for _, id := range ids {
+		if status != "" {
+			res, err := tx.ExecContext(ctx, `UPDATE test_cases SET status = ?, updated_at = ? WHERE id = ?`, status, now, id)
+			if err != nil {
+				return 0, err
+			}
+			n, _ := res.RowsAffected()
+			updated += n
+		}
+		if priority != "" {
+			res, err := tx.ExecContext(ctx, `UPDATE test_cases SET priority = ?, updated_at = ? WHERE id = ?`, priority, now, id)
+			if err != nil {
+				return 0, err
+			}
+			if status == "" {
+				n, _ := res.RowsAffected()
+				updated += n
+			}
+		}
+	}
+	return updated, tx.Commit()
 }

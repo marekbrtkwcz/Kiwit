@@ -176,4 +176,34 @@ func RegisterRoutes(api huma.API, repo Repository) {
 		out.Body.Items = items
 		return out, nil
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "bulk-update-testcases",
+		Method:      http.MethodPatch,
+		Path:        "/api/v1/testcases/bulk",
+		Summary:     "Bulk update status or priority for multiple test cases",
+		Tags:        []string{"TestCases"},
+	}, func(ctx context.Context, input *struct {
+		Body struct {
+			IDs      []int64 `json:"ids" minItems:"1"`
+			Status   string  `json:"status,omitempty" enum:",draft,confirmed,disabled"`
+			Priority string  `json:"priority,omitempty" enum:",low,medium,high,critical"`
+		}
+	}) (*struct {
+		Body struct {
+			Updated int64 `json:"updated"`
+		}
+	}, error) {
+		n, err := repo.BulkUpdate(ctx, input.Body.IDs, input.Body.Status, input.Body.Priority)
+		if err != nil {
+			return nil, huma.Error400BadRequest("failed to bulk update test cases", err)
+		}
+		out := &struct {
+			Body struct {
+				Updated int64 `json:"updated"`
+			}
+		}{}
+		out.Body.Updated = n
+		return out, nil
+	})
 }

@@ -199,3 +199,22 @@ func (r *PostgresRepository) CreateCategory(ctx context.Context, name string) (C
 	}
 	return Category{ID: id, Name: name, CreatedAt: now}, nil
 }
+
+func (r *PostgresRepository) AddMember(ctx context.Context, productID, userID int64, role string) error {
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO product_members (product_id, user_id, role, created_at)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (product_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
+		productID, userID, role, time.Now().UTC(),
+	)
+	return err
+}
+
+func (r *PostgresRepository) HasAccess(ctx context.Context, productID, userID int64) (bool, error) {
+	var count int
+	err := r.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM product_members WHERE product_id = $1 AND user_id = $2`,
+		productID, userID,
+	).Scan(&count)
+	return count > 0, err
+}

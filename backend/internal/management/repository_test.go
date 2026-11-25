@@ -70,4 +70,15 @@ func TestSQLiteProductRepository(t *testing.T) {
 	tags, err := repo.ListTags(ctx)
 	require.NoError(t, err)
 	require.Len(t, tags, 1)
+
+	// Product-level permissions
+	_, err = sqlDB.ExecContext(ctx, `INSERT INTO users (email, username, password_hash) VALUES ('u@k.local', 'u', 'hash')`)
+	require.NoError(t, err)
+	has, err := repo.HasAccess(ctx, created.ID, 1)
+	require.NoError(t, err)
+	require.False(t, has)
+	require.NoError(t, repo.AddMember(ctx, created.ID, 1, "maintainer"))
+	has, err = repo.HasAccess(ctx, created.ID, 1)
+	require.NoError(t, err)
+	require.True(t, has)
 }

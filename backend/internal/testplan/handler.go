@@ -98,4 +98,24 @@ func RegisterRoutes(api huma.API, repo Repository) {
 		out.Body.Added = len(input.Body.CaseIDs)
 		return out, nil
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "clone-testplan",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/testplans/{id}/clone",
+		Summary:     "Clone a test plan with all attached test cases",
+		Tags:        []string{"TestPlans"},
+	}, func(ctx context.Context, input *struct {
+		ID   int64 `path:"id"`
+		Body struct {
+			Name      string `json:"name" minLength:"1" maxLength:"255"`
+			VersionID *int64 `json:"version_id,omitempty"`
+		}
+	}) (*TestPlanOutput, error) {
+		tp, err := repo.Clone(ctx, input.ID, input.Body.Name, input.Body.VersionID)
+		if err != nil {
+			return nil, huma.Error400BadRequest("failed to clone test plan", err)
+		}
+		return &TestPlanOutput{Body: tp}, nil
+	})
 }

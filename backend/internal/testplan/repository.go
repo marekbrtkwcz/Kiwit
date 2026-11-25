@@ -12,6 +12,7 @@ type Repository interface {
 	List(ctx context.Context) ([]TestPlan, error)
 	Create(ctx context.Context, productID, versionID int64, name, description string) (TestPlan, error)
 	AddCases(ctx context.Context, planID int64, caseIDs []int64) error
+	Clone(ctx context.Context, sourcePlanID int64, newName string, newVersionID *int64) (TestPlan, error)
 }
 
 // SQLiteRepository implements Repository using database/sql (SQLite).
@@ -89,4 +90,48 @@ func (r *SQLiteRepository) AddCases(ctx context.Context, planID int64, caseIDs [
 		}
 	}
 	return tx.Commit()
+}
+
+func (r *SQLiteRepository) Clone(ctx context.Context, sourcePlanID int64, newName string, newVersionID *int64) (TestPlan, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return TestPlan{}, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var productID, versionID int64
+	var desc string
+	err = tx.QueryRowContext(ctx, `SELECT product_id, version_id, description FROM test_plans WHERE id = ?`, sourcePlanID).
+		Scan(&productID, &versionID, &desc)
+	if err != nil {
+		return TestPlan{}, fmt.Errorf("load source plan: %w", err)
+	}
+	if newVersionID != nil {
+		versionID = *newVersionID
+	}
+
+	now := time.Now().UTC()
+	res, err := tx.ExecContext(ctx, `
+		INSERT INTO test_plans (product_id, version_id, name, description, is_active, created_at, updated_at)
+		VALUES (?, ?, ?, ?, 1, ?, ?)`, productID, versionID, newName, desc, now, now)
+	if err != nil {
+		return TestPlan{}, fmt.Errorf("insert cloned plan: %w", err)
+	}
+	newID, err := res.LastInsertId()
+	if err != nil {
+		return TestPlan{}, fmt.Errorf("last insert id: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO test_plan_cases (test_plan_id, test_case_id, position)
+		SELECT ?, test_case_id, position FROM test_plan_cases WHERE test_plan_id = ?`, newID, sourcePlanID); err != nil {
+		return TestPlan{}, fmt.Errorf("clone plan cases: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return TestPlan{}, fmt.Errorf("commit tx: %w", err)
+	}
+	return TestPlan{
+		ID: newID, ProductID: productID, VersionID: versionID, Name: newName, Description: desc, IsActive: true, CreatedAt: now,
+	}, nil
 }

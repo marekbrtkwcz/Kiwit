@@ -161,3 +161,33 @@ func (r *PostgresRepository) ListRevisions(ctx context.Context, testCaseID int64
 	}
 	return items, rows.Err()
 }
+
+func (r *PostgresRepository) BulkUpdate(ctx context.Context, ids []int64, status, priority string) (int64, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var updated int64
+	now := time.Now().UTC()
+	for _, id := range ids {
+		if status != "" {
+			tag, err := tx.Exec(ctx, `UPDATE test_cases SET status = $1, updated_at = $2 WHERE id = $3`, status, now, id)
+			if err != nil {
+				return 0, err
+			}
+			updated += tag.RowsAffected()
+		}
+		if priority != "" {
+			tag, err := tx.Exec(ctx, `UPDATE test_cases SET priority = $1, updated_at = $2 WHERE id = $3`, priority, now, id)
+			if err != nil {
+				return 0, err
+			}
+			if status == "" {
+				updated += tag.RowsAffected()
+			}
+		}
+	}
+	return updated, tx.Commit(ctx)
+}

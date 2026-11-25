@@ -339,4 +339,33 @@ func RegisterRoutes(api huma.API, repo ProductRepository) {
 		}
 		return &CategoryOutput{Body: c}, nil
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "add-product-member",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/products/{product_id}/members",
+		Summary:     "Assign user role to a product",
+		Tags:        []string{"Management"},
+	}, func(ctx context.Context, input *struct {
+		ProductID int64 `path:"product_id"`
+		Body      struct {
+			UserID int64  `json:"user_id" minimum:"1"`
+			Role   string `json:"role" default:"tester" enum:"viewer,tester,maintainer"`
+		}
+	}) (*struct {
+		Body struct {
+			OK bool `json:"ok"`
+		}
+	}, error) {
+		if err := repo.AddMember(ctx, input.ProductID, input.Body.UserID, input.Body.Role); err != nil {
+			return nil, huma.Error400BadRequest("failed to assign member", err)
+		}
+		out := &struct {
+			Body struct {
+				OK bool `json:"ok"`
+			}
+		}{}
+		out.Body.OK = true
+		return out, nil
+	})
 }

@@ -22,8 +22,10 @@ import (
 
 	"github.com/kiwit/kiwit/internal/attachment"
 	"github.com/kiwit/kiwit/internal/auth"
+	"github.com/kiwit/kiwit/internal/comment"
 	"github.com/kiwit/kiwit/internal/issuetracker"
 	"github.com/kiwit/kiwit/internal/management"
+	"github.com/kiwit/kiwit/internal/notify"
 	"github.com/kiwit/kiwit/internal/platform/config"
 	"github.com/kiwit/kiwit/internal/platform/db"
 	"github.com/kiwit/kiwit/internal/telemetry"
@@ -43,6 +45,7 @@ func main() {
 	defer stop()
 
 	var authSvc *auth.Service
+	var commentRepo comment.Repository
 	var sqlDBConn *sql.DB
 	var attachmentRepo attachment.Repository
 	var issueRepo issuetracker.Repository
@@ -59,6 +62,7 @@ func main() {
 		defer func() { _ = sqlDB.Close() }()
 		sqlDBConn = sqlDB
 		authSvc = auth.NewService(sqlDB, cfg.JWTSecret)
+		commentRepo = comment.NewSQLiteRepository(sqlDB)
 		attachmentRepo = attachment.NewSQLiteRepository(sqlDB)
 		issueRepo = issuetracker.NewSQLiteRepository(sqlDB)
 		productRepo = management.NewSQLiteRepository(sqlDB)
@@ -74,6 +78,7 @@ func main() {
 		}
 		defer pgPool.Close()
 		attachmentRepo = attachment.NewPostgresRepository(pgPool)
+		commentRepo = comment.NewPostgresRepository(pgPool)
 		issueRepo = issuetracker.NewPostgresRepository(pgPool)
 		productRepo = management.NewPostgresRepository(pgPool)
 		testCaseRepo = testcase.NewPostgresRepository(pgPool)
@@ -105,8 +110,11 @@ func main() {
 	testcase.RegisterRoutes(api, testCaseRepo)
 	testplan.RegisterRoutes(api, testPlanRepo)
 	testrun.RegisterRoutes(api, testRunRepo)
+	testrun.RegisterExportRoutes(router, testRunRepo)
 	issuetracker.RegisterRoutes(api, issueRepo)
 	telemetry.RegisterRoutes(api, sqlDBConn)
+	comment.RegisterRoutes(api, commentRepo)
+	notify.RegisterRoutes(api, notify.NewWebhookClient(os.Getenv("KIWIT_WEBHOOK_URL")))
 	attachment.RegisterRoutes(router, attachmentRepo, "./uploads")
 
 	router.Handle("/*", web.SPAHandler())

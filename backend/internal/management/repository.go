@@ -21,6 +21,8 @@ type ProductRepository interface {
 	CreateTag(ctx context.Context, name string) (Tag, error)
 	ListCategories(ctx context.Context) ([]Category, error)
 	CreateCategory(ctx context.Context, name string) (Category, error)
+	AddMember(ctx context.Context, productID, userID int64, role string) error
+	HasAccess(ctx context.Context, productID, userID int64) (bool, error)
 }
 
 // SQLiteRepository implements ProductRepository using database/sql (SQLite).
@@ -250,4 +252,23 @@ func (r *SQLiteRepository) CreateCategory(ctx context.Context, name string) (Cat
 		return Category{}, fmt.Errorf("last insert id: %w", err)
 	}
 	return Category{ID: id, Name: name, CreatedAt: now}, nil
+}
+
+func (r *SQLiteRepository) AddMember(ctx context.Context, productID, userID int64, role string) error {
+	_, err := r.db.ExecContext(ctx, `
+		INSERT INTO product_members (product_id, user_id, role, created_at)
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT(product_id, user_id) DO UPDATE SET role = excluded.role`,
+		productID, userID, role, time.Now().UTC(),
+	)
+	return err
+}
+
+func (r *SQLiteRepository) HasAccess(ctx context.Context, productID, userID int64) (bool, error) {
+	var count int
+	err := r.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM product_members WHERE product_id = ? AND user_id = ?`,
+		productID, userID,
+	).Scan(&count)
+	return count > 0, err
 }
