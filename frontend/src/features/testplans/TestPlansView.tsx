@@ -114,6 +114,17 @@ export function TestPlansView() {
             <span style={{ marginLeft: '0.5rem', fontSize: '0.85rem', color: '#6b7280' }}>
               Product #{tp.product_id} · Version #{tp.version_id}
             </span>
+            <button
+              type="button"
+              onClick={async (e) => {
+                e.stopPropagation()
+                await api.cloneTestPlan(tp.id, `${tp.name} (copy)`)
+                await load()
+              }}
+              style={{ float: 'right', padding: '0.2rem 0.5rem', borderRadius: 4, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}
+            >
+              Clone
+            </button>
           </li>
         ))}
         {plans.length === 0 && <li style={{ color: '#6b7280' }}>{t.testplans.empty}</li>}

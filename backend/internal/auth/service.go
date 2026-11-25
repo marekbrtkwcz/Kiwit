@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -29,11 +31,16 @@ type User struct {
 
 type Service struct {
 	db        *sql.DB
+	pgPool    *pgxpool.Pool
 	jwtSecret []byte
 }
 
 func NewService(db *sql.DB, jwtSecret string) *Service {
 	return &Service{db: db, jwtSecret: []byte(jwtSecret)}
+}
+
+func NewPostgresService(pool *pgxpool.Pool, jwtSecret string) *Service {
+	return &Service{pgPool: pool, jwtSecret: []byte(jwtSecret)}
 }
 
 func (s *Service) Register(ctx context.Context, email, username, password string) (User, error) {
@@ -43,6 +50,19 @@ func (s *Service) Register(ctx context.Context, email, username, password string
 	}
 
 	now := time.Now().UTC()
+	if s.pgPool != nil {
+		var id int64
+		err := s.pgPool.QueryRow(ctx, `
+			INSERT INTO users (email, username, password_hash, role, is_active, created_at, updated_at)
+			VALUES ($1, $2, $3, 'tester', TRUE, $4, $5) RETURNING id`,
+			email, username, string(hash), now, now,
+		).Scan(&id)
+		if err != nil {
+			return User{}, fmt.Errorf("insert user: %w", err)
+		}
+		return User{ID: id, Email: email, Username: username, Role: "tester"}, nil
+	}
+
 	res, err := s.db.ExecContext(ctx, `
 		INSERT INTO users (email, username, password_hash, role, is_active, created_at, updated_at)
 		VALUES (?, ?, ?, 'tester', 1, ?, ?)`,
@@ -61,19 +81,36 @@ func (s *Service) Register(ctx context.Context, email, username, password string
 func (s *Service) Login(ctx context.Context, email, password string) (string, User, error) {
 	var u User
 	var passwordHash string
-	var active int
-	err := s.db.QueryRowContext(ctx, `
-		SELECT id, email, username, role, password_hash, is_active
-		FROM users WHERE email = ?`, email,
-	).Scan(&u.ID, &u.Email, &u.Username, &u.Role, &passwordHash, &active)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+	if s.pgPool != nil {
+		var active bool
+		err := s.pgPool.QueryRow(ctx, `
+			SELECT id, email, username, role, password_hash, is_active
+			FROM users WHERE email = $1`, email,
+		).Scan(&u.ID, &u.Email, &u.Username, &u.Role, &passwordHash, &active)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return "", User{}, ErrInvalidCredentials
+			}
+			return "", User{}, fmt.Errorf("query user: %w", err)
+		}
+		if !active {
 			return "", User{}, ErrInvalidCredentials
 		}
-		return "", User{}, fmt.Errorf("query user: %w", err)
-	}
-	if active != 1 {
-		return "", User{}, ErrInvalidCredentials
+	} else {
+		var active int
+		err := s.db.QueryRowContext(ctx, `
+			SELECT id, email, username, role, password_hash, is_active
+			FROM users WHERE email = ?`, email,
+		).Scan(&u.ID, &u.Email, &u.Username, &u.Role, &passwordHash, &active)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return "", User{}, ErrInvalidCredentials
+			}
+			return "", User{}, fmt.Errorf("query user: %w", err)
+		}
+		if active != 1 {
+			return "", User{}, ErrInvalidCredentials
+		}
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)); err != nil {
 		return "", User{}, ErrInvalidCredentials
@@ -103,6 +140,17 @@ func (s *Service) CreateAPIToken(ctx context.Context, userID int64, name string)
 	sum := sha256.Sum256([]byte(plain))
 	tokenHash := hex.EncodeToString(sum[:])
 
+	if s.pgPool != nil {
+		if _, err := s.pgPool.Exec(ctx, `
+			INSERT INTO api_tokens (user_id, name, token_hash, created_at)
+			VALUES ($1, $2, $3, $4)`,
+			userID, name, tokenHash, time.Now().UTC(),
+		); err != nil {
+			return "", fmt.Errorf("insert api token: %w", err)
+		}
+		return plain, nil
+	}
+
 	if _, err := s.db.ExecContext(ctx, `
 		INSERT INTO api_tokens (user_id, name, token_hash, created_at)
 		VALUES (?, ?, ?, ?)`,
@@ -120,6 +168,20 @@ func (s *Service) AuthenticateBearer(ctx context.Context, bearerToken string) (U
 		tokenHash := hex.EncodeToString(sum[:])
 
 		var u User
+		if s.pgPool != nil {
+			err := s.pgPool.QueryRow(ctx, `
+				SELECT u.id, u.email, u.username, u.role
+				FROM api_tokens t
+				JOIN users u ON u.id = t.user_id
+				WHERE t.token_hash = $1 AND u.is_active = TRUE`, tokenHash,
+			).Scan(&u.ID, &u.Email, &u.Username, &u.Role)
+			if err != nil {
+				return User{}, ErrUnauthorized
+			}
+			_, _ = s.pgPool.Exec(ctx, `UPDATE api_tokens SET last_used_at = $1 WHERE token_hash = $2`, time.Now().UTC(), tokenHash)
+			return u, nil
+		}
+
 		err := s.db.QueryRowContext(ctx, `
 			SELECT u.id, u.email, u.username, u.role
 			FROM api_tokens t

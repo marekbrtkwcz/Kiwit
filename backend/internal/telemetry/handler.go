@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Summary struct {
@@ -23,7 +24,7 @@ type Summary struct {
 	} `json:"executions"`
 }
 
-func RegisterRoutes(api huma.API, db *sql.DB) {
+func RegisterRoutes(api huma.API, db *sql.DB, pgPool *pgxpool.Pool) {
 	huma.Register(api, huma.Operation{
 		OperationID: "telemetry-summary",
 		Method:      http.MethodGet,
@@ -32,6 +33,28 @@ func RegisterRoutes(api huma.API, db *sql.DB) {
 		Tags:        []string{"Telemetry"},
 	}, func(ctx context.Context, input *struct{}) (*struct{ Body Summary }, error) {
 		var s Summary
+		if pgPool != nil {
+			_ = pgPool.QueryRow(ctx, `SELECT COUNT(*) FROM products`).Scan(&s.Products)
+			_ = pgPool.QueryRow(ctx, `SELECT COUNT(*) FROM test_cases`).Scan(&s.TestCases)
+			_ = pgPool.QueryRow(ctx, `SELECT COUNT(*) FROM test_plans`).Scan(&s.TestPlans)
+			_ = pgPool.QueryRow(ctx, `SELECT COUNT(*) FROM test_runs`).Scan(&s.TestRuns)
+
+			rows, err := pgPool.Query(ctx, `SELECT status, COUNT(*) FROM test_executions GROUP BY status`)
+			if err != nil {
+				return nil, huma.Error500InternalServerError("failed to query telemetry", err)
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var status string
+				var cnt int64
+				if err := rows.Scan(&status, &cnt); err != nil {
+					return nil, huma.Error500InternalServerError("failed to scan telemetry", err)
+				}
+				accumulateStatus(&s, status, cnt)
+			}
+			return &struct{ Body Summary }{Body: s}, nil
+		}
+
 		_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM products`).Scan(&s.Products)
 		_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM test_cases`).Scan(&s.TestCases)
 		_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM test_plans`).Scan(&s.TestPlans)
@@ -49,21 +72,25 @@ func RegisterRoutes(api huma.API, db *sql.DB) {
 			if err := rows.Scan(&status, &cnt); err != nil {
 				return nil, huma.Error500InternalServerError("failed to scan telemetry", err)
 			}
-			s.Executions.Total += cnt
-			switch status {
-			case "passed":
-				s.Executions.Passed = cnt
-			case "failed":
-				s.Executions.Failed = cnt
-			case "blocked":
-				s.Executions.Blocked = cnt
-			case "skipped":
-				s.Executions.Skipped = cnt
-			default:
-				s.Executions.Idle += cnt
-			}
+			accumulateStatus(&s, status, cnt)
 		}
 
 		return &struct{ Body Summary }{Body: s}, nil
 	})
+}
+
+func accumulateStatus(s *Summary, status string, cnt int64) {
+	s.Executions.Total += cnt
+	switch status {
+	case "passed":
+		s.Executions.Passed = cnt
+	case "failed":
+		s.Executions.Failed = cnt
+	case "blocked":
+		s.Executions.Blocked = cnt
+	case "skipped":
+		s.Executions.Skipped = cnt
+	default:
+		s.Executions.Idle += cnt
+	}
 }

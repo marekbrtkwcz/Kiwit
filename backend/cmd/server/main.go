@@ -19,6 +19,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kiwit/kiwit/internal/attachment"
 	"github.com/kiwit/kiwit/internal/auth"
@@ -47,6 +48,7 @@ func main() {
 	var authSvc *auth.Service
 	var commentRepo comment.Repository
 	var sqlDBConn *sql.DB
+	var pgPoolConn *pgxpool.Pool
 	var attachmentRepo attachment.Repository
 	var issueRepo issuetracker.Repository
 	var productRepo management.ProductRepository
@@ -77,6 +79,8 @@ func main() {
 			os.Exit(1)
 		}
 		defer pgPool.Close()
+		pgPoolConn = pgPool
+		authSvc = auth.NewPostgresService(pgPool, cfg.JWTSecret)
 		attachmentRepo = attachment.NewPostgresRepository(pgPool)
 		commentRepo = comment.NewPostgresRepository(pgPool)
 		issueRepo = issuetracker.NewPostgresRepository(pgPool)
@@ -112,7 +116,7 @@ func main() {
 	testrun.RegisterRoutes(api, testRunRepo)
 	testrun.RegisterExportRoutes(router, testRunRepo)
 	issuetracker.RegisterRoutes(api, issueRepo)
-	telemetry.RegisterRoutes(api, sqlDBConn)
+	telemetry.RegisterRoutes(api, sqlDBConn, pgPoolConn)
 	comment.RegisterRoutes(api, commentRepo)
 	notify.RegisterRoutes(api, notify.NewWebhookClient(os.Getenv("KIWIT_WEBHOOK_URL")))
 	attachment.RegisterRoutes(router, attachmentRepo, "./uploads")

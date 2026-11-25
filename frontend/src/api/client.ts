@@ -166,7 +166,13 @@ export const api = {
   createCategory: (name: string) =>
     request<Category>('/api/v1/categories', { method: 'POST', body: JSON.stringify({ name }) }),
 
-  listTestCases: () => request<{ items: TestCase[] }>('/api/v1/testcases'),
+  listTestCases: (params?: { q?: string; priority?: string }) => {
+    const qs = new URLSearchParams()
+    if (params?.q) qs.set('q', params.q)
+    if (params?.priority) qs.set('priority', params.priority)
+    const suffix = qs.toString() ? `?${qs.toString()}` : ''
+    return request<{ items: TestCase[] }>(`/api/v1/testcases${suffix}`)
+  },
   createTestCase: (body: Omit<TestCase, 'id' | 'created_at' | 'updated_at'>) =>
     request<TestCase>('/api/v1/testcases', { method: 'POST', body: JSON.stringify(body) }),
   updateTestCase: (id: number, body: Omit<TestCase, 'id' | 'created_at' | 'updated_at'>) =>
@@ -179,6 +185,11 @@ export const api = {
     request<{ plan_id: number; added: number }>(`/api/v1/testplans/${planId}/cases`, {
       method: 'POST',
       body: JSON.stringify({ case_ids: caseIds }),
+    }),
+  cloneTestPlan: (planId: number, name: string) =>
+    request<TestPlan>(`/api/v1/testplans/${planId}/clone`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
     }),
 
   listTestRuns: () => request<{ items: TestRun[] }>('/api/v1/testruns'),

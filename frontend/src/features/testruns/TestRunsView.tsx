@@ -122,7 +122,15 @@ export function TestRunsView() {
         </ul>
 
         <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: '0.75rem' }}>
-          <h3 style={{ marginTop: 0 }}>{t.testruns.executions}</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <h3 style={{ margin: 0 }}>{t.testruns.executions}</h3>
+            {selectedRunId !== null && (
+              <div style={{ display: 'flex', gap: '0.4rem', fontSize: '0.85rem' }}>
+                <a href={`/api/v1/testruns/${selectedRunId}/export?format=csv`} style={{ padding: '0.25rem 0.5rem', border: '1px solid #d1d5db', borderRadius: 4, textDecoration: 'none', color: '#111827' }}>CSV</a>
+                <a href={`/api/v1/testruns/${selectedRunId}/export?format=html`} target="_blank" rel="noreferrer" style={{ padding: '0.25rem 0.5rem', border: '1px solid #d1d5db', borderRadius: 4, textDecoration: 'none', color: '#111827' }}>HTML</a>
+              </div>
+            )}
+          </div>
           {executions.length === 0 && <p style={{ color: '#6b7280' }}>{t.testruns.emptyExecutions}</p>}
           <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: '0.5rem' }}>
             {executions.map((ex) => (
