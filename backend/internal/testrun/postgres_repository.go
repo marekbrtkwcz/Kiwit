@@ -37,6 +37,17 @@ func (r *PostgresRepository) List(ctx context.Context) ([]TestRun, error) {
 	return items, rows.Err()
 }
 
+func (r *PostgresRepository) Stop(ctx context.Context, runID int64) error {
+	tag, err := r.pool.Exec(ctx, `UPDATE test_runs SET stopped_at = $1 WHERE id = $2`, time.Now().UTC(), runID)
+	if err != nil {
+		return fmt.Errorf("stop test run: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func (r *PostgresRepository) Create(ctx context.Context, testPlanID, buildID int64, summary, notes string) (TestRun, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -93,6 +104,17 @@ func (r *PostgresRepository) ListExecutions(ctx context.Context, runID int64) ([
 		items = append(items, ex)
 	}
 	return items, rows.Err()
+}
+
+func (r *PostgresRepository) Stop(ctx context.Context, runID int64) error {
+	tag, err := r.pool.Exec(ctx, `UPDATE test_runs SET stopped_at = $1 WHERE id = $2`, time.Now().UTC(), runID)
+	if err != nil {
+		return fmt.Errorf("stop test run: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func (r *PostgresRepository) UpdateExecution(ctx context.Context, executionID int64, status, comment string) (ExecutionResult, error) {

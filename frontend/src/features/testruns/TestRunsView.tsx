@@ -126,6 +126,7 @@ export function TestRunsView() {
             <h3 style={{ margin: 0 }}>{t.testruns.executions}</h3>
             {selectedRunId !== null && (
               <div style={{ display: 'flex', gap: '0.4rem', fontSize: '0.85rem' }}>
+                <button type="button" onClick={() => void api.stopTestRun(selectedRunId)} style={{ padding: '0.25rem 0.5rem', border: '1px solid #d1d5db', borderRadius: 4, background: '#fff', cursor: 'pointer' }}>Stop</button>
                 <a href={`/api/v1/testruns/${selectedRunId}/export?format=csv`} style={{ padding: '0.25rem 0.5rem', border: '1px solid #d1d5db', borderRadius: 4, textDecoration: 'none', color: '#111827' }}>CSV</a>
                 <a href={`/api/v1/testruns/${selectedRunId}/export?format=html`} target="_blank" rel="noreferrer" style={{ padding: '0.25rem 0.5rem', border: '1px solid #d1d5db', borderRadius: 4, textDecoration: 'none', color: '#111827' }}>HTML</a>
               </div>

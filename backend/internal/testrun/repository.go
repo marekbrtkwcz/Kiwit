@@ -29,6 +29,7 @@ type ExecutionItem struct {
 type Repository interface {
 	List(ctx context.Context) ([]TestRun, error)
 	Create(ctx context.Context, testPlanID, buildID int64, summary, notes string) (TestRun, error)
+	Stop(ctx context.Context, runID int64) error
 	ListExecutions(ctx context.Context, runID int64) ([]ExecutionItem, error)
 	UpdateExecution(ctx context.Context, executionID int64, status, comment string) (ExecutionResult, error)
 }
@@ -64,6 +65,17 @@ func (r *SQLiteRepository) List(ctx context.Context) ([]TestRun, error) {
 	return items, rows.Err()
 }
 
+func (r *SQLiteRepository) Stop(ctx context.Context, runID int64) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE test_runs SET stopped_at = ? WHERE id = ?`, time.Now().UTC(), runID)
+	if err != nil {
+		return fmt.Errorf("stop test run: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func (r *SQLiteRepository) ListExecutions(ctx context.Context, runID int64) ([]ExecutionItem, error) {
 	rows, err := r.db.QueryContext(ctx, `
 		SELECT e.id, e.test_run_id, e.test_case_id, tc.summary, e.status, e.comment
@@ -85,6 +97,17 @@ func (r *SQLiteRepository) ListExecutions(ctx context.Context, runID int64) ([]E
 		items = append(items, ex)
 	}
 	return items, rows.Err()
+}
+
+func (r *SQLiteRepository) Stop(ctx context.Context, runID int64) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE test_runs SET stopped_at = ? WHERE id = ?`, time.Now().UTC(), runID)
+	if err != nil {
+		return fmt.Errorf("stop test run: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func (r *SQLiteRepository) Create(ctx context.Context, testPlanID, buildID int64, summary, notes string) (TestRun, error) {

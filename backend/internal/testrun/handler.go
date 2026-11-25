@@ -87,6 +87,34 @@ func RegisterRoutes(api huma.API, repo Repository) {
 	})
 
 	huma.Register(api, huma.Operation{
+		OperationID: "stop-testrun",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/testruns/{id}/stop",
+		Summary:     "Mark a test run as stopped",
+		Tags:        []string{"TestRuns"},
+	}, func(ctx context.Context, input *struct {
+		ID int64 `path:"id"`
+	}) (*struct {
+		Body struct {
+			Stopped bool `json:"stopped"`
+		}
+	}, error) {
+		if err := repo.Stop(ctx, input.ID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, huma.Error404NotFound("test run not found")
+			}
+			return nil, huma.Error500InternalServerError("failed to stop test run", err)
+		}
+		out := &struct {
+			Body struct {
+				Stopped bool `json:"stopped"`
+			}
+		}{}
+		out.Body.Stopped = true
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
 		OperationID: "list-testrun-executions",
 		Method:      http.MethodGet,
 		Path:        "/api/v1/testruns/{id}/executions",

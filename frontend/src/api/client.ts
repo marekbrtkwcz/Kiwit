@@ -195,6 +195,8 @@ export const api = {
   listTestRuns: () => request<{ items: TestRun[] }>('/api/v1/testruns'),
   createTestRun: (body: { test_plan_id: number; build_id: number; summary: string; notes?: string }) =>
     request<TestRun>('/api/v1/testruns', { method: 'POST', body: JSON.stringify(body) }),
+  stopTestRun: (runId: number) =>
+    request<{ stopped: boolean }>(`/api/v1/testruns/${runId}/stop`, { method: 'POST' }),
   listExecutions: (runId: number) => request<{ items: TestExecution[] }>(`/api/v1/testruns/${runId}/executions`),
   updateExecution: (id: number, body: { status: TestExecution['status']; comment?: string }) =>
     request<{ id: number; status: string; comment?: string }>(`/api/v1/executions/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),

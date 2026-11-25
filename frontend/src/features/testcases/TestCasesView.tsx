@@ -10,6 +10,8 @@ export function TestCasesView() {
   const [productId, setProductId] = useState<number>(1)
   const [categoryId, setCategoryId] = useState<number | undefined>(undefined)
   const [newCategory, setNewCategory] = useState('')
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [filterQ, setFilterQ] = useState('')
   const [summary, setSummary] = useState('')
   const [priority, setPriority] = useState<TestCase['priority']>('medium')
   const [steps, setSteps] = useState<TestStep[]>([{ position: 1, action: '', expected_result: '' }])
@@ -17,7 +19,7 @@ export function TestCasesView() {
 
   const load = async () => {
     try {
-      const [pRes, cRes, tcRes] = await Promise.all([api.listProducts(), api.listCategories(), api.listTestCases()])
+      const [pRes, cRes, tcRes] = await Promise.all([api.listProducts(), api.listCategories(), api.listTestCases({ q: filterQ })])
       setProducts(pRes.items)
       setCategories(cRes.items)
       if (cRes.items.length > 0 && categoryId === undefined) {
@@ -35,7 +37,7 @@ export function TestCasesView() {
 
   useEffect(() => {
     void load()
-  }, [])
+  }, [filterQ])
 
   const updateStep = (idx: number, field: keyof TestStep, value: string) => {
     setSteps((prev) => prev.map((s, i) => (i === idx ? { ...s, [field]: value } : s)))
@@ -60,15 +62,21 @@ export function TestCasesView() {
       .filter((s) => s.action.trim() !== '')
       .map((s, i) => ({ ...s, position: i + 1 }))
     try {
-      await api.createTestCase({
+      const payload = {
         product_id: productId,
         category_id: categoryId,
         summary: summary.trim(),
-        format: 'steps',
+        format: 'steps' as const,
         priority,
-        status: 'confirmed',
+        status: 'confirmed' as const,
         steps: validSteps,
-      })
+      }
+      if (editingId !== null) {
+        await api.updateTestCase(editingId, payload)
+      } else {
+        await api.createTestCase(payload)
+      }
+      setEditingId(null)
       setSummary('')
       setSteps([{ position: 1, action: '', expected_result: '' }])
       await load()
@@ -165,9 +173,34 @@ export function TestCasesView() {
         </div>
       </form>
 
+      <div style={{ marginBottom: '0.75rem' }}>
+        <input
+          placeholder="Search..."
+          value={filterQ}
+          onChange={(e) => setFilterQ(e.target.value)}
+          style={{ padding: '0.35rem 0.6rem', borderRadius: 6, border: '1px solid #d1d5db', width: 260 }}
+        />
+      </div>
+
       <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: '0.5rem' }}>
         {cases.map((tc) => (
-          <li key={tc.id} style={{ padding: '0.75rem', border: '1px solid #e5e7eb', borderRadius: 8 }}>
+          <li
+            key={tc.id}
+            onClick={() => {
+              setEditingId(tc.id)
+              setProductId(tc.product_id)
+              setCategoryId(tc.category_id)
+              setSummary(tc.summary)
+              setPriority(tc.priority)
+              setSteps(tc.steps.length > 0 ? tc.steps : [{ position: 1, action: '', expected_result: '' }])
+            }}
+            style={{
+              padding: '0.75rem',
+              border: editingId === tc.id ? '2px solid #111827' : '1px solid #e5e7eb',
+              borderRadius: 8,
+              cursor: 'pointer',
+            }}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <strong>{tc.summary}</strong>
               <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>{tc.priority} · {tc.steps.length} {t.testcases.stepsCount}</span>
