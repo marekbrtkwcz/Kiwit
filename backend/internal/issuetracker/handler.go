@@ -3,6 +3,7 @@ package issuetracker
 import (
 	"context"
 	"net/http"
+	"os"
 
 	"github.com/danielgtaylor/huma/v2"
 )
@@ -96,6 +97,52 @@ func RegisterRoutes(api huma.API, repo Repository) {
 		b, err := repo.LinkBug(ctx, input.ExecutionID, input.Body.TrackerID, input.Body.ExternalKey, input.Body.URL, input.Body.Title)
 		if err != nil {
 			return nil, huma.Error400BadRequest("failed to link bug", err)
+		}
+		return &struct{ Body Bug }{Body: b}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "report-execution-bug",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/executions/{execution_id}/bugs/report",
+		Summary:     "Create an issue in GitHub/GitLab/Jira via REST API and link it to TestExecution",
+		Tags:        []string{"IssueTrackers"},
+	}, func(ctx context.Context, input *struct {
+		ExecutionID int64 `path:"execution_id"`
+		Body        struct {
+			TrackerID  int64  `json:"tracker_id" minimum:"1"`
+			APIToken   string `json:"api_token,omitempty"`
+			ProjectKey string `json:"project_key,omitempty"`
+			Title      string `json:"title" minLength:"1"`
+			Body       string `json:"body,omitempty"`
+		}
+	}) (*struct{ Body Bug }, error) {
+		trackers, err := repo.ListTrackers(ctx)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to list trackers", err)
+		}
+		var target *Tracker
+		for i := range trackers {
+			if trackers[i].ID == input.Body.TrackerID {
+				target = &trackers[i]
+				break
+			}
+		}
+		if target == nil {
+			return nil, huma.Error404NotFound("issue tracker not found")
+		}
+		token := input.Body.APIToken
+		if token == "" {
+			token = os.Getenv("KIWIT_TRACKER_TOKEN")
+		}
+		reported, err := ReportIssue(ctx, *target, token, input.Body.ProjectKey, input.Body.Title, input.Body.Body)
+		if err != nil {
+			return nil, huma.Error502BadGateway("failed to report issue to tracker", err)
+		}
+		tid := target.ID
+		b, err := repo.LinkBug(ctx, input.ExecutionID, &tid, reported.ExternalKey, reported.URL, input.Body.Title)
+		if err != nil {
+			return nil, huma.Error400BadRequest("failed to link reported bug", err)
 		}
 		return &struct{ Body Bug }{Body: b}, nil
 	})
