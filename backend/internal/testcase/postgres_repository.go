@@ -22,7 +22,7 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 
 func (r *PostgresRepository) List(ctx context.Context) ([]TestCase, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, product_id, category_id, summary, preconditions, format, gherkin_body, priority, status, created_at, updated_at
+		SELECT id, product_id, category_id, summary, preconditions, format, gherkin_body, priority, status, is_automated, script, arguments, created_at, updated_at
 		FROM test_cases ORDER BY id ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("query test cases: %w", err)
@@ -36,6 +36,7 @@ func (r *PostgresRepository) List(ctx context.Context) ([]TestCase, error) {
 		if err := rows.Scan(
 			&tc.ID, &tc.ProductID, &catID, &tc.Summary, &tc.Preconditions,
 			&tc.Format, &tc.GherkinBody, &tc.Priority, &tc.Status,
+			&tc.IsAutomated, &tc.Script, &tc.Arguments,
 			&tc.CreatedAt, &tc.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan test case: %w", err)
@@ -77,9 +78,9 @@ func (r *PostgresRepository) Create(ctx context.Context, p UpsertParams) (TestCa
 	now := time.Now().UTC()
 	var id int64
 	err = tx.QueryRow(ctx, `
-		INSERT INTO test_cases (product_id, category_id, summary, preconditions, format, gherkin_body, priority, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
-		p.ProductID, p.CategoryID, p.Summary, p.Preconditions, p.Format, p.GherkinBody, p.Priority, p.Status, now, now,
+		INSERT INTO test_cases (product_id, category_id, summary, preconditions, format, gherkin_body, priority, status, is_automated, script, arguments, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
+		p.ProductID, p.CategoryID, p.Summary, p.Preconditions, p.Format, p.GherkinBody, p.Priority, p.Status, p.IsAutomated, p.Script, p.Arguments, now, now,
 	).Scan(&id)
 	if err != nil {
 		return TestCase{}, fmt.Errorf("insert test case: %w", err)
@@ -118,9 +119,9 @@ func (r *PostgresRepository) Update(ctx context.Context, id int64, p UpsertParam
 	now := time.Now().UTC()
 	tag, err := tx.Exec(ctx, `
 		UPDATE test_cases
-		SET product_id = $1, category_id = $2, summary = $3, preconditions = $4, format = $5, gherkin_body = $6, priority = $7, status = $8, updated_at = $9
-		WHERE id = $10`,
-		p.ProductID, p.CategoryID, p.Summary, p.Preconditions, p.Format, p.GherkinBody, p.Priority, p.Status, now, id,
+		SET product_id = $1, category_id = $2, summary = $3, preconditions = $4, format = $5, gherkin_body = $6, priority = $7, status = $8, is_automated = $9, script = $10, arguments = $11, updated_at = $12
+		WHERE id = $13`,
+		p.ProductID, p.CategoryID, p.Summary, p.Preconditions, p.Format, p.GherkinBody, p.Priority, p.Status, p.IsAutomated, p.Script, p.Arguments, now, id,
 	)
 	if err != nil {
 		return TestCase{}, fmt.Errorf("update test case: %w", err)
@@ -223,4 +224,34 @@ func (r *PostgresRepository) Delete(ctx context.Context, id int64) error {
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+func (r *PostgresRepository) Clone(ctx context.Context, id int64, newSummary string) (TestCase, error) {
+	items, err := r.List(ctx)
+	if err != nil {
+		return TestCase{}, err
+	}
+	for _, tc := range items {
+		if tc.ID == id {
+			summary := newSummary
+			if summary == "" {
+				summary = tc.Summary + " (copy)"
+			}
+			return r.Create(ctx, UpsertParams{
+				ProductID:     tc.ProductID,
+				CategoryID:    tc.CategoryID,
+				Summary:       summary,
+				Preconditions: tc.Preconditions,
+				Format:        tc.Format,
+				GherkinBody:   tc.GherkinBody,
+				Priority:      tc.Priority,
+				Status:        tc.Status,
+				IsAutomated:   tc.IsAutomated,
+				Script:        tc.Script,
+				Arguments:     tc.Arguments,
+				Steps:         tc.Steps,
+			})
+		}
+	}
+	return TestCase{}, sql.ErrNoRows
 }

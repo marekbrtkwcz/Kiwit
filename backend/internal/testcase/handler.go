@@ -236,4 +236,26 @@ func RegisterRoutes(api huma.API, repo Repository) {
 		}
 		return nil, nil
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "clone-testcase",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/testcases/{id}/clone",
+		Summary:     "Clone a test case with steps and automation fields",
+		Tags:        []string{"TestCases"},
+	}, func(ctx context.Context, input *struct {
+		ID   int64 `path:"id"`
+		Body struct {
+			Summary string `json:"summary,omitempty"`
+		}
+	}) (*TestCaseOutput, error) {
+		tc, err := repo.Clone(ctx, input.ID, input.Body.Summary)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, huma.Error404NotFound("test case not found")
+			}
+			return nil, huma.Error500InternalServerError("failed to clone test case", err)
+		}
+		return &TestCaseOutput{Body: tc}, nil
+	})
 }

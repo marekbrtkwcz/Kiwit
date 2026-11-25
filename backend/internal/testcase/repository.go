@@ -47,6 +47,7 @@ type Repository interface {
 	ListRevisions(ctx context.Context, testCaseID int64) ([]Revision, error)
 	BulkUpdate(ctx context.Context, ids []int64, status, priority string) (int64, error)
 	Delete(ctx context.Context, id int64) error
+	Clone(ctx context.Context, id int64, newSummary string) (TestCase, error)
 }
 
 // SQLiteRepository implements Repository using database/sql (SQLite).
@@ -61,7 +62,7 @@ func NewSQLiteRepository(db *sql.DB) *SQLiteRepository {
 
 func (r *SQLiteRepository) List(ctx context.Context) ([]TestCase, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, product_id, category_id, summary, preconditions, format, gherkin_body, priority, status, created_at, updated_at
+		SELECT id, product_id, category_id, summary, preconditions, format, gherkin_body, priority, status, is_automated, script, arguments, created_at, updated_at
 		FROM test_cases
 		ORDER BY id ASC`)
 	if err != nil {
@@ -73,13 +74,16 @@ func (r *SQLiteRepository) List(ctx context.Context) ([]TestCase, error) {
 	for rows.Next() {
 		var tc TestCase
 		var catID sql.NullInt64
+		var isAuto int
 		if err := rows.Scan(
 			&tc.ID, &tc.ProductID, &catID, &tc.Summary, &tc.Preconditions,
 			&tc.Format, &tc.GherkinBody, &tc.Priority, &tc.Status,
+			&isAuto, &tc.Script, &tc.Arguments,
 			&tc.CreatedAt, &tc.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan test case: %w", err)
 		}
+		tc.IsAutomated = isAuto == 1
 		if catID.Valid {
 			tc.CategoryID = &catID.Int64
 		}
@@ -108,10 +112,14 @@ func (r *SQLiteRepository) Create(ctx context.Context, p UpsertParams) (TestCase
 	defer func() { _ = tx.Rollback() }()
 
 	now := time.Now().UTC()
+	isAutoInt := 0
+	if p.IsAutomated {
+		isAutoInt = 1
+	}
 	res, err := tx.ExecContext(ctx, `
-		INSERT INTO test_cases (product_id, category_id, summary, preconditions, format, gherkin_body, priority, status, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.ProductID, p.CategoryID, p.Summary, p.Preconditions, p.Format, p.GherkinBody, p.Priority, p.Status, now, now,
+		INSERT INTO test_cases (product_id, category_id, summary, preconditions, format, gherkin_body, priority, status, is_automated, script, arguments, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.ProductID, p.CategoryID, p.Summary, p.Preconditions, p.Format, p.GherkinBody, p.Priority, p.Status, isAutoInt, p.Script, p.Arguments, now, now,
 	)
 	if err != nil {
 		return TestCase{}, fmt.Errorf("insert test case: %w", err)
@@ -159,11 +167,15 @@ func (r *SQLiteRepository) Update(ctx context.Context, id int64, p UpsertParams)
 	defer func() { _ = tx.Rollback() }()
 
 	now := time.Now().UTC()
+	isAutoInt := 0
+	if p.IsAutomated {
+		isAutoInt = 1
+	}
 	res, err := tx.ExecContext(ctx, `
 		UPDATE test_cases
-		SET product_id = ?, category_id = ?, summary = ?, preconditions = ?, format = ?, gherkin_body = ?, priority = ?, status = ?, updated_at = ?
+		SET product_id = ?, category_id = ?, summary = ?, preconditions = ?, format = ?, gherkin_body = ?, priority = ?, status = ?, is_automated = ?, script = ?, arguments = ?, updated_at = ?
 		WHERE id = ?`,
-		p.ProductID, p.CategoryID, p.Summary, p.Preconditions, p.Format, p.GherkinBody, p.Priority, p.Status, now, id,
+		p.ProductID, p.CategoryID, p.Summary, p.Preconditions, p.Format, p.GherkinBody, p.Priority, p.Status, isAutoInt, p.Script, p.Arguments, now, id,
 	)
 	if err != nil {
 		return TestCase{}, fmt.Errorf("update test case: %w", err)
@@ -339,4 +351,34 @@ func (r *SQLiteRepository) Delete(ctx context.Context, id int64) error {
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+func (r *SQLiteRepository) Clone(ctx context.Context, id int64, newSummary string) (TestCase, error) {
+	items, err := r.List(ctx)
+	if err != nil {
+		return TestCase{}, err
+	}
+	for _, tc := range items {
+		if tc.ID == id {
+			summary := newSummary
+			if summary == "" {
+				summary = tc.Summary + " (copy)"
+			}
+			return r.Create(ctx, UpsertParams{
+				ProductID:     tc.ProductID,
+				CategoryID:    tc.CategoryID,
+				Summary:       summary,
+				Preconditions: tc.Preconditions,
+				Format:        tc.Format,
+				GherkinBody:   tc.GherkinBody,
+				Priority:      tc.Priority,
+				Status:        tc.Status,
+				IsAutomated:   tc.IsAutomated,
+				Script:        tc.Script,
+				Arguments:     tc.Arguments,
+				Steps:         tc.Steps,
+			})
+		}
+	}
+	return TestCase{}, sql.ErrNoRows
 }

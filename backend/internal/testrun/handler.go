@@ -140,6 +140,38 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 	})
 
 	huma.Register(api, huma.Operation{
+		OperationID: "clone-testrun",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/testruns/{id}/clone",
+		Summary:     "Clone a test run (creates a new run from the same plan and build)",
+		Tags:        []string{"TestRuns"},
+	}, func(ctx context.Context, input *struct {
+		ID   int64 `path:"id"`
+		Body struct {
+			Summary string `json:"summary,omitempty"`
+		}
+	}) (*TestRunOutput, error) {
+		runs, err := repo.List(ctx)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to list test runs", err)
+		}
+		for _, r := range runs {
+			if r.ID == input.ID {
+				sum := input.Body.Summary
+				if sum == "" {
+					sum = r.Summary + " (copy)"
+				}
+				cloned, err := repo.Create(ctx, r.TestPlanID, r.BuildID, sum, r.Notes)
+				if err != nil {
+					return nil, huma.Error400BadRequest("failed to clone test run", err)
+				}
+				return &TestRunOutput{Body: cloned}, nil
+			}
+		}
+		return nil, huma.Error404NotFound("test run not found")
+	})
+
+	huma.Register(api, huma.Operation{
 		OperationID: "list-testrun-executions",
 		Method:      http.MethodGet,
 		Path:        "/api/v1/testruns/{id}/executions",
