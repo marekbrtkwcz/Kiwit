@@ -77,6 +77,208 @@ func RegisterRoutes(api huma.API, db *sql.DB, pgPool *pgxpool.Pool) {
 
 		return &struct{ Body Summary }{Body: s}, nil
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "telemetry-execution-trends",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/telemetry/execution-trends",
+		Summary:     "Get daily execution trends by status",
+		Tags:        []string{"Telemetry"},
+	}, func(ctx context.Context, input *struct{}) (*struct {
+		Body struct {
+			Items []TrendPoint `json:"items"`
+		}
+	}, error) {
+		items, err := queryTrends(ctx, db, pgPool)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to query execution trends", err)
+		}
+		out := &struct {
+			Body struct {
+				Items []TrendPoint `json:"items"`
+			}
+		}{}
+		out.Body.Items = items
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "telemetry-status-matrix",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/telemetry/status-matrix",
+		Summary:     "Get status matrix per test case",
+		Tags:        []string{"Telemetry"},
+	}, func(ctx context.Context, input *struct{}) (*struct {
+		Body struct {
+			Items []MatrixRow `json:"items"`
+		}
+	}, error) {
+		items, err := queryMatrix(ctx, db, pgPool)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to query status matrix", err)
+		}
+		out := &struct {
+			Body struct {
+				Items []MatrixRow `json:"items"`
+			}
+		}{}
+		out.Body.Items = items
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "telemetry-test-case-health",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/telemetry/test-case-health",
+		Summary:     "Identify flaky/failing test cases sorted by fail rate",
+		Tags:        []string{"Telemetry"},
+	}, func(ctx context.Context, input *struct{}) (*struct {
+		Body struct {
+			Items []CaseHealth `json:"items"`
+		}
+	}, error) {
+		items, err := queryHealth(ctx, db, pgPool)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to query test case health", err)
+		}
+		out := &struct {
+			Body struct {
+				Items []CaseHealth `json:"items"`
+			}
+		}{}
+		out.Body.Items = items
+		return out, nil
+	})
+}
+
+type TrendPoint struct {
+	Date   string `json:"date"`
+	Status string `json:"status"`
+	Count  int64  `json:"count"`
+}
+
+type MatrixRow struct {
+	TestCaseID int64  `json:"test_case_id"`
+	Summary    string `json:"summary"`
+	Status     string `json:"status"`
+	Count      int64  `json:"count"`
+}
+
+type CaseHealth struct {
+	TestCaseID int64   `json:"test_case_id"`
+	Summary    string  `json:"summary"`
+	Total      int64   `json:"total"`
+	Failed     int64   `json:"failed"`
+	FailRate   float64 `json:"fail_rate"`
+}
+
+func queryTrends(ctx context.Context, db *sql.DB, pgPool *pgxpool.Pool) ([]TrendPoint, error) {
+	items := make([]TrendPoint, 0)
+	q := `SELECT CAST(created_at AS DATE) AS d, status, COUNT(*) FROM test_executions GROUP BY d, status ORDER BY d ASC`
+	if pgPool != nil {
+		rows, err := pgPool.Query(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var t TrendPoint
+			if err := rows.Scan(&t.Date, &t.Status, &t.Count); err != nil {
+				return nil, err
+			}
+			items = append(items, t)
+		}
+		return items, rows.Err()
+	}
+	rows, err := db.QueryContext(ctx, `SELECT SUBSTR(CAST(created_at AS TEXT), 1, 10) AS d, status, COUNT(*) FROM test_executions GROUP BY d, status ORDER BY d ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var t TrendPoint
+		if err := rows.Scan(&t.Date, &t.Status, &t.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, t)
+	}
+	return items, rows.Err()
+}
+
+func queryMatrix(ctx context.Context, db *sql.DB, pgPool *pgxpool.Pool) ([]MatrixRow, error) {
+	items := make([]MatrixRow, 0)
+	q := `SELECT e.test_case_id, tc.summary, e.status, COUNT(*) FROM test_executions e JOIN test_cases tc ON tc.id = e.test_case_id GROUP BY e.test_case_id, tc.summary, e.status ORDER BY e.test_case_id ASC`
+	if pgPool != nil {
+		rows, err := pgPool.Query(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var m MatrixRow
+			if err := rows.Scan(&m.TestCaseID, &m.Summary, &m.Status, &m.Count); err != nil {
+				return nil, err
+			}
+			items = append(items, m)
+		}
+		return items, rows.Err()
+	}
+	rows, err := db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var m MatrixRow
+		if err := rows.Scan(&m.TestCaseID, &m.Summary, &m.Status, &m.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, m)
+	}
+	return items, rows.Err()
+}
+
+func queryHealth(ctx context.Context, db *sql.DB, pgPool *pgxpool.Pool) ([]CaseHealth, error) {
+	items := make([]CaseHealth, 0)
+	q := `
+		SELECT e.test_case_id, tc.summary,
+		       COUNT(*) AS total,
+		       SUM(CASE WHEN e.status = 'failed' THEN 1 ELSE 0 END) AS failed
+		FROM test_executions e
+		JOIN test_cases tc ON tc.id = e.test_case_id
+		GROUP BY e.test_case_id, tc.summary
+		ORDER BY failed DESC, total DESC`
+	scanRows := func(rows interface {
+		Next() bool
+		Scan(...any) error
+		Err() error
+	}) error {
+		for rows.Next() {
+			var h CaseHealth
+			if err := rows.Scan(&h.TestCaseID, &h.Summary, &h.Total, &h.Failed); err != nil {
+				return err
+			}
+			if h.Total > 0 {
+				h.FailRate = float64(h.Failed) / float64(h.Total)
+			}
+			items = append(items, h)
+		}
+		return rows.Err()
+	}
+	if pgPool != nil {
+		rows, err := pgPool.Query(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		return items, scanRows(rows)
+	}
+	rows, err := db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	return items, scanRows(rows)
 }
 
 func accumulateStatus(s *Summary, status string, cnt int64) {
