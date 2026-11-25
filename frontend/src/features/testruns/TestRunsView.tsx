@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, TestExecution, TestPlan, TestRun } from '../../api/client'
 import { useI18n } from '../../i18n'
 import { AttachmentsPanel } from '../attachments/AttachmentsPanel'
+import { CommentsPanel } from '../comments/CommentsPanel'
 
 const STATUSES: TestExecution['status'][] = ['passed', 'failed', 'blocked', 'skipped']
 
@@ -142,6 +143,7 @@ export function TestRunsView() {
                     {ex.status.toUpperCase()}
                   </span>
                   <AttachmentsPanel entityType="test_execution" entityId={ex.id} />
+                  <CommentsPanel entityType="test_execution" entityId={ex.id} />
                 </div>
                 <div style={{ display: 'flex', gap: '0.25rem' }}>
                   {STATUSES.map((st) => (

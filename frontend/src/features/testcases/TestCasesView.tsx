@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { api, Category, Product, TestCase, TestStep } from '../../api/client'
+import { api, Category, Product, RevisionItem, TestCase, TestStep } from '../../api/client'
 import { useI18n } from '../../i18n'
+import { CommentsPanel } from '../comments/CommentsPanel'
 
 export function TestCasesView() {
   const { t } = useI18n()
@@ -11,6 +12,7 @@ export function TestCasesView() {
   const [categoryId, setCategoryId] = useState<number | undefined>(undefined)
   const [newCategory, setNewCategory] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [revisions, setRevisions] = useState<RevisionItem[]>([])
   const [filterQ, setFilterQ] = useState('')
   const [summary, setSummary] = useState('')
   const [priority, setPriority] = useState<TestCase['priority']>('medium')
@@ -193,6 +195,7 @@ export function TestCasesView() {
               setSummary(tc.summary)
               setPriority(tc.priority)
               setSteps(tc.steps.length > 0 ? tc.steps : [{ position: 1, action: '', expected_result: '' }])
+              void api.listTestCaseRevisions(tc.id).then((r) => setRevisions(r.items)).catch(() => setRevisions([]))
             }}
             style={{
               padding: '0.75rem',
@@ -201,14 +204,40 @@ export function TestCasesView() {
               cursor: 'pointer',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <strong>{tc.summary}</strong>
-              <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>{tc.priority} · {tc.steps.length} {t.testcases.stepsCount}</span>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>{tc.priority} · {tc.steps.length} {t.testcases.stepsCount}</span>
+                <button
+                  type="button"
+                  onClick={async (e) => {
+                    e.stopPropagation()
+                    await api.deleteTestCase(tc.id)
+                    if (editingId === tc.id) setEditingId(null)
+                    await load()
+                  }}
+                  style={{ padding: '0.15rem 0.45rem', borderRadius: 4, border: '1px solid #fca5a5', color: '#b91c1c', background: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}
+                >
+                  ×
+                </button>
+              </div>
             </div>
           </li>
         ))}
         {cases.length === 0 && <li style={{ color: '#6b7280' }}>{t.testcases.empty}</li>}
       </ul>
+
+      {editingId !== null && (
+        <div style={{ marginTop: '1rem', border: '1px solid #e5e7eb', borderRadius: 8, padding: '0.75rem' }}>
+          <h4 style={{ margin: '0 0 0.5rem' }}>TestCase #{editingId} — Revisions ({revisions.length})</h4>
+          <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 0.75rem', fontSize: '0.85rem', color: '#4b5563' }}>
+            {revisions.map((r) => (
+              <li key={r.id}>v{r.version}: {r.summary} ({r.priority})</li>
+            ))}
+          </ul>
+          <CommentsPanel entityType="test_case" entityId={editingId} />
+        </div>
+      )}
     </section>
   )
 }

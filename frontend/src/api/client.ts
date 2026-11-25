@@ -140,6 +140,35 @@ export interface BugItem {
   status: string
 }
 
+export interface CommentItem {
+  id: number
+  entity_type: 'test_case' | 'test_execution'
+  entity_id: number
+  body: string
+  created_at: string
+}
+
+export interface RevisionItem {
+  id: number
+  version: number
+  summary: string
+  priority: string
+  status: string
+  created_at: string
+}
+
+export interface ComponentItem {
+  id: number
+  product_id: number
+  name: string
+  description?: string
+}
+
+export interface TagItem {
+  id: number
+  name: string
+}
+
 export const api = {
   register: (body: { email: string; username: string; password: string }) =>
     request<User>('/api/v1/auth/register', { method: 'POST', body: JSON.stringify(body) }),
@@ -220,4 +249,34 @@ export const api = {
     }
     return res.json() as Promise<AttachmentItem>
   },
+
+  listExecutionBugs: (executionId: number) =>
+    request<{ items: BugItem[] }>(`/api/v1/executions/${executionId}/bugs`),
+  linkExecutionBug: (executionId: number, body: { external_key: string; url: string; title?: string }) =>
+    request<BugItem>(`/api/v1/executions/${executionId}/bugs`, { method: 'POST', body: JSON.stringify(body) }),
+  deleteTestCase: (id: number) =>
+    request<void>(`/api/v1/testcases/${id}`, { method: 'DELETE' }),
+  listTestCaseRevisions: (id: number) =>
+    request<{ items: RevisionItem[] }>(`/api/v1/testcases/${id}/revisions`),
+  listComments: (entityType: 'test_case' | 'test_execution', entityId: number) =>
+    request<{ items: CommentItem[] }>(`/api/v1/comments?entity_type=${entityType}&entity_id=${entityId}`),
+  createComment: (entityType: 'test_case' | 'test_execution', entityId: number, body: string) =>
+    request<CommentItem>('/api/v1/comments', {
+      method: 'POST',
+      body: JSON.stringify({ entity_type: entityType, entity_id: entityId, body }),
+    }),
+  importJUnitXML: (body: { test_plan_id: number; build_id: number; summary: string; xml: string }) =>
+    request<{ test_run: TestRun; results: { name: string; status: string }[] }>('/api/v1/testruns/import/junit', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  listComponents: (productId: number) =>
+    request<{ items: ComponentItem[] }>(`/api/v1/products/${productId}/components`),
+  createComponent: (productId: number, name: string, description?: string) =>
+    request<ComponentItem>(`/api/v1/products/${productId}/components`, {
+      method: 'POST',
+      body: JSON.stringify({ name, description }),
+    }),
+  listTags: () => request<{ items: TagItem[] }>('/api/v1/tags'),
+  createTag: (name: string) => request<TagItem>('/api/v1/tags', { method: 'POST', body: JSON.stringify({ name }) }),
 }

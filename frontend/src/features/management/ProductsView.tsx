@@ -12,12 +12,15 @@ export function ProductsView() {
   const [description, setDescription] = useState('')
   const [newVersion, setNewVersion] = useState('')
   const [newBuild, setNewBuild] = useState<Record<number, string>>({})
+  const [newTag, setNewTag] = useState('')
+  const [tags, setTags] = useState<{ id: number; name: string }[]>([])
   const [error, setError] = useState<string | null>(null)
 
   const load = async () => {
     try {
-      const res = await api.listProducts()
+      const [res, tRes] = await Promise.all([api.listProducts(), api.listTags()])
       setProducts(res.items)
+      setTags(tRes.items)
       if (res.items.length > 0 && selectedId === null) {
         setSelectedId(res.items[0].id)
       }
@@ -158,6 +161,15 @@ export function ProductsView() {
                 )}
               </div>
             ))}
+          </div>
+
+          <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid #e5e7eb' }}>
+            <strong>Tags:</strong>{' '}
+            <span style={{ fontSize: '0.85rem', color: '#4b5563' }}>{tags.map((tg) => tg.name).join(', ') || '-'}</span>
+            <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.4rem' }}>
+              <input placeholder="Tag" value={newTag} onChange={(e) => setNewTag(e.target.value)} style={{ padding: '0.25rem 0.5rem', borderRadius: 4, border: '1px solid #d1d5db', fontSize: '0.85rem' }} />
+              <button type="button" onClick={async () => { if (!newTag.trim()) return; await api.createTag(newTag.trim()); setNewTag(''); await load() }} style={{ padding: '0.25rem 0.6rem', borderRadius: 4, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}>+ Tag</button>
+            </div>
           </div>
         </div>
       )}
