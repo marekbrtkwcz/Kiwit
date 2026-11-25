@@ -11,6 +11,7 @@ import (
 // UpsertParams holds fields for creating or updating a test case and its steps.
 type UpsertParams struct {
 	ProductID     int64
+	CategoryID    *int64
 	Summary       string
 	Preconditions string
 	Format        string
@@ -55,7 +56,7 @@ func NewSQLiteRepository(db *sql.DB) *SQLiteRepository {
 
 func (r *SQLiteRepository) List(ctx context.Context) ([]TestCase, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, product_id, summary, preconditions, format, gherkin_body, priority, status, created_at, updated_at
+		SELECT id, product_id, category_id, summary, preconditions, format, gherkin_body, priority, status, created_at, updated_at
 		FROM test_cases
 		ORDER BY id ASC`)
 	if err != nil {
@@ -66,12 +67,16 @@ func (r *SQLiteRepository) List(ctx context.Context) ([]TestCase, error) {
 	items := make([]TestCase, 0)
 	for rows.Next() {
 		var tc TestCase
+		var catID sql.NullInt64
 		if err := rows.Scan(
-			&tc.ID, &tc.ProductID, &tc.Summary, &tc.Preconditions,
+			&tc.ID, &tc.ProductID, &catID, &tc.Summary, &tc.Preconditions,
 			&tc.Format, &tc.GherkinBody, &tc.Priority, &tc.Status,
 			&tc.CreatedAt, &tc.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan test case: %w", err)
+		}
+		if catID.Valid {
+			tc.CategoryID = &catID.Int64
 		}
 		tc.Steps = []Step{}
 		items = append(items, tc)
@@ -99,9 +104,9 @@ func (r *SQLiteRepository) Create(ctx context.Context, p UpsertParams) (TestCase
 
 	now := time.Now().UTC()
 	res, err := tx.ExecContext(ctx, `
-		INSERT INTO test_cases (product_id, summary, preconditions, format, gherkin_body, priority, status, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		p.ProductID, p.Summary, p.Preconditions, p.Format, p.GherkinBody, p.Priority, p.Status, now, now,
+		INSERT INTO test_cases (product_id, category_id, summary, preconditions, format, gherkin_body, priority, status, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		p.ProductID, p.CategoryID, p.Summary, p.Preconditions, p.Format, p.GherkinBody, p.Priority, p.Status, now, now,
 	)
 	if err != nil {
 		return TestCase{}, fmt.Errorf("insert test case: %w", err)
@@ -128,6 +133,7 @@ func (r *SQLiteRepository) Create(ctx context.Context, p UpsertParams) (TestCase
 	return TestCase{
 		ID:            id,
 		ProductID:     p.ProductID,
+		CategoryID:    p.CategoryID,
 		Summary:       p.Summary,
 		Preconditions: p.Preconditions,
 		Format:        p.Format,
@@ -150,9 +156,9 @@ func (r *SQLiteRepository) Update(ctx context.Context, id int64, p UpsertParams)
 	now := time.Now().UTC()
 	res, err := tx.ExecContext(ctx, `
 		UPDATE test_cases
-		SET product_id = ?, summary = ?, preconditions = ?, format = ?, gherkin_body = ?, priority = ?, status = ?, updated_at = ?
+		SET product_id = ?, category_id = ?, summary = ?, preconditions = ?, format = ?, gherkin_body = ?, priority = ?, status = ?, updated_at = ?
 		WHERE id = ?`,
-		p.ProductID, p.Summary, p.Preconditions, p.Format, p.GherkinBody, p.Priority, p.Status, now, id,
+		p.ProductID, p.CategoryID, p.Summary, p.Preconditions, p.Format, p.GherkinBody, p.Priority, p.Status, now, id,
 	)
 	if err != nil {
 		return TestCase{}, fmt.Errorf("update test case: %w", err)
@@ -185,6 +191,7 @@ func (r *SQLiteRepository) Update(ctx context.Context, id int64, p UpsertParams)
 	return TestCase{
 		ID:            id,
 		ProductID:     p.ProductID,
+		CategoryID:    p.CategoryID,
 		Summary:       p.Summary,
 		Preconditions: p.Preconditions,
 		Format:        p.Format,

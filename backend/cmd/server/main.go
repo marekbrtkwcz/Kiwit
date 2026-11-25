@@ -73,7 +73,12 @@ func main() {
 			os.Exit(1)
 		}
 		defer pgPool.Close()
+		attachmentRepo = attachment.NewPostgresRepository(pgPool)
+		issueRepo = issuetracker.NewPostgresRepository(pgPool)
 		productRepo = management.NewPostgresRepository(pgPool)
+		testCaseRepo = testcase.NewPostgresRepository(pgPool)
+		testPlanRepo = testplan.NewPostgresRepository(pgPool)
+		testRunRepo = testrun.NewPostgresRepository(pgPool)
 		logger.Info("postgres database ready")
 	}
 

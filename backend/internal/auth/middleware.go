@@ -43,3 +43,27 @@ func (s *Service) RequireAuth(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
+
+// RequireRole enforces that the authenticated user has one of the allowed roles (admin always passes).
+func RequireRole(allowed ...string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			u, ok := UserFromContext(r.Context())
+			if !ok {
+				http.Error(w, `{"title":"Unauthorized","status":401}`, http.StatusUnauthorized)
+				return
+			}
+			if u.Role == "admin" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			for _, role := range allowed {
+				if u.Role == role {
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
+			http.Error(w, `{"title":"Forbidden","status":403,"detail":"insufficient role"}`, http.StatusForbidden)
+		})
+	}
+}

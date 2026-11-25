@@ -130,6 +130,28 @@ type ListTagsOutput struct {
 	}
 }
 
+type Category struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type CreateCategoryInput struct {
+	Body struct {
+		Name string `json:"name" minLength:"1" maxLength:"64"`
+	}
+}
+
+type CategoryOutput struct {
+	Body Category
+}
+
+type ListCategoriesOutput struct {
+	Body struct {
+		Items []Category `json:"items"`
+	}
+}
+
 // RegisterRoutes registers management OpenAPI endpoints.
 func RegisterRoutes(api huma.API, repo ProductRepository) {
 	huma.Register(api, huma.Operation{
@@ -286,5 +308,35 @@ func RegisterRoutes(api huma.API, repo ProductRepository) {
 			return nil, huma.Error409Conflict("failed to create tag", err)
 		}
 		return &TagOutput{Body: t}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "list-categories",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/categories",
+		Summary:     "List test case categories",
+		Tags:        []string{"Management"},
+	}, func(ctx context.Context, input *struct{}) (*ListCategoriesOutput, error) {
+		items, err := repo.ListCategories(ctx)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to list categories", err)
+		}
+		out := &ListCategoriesOutput{}
+		out.Body.Items = items
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "create-category",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/categories",
+		Summary:     "Create test case category",
+		Tags:        []string{"Management"},
+	}, func(ctx context.Context, input *CreateCategoryInput) (*CategoryOutput, error) {
+		c, err := repo.CreateCategory(ctx, input.Body.Name)
+		if err != nil {
+			return nil, huma.Error409Conflict("failed to create category", err)
+		}
+		return &CategoryOutput{Body: c}, nil
 	})
 }

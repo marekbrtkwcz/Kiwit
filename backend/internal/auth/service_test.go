@@ -2,6 +2,8 @@ package auth_test
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -46,4 +48,27 @@ func TestAuthServiceFlow(t *testing.T) {
 	tokenUser, err := svc.AuthenticateBearer(ctx, apiToken)
 	require.NoError(t, err)
 	require.Equal(t, u.ID, tokenUser.ID)
+}
+
+func TestRequireRoleMiddleware(t *testing.T) {
+	ctx := context.Background()
+	sqlDB, err := db.OpenSQLite(ctx, "sqlite://:memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	svc := auth.NewService(sqlDB, "test-jwt-secret")
+	_, err = svc.Register(ctx, "tester@kiwit.local", "tester", "supersecret123")
+	require.NoError(t, err)
+	testerJWT, _, err := svc.Login(ctx, "tester@kiwit.local", "supersecret123")
+	require.NoError(t, err)
+
+	handler := svc.RequireAuth(auth.RequireRole("admin")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/products", nil)
+	req.Header.Set("Authorization", "Bearer "+testerJWT)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusForbidden, rec.Code)
 }

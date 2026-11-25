@@ -20,6 +20,11 @@ const dict = {
       descPlaceholder: 'Opis (opcjonalnie)',
       add: 'Dodaj produkt',
       empty: 'Brak produktów.',
+      versions: 'Wersje',
+      versionPlaceholder: 'Wersja (np. 1.0.0)',
+      addVersion: '+ Wersja',
+      buildPlaceholder: 'Build (np. b100)',
+      addBuild: '+ Build',
     },
     testcases: {
       title: 'Scenariusze testowe (TestCases)',
@@ -31,6 +36,8 @@ const dict = {
       save: 'Zapisz scenariusz',
       empty: 'Brak scenariuszy.',
       stepsCount: 'kroków',
+      newCategoryPlaceholder: 'Nowy rodzaj (np. UX)',
+      addCategory: '+ Rodzaj',
     },
     testplans: {
       title: 'Plany testowe (TestPlans)',
@@ -109,6 +116,11 @@ const dict = {
       descPlaceholder: 'Description (optional)',
       add: 'Add product',
       empty: 'No products yet.',
+      versions: 'Versions',
+      versionPlaceholder: 'Version (e.g. 1.0.0)',
+      addVersion: '+ Version',
+      buildPlaceholder: 'Build (e.g. b100)',
+      addBuild: '+ Build',
     },
     testcases: {
       title: 'Test Cases',
@@ -120,6 +132,8 @@ const dict = {
       save: 'Save test case',
       empty: 'No test cases yet.',
       stepsCount: 'steps',
+      newCategoryPlaceholder: 'New type (e.g. UX)',
+      addCategory: '+ Type',
     },
     testplans: {
       title: 'Test Plans',

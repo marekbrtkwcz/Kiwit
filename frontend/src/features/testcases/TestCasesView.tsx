@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
-import { api, Product, TestCase, TestStep } from '../../api/client'
+import { api, Category, Product, TestCase, TestStep } from '../../api/client'
 import { useI18n } from '../../i18n'
 
 export function TestCasesView() {
   const { t } = useI18n()
   const [products, setProducts] = useState<Product[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [cases, setCases] = useState<TestCase[]>([])
   const [productId, setProductId] = useState<number>(1)
+  const [categoryId, setCategoryId] = useState<number | undefined>(undefined)
+  const [newCategory, setNewCategory] = useState('')
   const [summary, setSummary] = useState('')
   const [priority, setPriority] = useState<TestCase['priority']>('medium')
   const [steps, setSteps] = useState<TestStep[]>([{ position: 1, action: '', expected_result: '' }])
@@ -14,8 +17,12 @@ export function TestCasesView() {
 
   const load = async () => {
     try {
-      const [pRes, tcRes] = await Promise.all([api.listProducts(), api.listTestCases()])
+      const [pRes, cRes, tcRes] = await Promise.all([api.listProducts(), api.listCategories(), api.listTestCases()])
       setProducts(pRes.items)
+      setCategories(cRes.items)
+      if (cRes.items.length > 0 && categoryId === undefined) {
+        setCategoryId(cRes.items[0].id)
+      }
       if (pRes.items.length > 0 && !pRes.items.some((p) => p.id === productId)) {
         setProductId(pRes.items[0].id)
       }
@@ -55,6 +62,7 @@ export function TestCasesView() {
     try {
       await api.createTestCase({
         product_id: productId,
+        category_id: categoryId,
         summary: summary.trim(),
         format: 'steps',
         priority,
@@ -87,12 +95,39 @@ export function TestCasesView() {
             onChange={(e) => setSummary(e.target.value)}
             style={{ flex: 1, padding: '0.4rem 0.6rem', borderRadius: 6, border: '1px solid #d1d5db' }}
           />
+          <select value={categoryId ?? ''} onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : undefined)} style={{ padding: '0.4rem', borderRadius: 6, border: '1px solid #d1d5db' }}>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
           <select value={priority} onChange={(e) => setPriority(e.target.value as TestCase['priority'])} style={{ padding: '0.4rem', borderRadius: 6, border: '1px solid #d1d5db' }}>
             <option value="low">low</option>
             <option value="medium">medium</option>
             <option value="high">high</option>
             <option value="critical">critical</option>
           </select>
+        </div>
+
+        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+          <input
+            placeholder={t.testcases.newCategoryPlaceholder}
+            value={newCategory}
+            onChange={(e) => setNewCategory(e.target.value)}
+            style={{ padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid #d1d5db', fontSize: '0.85rem' }}
+          />
+          <button
+            type="button"
+            onClick={async () => {
+              if (!newCategory.trim()) return
+              const created = await api.createCategory(newCategory.trim())
+              setNewCategory('')
+              setCategoryId(created.id)
+              await load()
+            }}
+            style={{ padding: '0.3rem 0.6rem', borderRadius: 6, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer', fontSize: '0.85rem' }}
+          >
+            {t.testcases.addCategory}
+          </button>
         </div>
 
         <div style={{ display: 'grid', gap: '0.4rem' }}>

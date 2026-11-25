@@ -54,9 +54,12 @@ func RegisterRoutes(api huma.API, repo Repository) {
 		OperationID: "list-testruns",
 		Method:      http.MethodGet,
 		Path:        "/api/v1/testruns",
-		Summary:     "List test runs",
+		Summary:     "List test runs with pagination",
 		Tags:        []string{"TestRuns"},
-	}, func(ctx context.Context, input *struct{}) (*struct {
+	}, func(ctx context.Context, input *struct {
+		Limit  int `query:"limit" default:"50" minimum:"1" maximum:"200"`
+		Offset int `query:"offset" default:"0" minimum:"0"`
+	}) (*struct {
 		Body struct {
 			Items []TestRun `json:"items"`
 		}
@@ -64,6 +67,15 @@ func RegisterRoutes(api huma.API, repo Repository) {
 		items, err := repo.List(ctx)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to list test runs", err)
+		}
+		if input.Offset >= len(items) {
+			items = []TestRun{}
+		} else {
+			end := input.Offset + input.Limit
+			if end > len(items) {
+				end = len(items)
+			}
+			items = items[input.Offset:end]
 		}
 		out := &struct {
 			Body struct {

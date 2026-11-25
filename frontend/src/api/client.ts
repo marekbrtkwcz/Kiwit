@@ -11,9 +11,15 @@ export interface TestStep {
   expected_result?: string
 }
 
+export interface Category {
+  id: number
+  name: string
+}
+
 export interface TestCase {
   id: number
   product_id: number
+  category_id?: number
   summary: string
   preconditions?: string
   format: 'steps' | 'gherkin'
@@ -125,6 +131,15 @@ export interface TelemetrySummary {
   }
 }
 
+export interface BugItem {
+  id: number
+  test_execution_id: number
+  external_key: string
+  url: string
+  title?: string
+  status: string
+}
+
 export const api = {
   register: (body: { email: string; username: string; password: string }) =>
     request<User>('/api/v1/auth/register', { method: 'POST', body: JSON.stringify(body) }),
@@ -147,6 +162,9 @@ export const api = {
   listBuilds: (versionId: number) => request<{ items: Build[] }>(`/api/v1/versions/${versionId}/builds`),
   createBuild: (versionId: number, name: string) =>
     request<Build>(`/api/v1/versions/${versionId}/builds`, { method: 'POST', body: JSON.stringify({ name }) }),
+  listCategories: () => request<{ items: Category[] }>('/api/v1/categories'),
+  createCategory: (name: string) =>
+    request<Category>('/api/v1/categories', { method: 'POST', body: JSON.stringify({ name }) }),
 
   listTestCases: () => request<{ items: TestCase[] }>('/api/v1/testcases'),
   createTestCase: (body: Omit<TestCase, 'id' | 'created_at' | 'updated_at'>) =>

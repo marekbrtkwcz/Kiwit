@@ -171,3 +171,31 @@ func (r *PostgresRepository) CreateTag(ctx context.Context, name string) (Tag, e
 	}
 	return Tag{ID: id, Name: name, CreatedAt: now}, nil
 }
+
+func (r *PostgresRepository) ListCategories(ctx context.Context) ([]Category, error) {
+	rows, err := r.pool.Query(ctx, `SELECT id, name, created_at FROM categories ORDER BY id ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("query categories: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]Category, 0)
+	for rows.Next() {
+		var c Category
+		if err := rows.Scan(&c.ID, &c.Name, &c.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan category: %w", err)
+		}
+		items = append(items, c)
+	}
+	return items, rows.Err()
+}
+
+func (r *PostgresRepository) CreateCategory(ctx context.Context, name string) (Category, error) {
+	now := time.Now().UTC()
+	var id int64
+	err := r.pool.QueryRow(ctx, `INSERT INTO categories (name, created_at) VALUES ($1, $2) RETURNING id`, name, now).Scan(&id)
+	if err != nil {
+		return Category{}, fmt.Errorf("insert category: %w", err)
+	}
+	return Category{ID: id, Name: name, CreatedAt: now}, nil
+}

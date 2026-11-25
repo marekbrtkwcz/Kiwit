@@ -19,6 +19,8 @@ type ProductRepository interface {
 	CreateComponent(ctx context.Context, productID int64, name, description string) (Component, error)
 	ListTags(ctx context.Context) ([]Tag, error)
 	CreateTag(ctx context.Context, name string) (Tag, error)
+	ListCategories(ctx context.Context) ([]Category, error)
+	CreateCategory(ctx context.Context, name string) (Category, error)
 }
 
 // SQLiteRepository implements ProductRepository using database/sql (SQLite).
@@ -217,4 +219,35 @@ func (r *SQLiteRepository) CreateTag(ctx context.Context, name string) (Tag, err
 		return Tag{}, fmt.Errorf("last insert id: %w", err)
 	}
 	return Tag{ID: id, Name: name, CreatedAt: now}, nil
+}
+
+func (r *SQLiteRepository) ListCategories(ctx context.Context) ([]Category, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id, name, created_at FROM categories ORDER BY id ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("query categories: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	items := make([]Category, 0)
+	for rows.Next() {
+		var c Category
+		if err := rows.Scan(&c.ID, &c.Name, &c.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan category: %w", err)
+		}
+		items = append(items, c)
+	}
+	return items, rows.Err()
+}
+
+func (r *SQLiteRepository) CreateCategory(ctx context.Context, name string) (Category, error) {
+	now := time.Now().UTC()
+	res, err := r.db.ExecContext(ctx, `INSERT INTO categories (name, created_at) VALUES (?, ?)`, name, now)
+	if err != nil {
+		return Category{}, fmt.Errorf("insert category: %w", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return Category{}, fmt.Errorf("last insert id: %w", err)
+	}
+	return Category{ID: id, Name: name, CreatedAt: now}, nil
 }

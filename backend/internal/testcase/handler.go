@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -19,6 +20,7 @@ type Step struct {
 type TestCase struct {
 	ID            int64     `json:"id"`
 	ProductID     int64     `json:"product_id"`
+	CategoryID    *int64    `json:"category_id,omitempty"`
 	Summary       string    `json:"summary"`
 	Preconditions string    `json:"preconditions,omitempty"`
 	Format        string    `json:"format" enum:"steps,gherkin"`
@@ -34,6 +36,7 @@ type UpsertTestCaseInput struct {
 	ID   int64 `path:"id" required:"false"`
 	Body struct {
 		ProductID     int64  `json:"product_id"`
+		CategoryID    *int64 `json:"category_id,omitempty"`
 		Summary       string `json:"summary" minLength:"1" maxLength:"255"`
 		Preconditions string `json:"preconditions,omitempty"`
 		Format        string `json:"format,omitempty" default:"steps" enum:"steps,gherkin"`
@@ -60,15 +63,40 @@ func RegisterRoutes(api huma.API, repo Repository) {
 		OperationID: "list-testcases",
 		Method:      http.MethodGet,
 		Path:        "/api/v1/testcases",
-		Summary:     "List test cases",
+		Summary:     "List test cases with optional filtering and pagination",
 		Tags:        []string{"TestCases"},
-	}, func(ctx context.Context, input *struct{}) (*ListTestCasesOutput, error) {
+	}, func(ctx context.Context, input *struct {
+		Q        string `query:"q" doc:"Filter by summary substring"`
+		Priority string `query:"priority" doc:"Filter by priority"`
+		Limit    int    `query:"limit" default:"50" minimum:"1" maximum:"200"`
+		Offset   int    `query:"offset" default:"0" minimum:"0"`
+	}) (*ListTestCasesOutput, error) {
 		items, err := repo.List(ctx)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("failed to list test cases", err)
 		}
+		filtered := make([]TestCase, 0, len(items))
+		qLower := strings.ToLower(strings.TrimSpace(input.Q))
+		for _, tc := range items {
+			if qLower != "" && !strings.Contains(strings.ToLower(tc.Summary), qLower) {
+				continue
+			}
+			if input.Priority != "" && tc.Priority != input.Priority {
+				continue
+			}
+			filtered = append(filtered, tc)
+		}
+		if input.Offset >= len(filtered) {
+			filtered = []TestCase{}
+		} else {
+			end := input.Offset + input.Limit
+			if end > len(filtered) {
+				end = len(filtered)
+			}
+			filtered = filtered[input.Offset:end]
+		}
 		out := &ListTestCasesOutput{}
-		out.Body.Items = items
+		out.Body.Items = filtered
 		return out, nil
 	})
 
@@ -81,6 +109,7 @@ func RegisterRoutes(api huma.API, repo Repository) {
 	}, func(ctx context.Context, input *UpsertTestCaseInput) (*TestCaseOutput, error) {
 		tc, err := repo.Create(ctx, UpsertParams{
 			ProductID:     input.Body.ProductID,
+			CategoryID:    input.Body.CategoryID,
 			Summary:       input.Body.Summary,
 			Preconditions: input.Body.Preconditions,
 			Format:        input.Body.Format,
@@ -104,6 +133,7 @@ func RegisterRoutes(api huma.API, repo Repository) {
 	}, func(ctx context.Context, input *UpsertTestCaseInput) (*TestCaseOutput, error) {
 		tc, err := repo.Update(ctx, input.ID, UpsertParams{
 			ProductID:     input.Body.ProductID,
+			CategoryID:    input.Body.CategoryID,
 			Summary:       input.Body.Summary,
 			Preconditions: input.Body.Preconditions,
 			Format:        input.Body.Format,
