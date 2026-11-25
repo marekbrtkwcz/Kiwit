@@ -271,10 +271,27 @@ function buildTelemetryQuery(params?: TelemetryFilterParams): string {
 export interface BugItem {
   id: number
   test_execution_id: number
+  tracker_id?: number
   external_key: string
   url: string
   title?: string
   status: string
+  last_synced_at?: string
+}
+
+export interface InternalBug {
+  id: number
+  product_id: number
+  build_id?: number
+  test_execution_id?: number
+  summary: string
+  description?: string
+  status: 'open' | 'in_progress' | 'resolved' | 'closed'
+  severity: 'low' | 'medium' | 'high' | 'critical'
+  reporter_id?: number
+  assignee_id?: number
+  created_at: string
+  updated_at: string
 }
 
 export interface CommentItem {
@@ -311,6 +328,7 @@ export interface IssueTrackerItem {
   name: string
   provider: 'github' | 'gitlab' | 'jira'
   base_url: string
+  api_username?: string
   created_at: string
 }
 
@@ -560,8 +578,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ entity_type: entityType, entity_id: entityId, body }),
     }),
-  importJUnitXML: (body: { test_plan_id: number; build_id: number; summary: string; xml: string }) =>
-    request<{ test_run: TestRun; results: { name: string; status: string }[] }>('/api/v1/testruns/import/junit', {
+  importJUnitXML: (body: { test_plan_id: number; build_id: number; summary: string; xml: string; auto_create_cases?: boolean }) =>
+    request<{ test_run: TestRun; results: { name: string; status: string }[]; created_cases: number }>('/api/v1/testruns/import/junit', {
       method: 'POST',
       body: JSON.stringify(body),
     }),
@@ -595,12 +613,47 @@ export const api = {
     }),
 
   listIssueTrackers: () => request<{ items: IssueTrackerItem[] }>('/api/v1/issue-trackers'),
-  createIssueTracker: (body: { name: string; provider: 'github' | 'gitlab' | 'jira'; base_url: string }) =>
+  createIssueTracker: (body: { name: string; provider: 'github' | 'gitlab' | 'jira'; base_url: string; api_username?: string }) =>
     request<IssueTrackerItem>('/api/v1/issue-trackers', { method: 'POST', body: JSON.stringify(body) }),
   reportExecutionBug: (
     executionId: number,
     body: { tracker_id: number; api_token?: string; project_key?: string; title: string; body?: string },
   ) => request<BugItem>(`/api/v1/executions/${executionId}/bugs/report`, { method: 'POST', body: JSON.stringify(body) }),
+  syncExecutionBug: (executionId: number, bugId: number, apiToken?: string) =>
+    request<BugItem>(`/api/v1/executions/${executionId}/bugs/${bugId}/sync`, {
+      method: 'POST',
+      body: JSON.stringify({ api_token: apiToken || '' }),
+    }),
+  commentExecutionBug: (executionId: number, bugId: number, body: { body: string; api_token?: string }) =>
+    request<{ ok: boolean }>(`/api/v1/executions/${executionId}/bugs/${bugId}/comment`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  listInternalBugs: (params?: { product_id?: number; status?: string; severity?: string; test_execution_id?: number; q?: string }) => {
+    const qs = new URLSearchParams()
+    if (params?.product_id) qs.set('product_id', String(params.product_id))
+    if (params?.status) qs.set('status', params.status)
+    if (params?.severity) qs.set('severity', params.severity)
+    if (params?.test_execution_id) qs.set('test_execution_id', String(params.test_execution_id))
+    if (params?.q) qs.set('q', params.q)
+    const suffix = qs.toString() ? `?${qs.toString()}` : ''
+    return request<{ items: InternalBug[] }>(`/api/v1/bugs${suffix}`)
+  },
+  createInternalBug: (body: {
+    product_id: number
+    build_id?: number
+    test_execution_id?: number
+    summary: string
+    description?: string
+    severity?: InternalBug['severity']
+    assignee_id?: number
+  }) => request<InternalBug>('/api/v1/bugs', { method: 'POST', body: JSON.stringify(body) }),
+  updateInternalBug: (
+    id: number,
+    body: { summary: string; description?: string; status?: InternalBug['status']; severity?: InternalBug['severity']; assignee_id?: number },
+  ) => request<InternalBug>(`/api/v1/bugs/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteInternalBug: (id: number) => request<void>(`/api/v1/bugs/${id}`, { method: 'DELETE' }),
 
   listEnvironments: () => request<{ items: EnvironmentItem[] }>('/api/v1/environments'),
   createEnvironment: (body: { name: string; description?: string; properties?: Record<string, string> }) =>

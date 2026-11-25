@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import {
+  Bug,
   CheckCircle2,
   FileCheck2,
   FolderKanban,
@@ -21,6 +22,7 @@ import { getAuthToken } from './api/client'
 import { CommandPalette } from './components/CommandPalette'
 import { useWorkspace, WorkspaceProvider } from './context/WorkspaceContext'
 import { AuthView } from './features/auth/AuthView'
+import { BugsView } from './features/bugs/BugsView'
 import { ProductsView } from './features/management/ProductsView'
 import { SettingsView } from './features/settings/SettingsView'
 import { DashboardView } from './features/telemetry/DashboardView'
@@ -41,6 +43,7 @@ function AppShell() {
     { to: '/cases', label: t.nav.testcases, icon: FileCheck2 },
     { to: '/plans', label: t.nav.testplans, icon: FolderKanban },
     { to: '/runs', label: t.nav.testruns, icon: PlayCircle },
+    { to: '/bugs', label: 'Bugs', icon: Bug },
     { to: '/products', label: t.nav.products, icon: Package },
     { to: '/settings', label: t.nav.settings, icon: Settings },
     { to: '/auth', label: t.nav.auth, icon: UserCircle2 },
@@ -199,6 +202,7 @@ function AppShell() {
             <Route path="/plans/:id" element={<TestPlansView />} />
             <Route path="/runs" element={<TestRunsView />} />
             <Route path="/runs/:id" element={<TestRunsView />} />
+            <Route path="/bugs" element={<BugsView />} />
             <Route path="/settings" element={<SettingsView />} />
             <Route path="/auth" element={<AuthView />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />

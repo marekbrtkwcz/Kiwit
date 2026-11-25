@@ -1,0 +1,233 @@
+import { useEffect, useState } from 'react'
+import { Bug, Plus, Search, Trash2, X } from 'lucide-react'
+import { api, InternalBug } from '../../api/client'
+import { useWorkspace } from '../../context/WorkspaceContext'
+
+export function BugsView() {
+  const { products, activeProductId, notify } = useWorkspace()
+  const [bugs, setBugs] = useState<InternalBug[]>([])
+  const [filterQ, setFilterQ] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
+  const [filterSeverity, setFilterSeverity] = useState('')
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [editing, setEditing] = useState<InternalBug | null>(null)
+
+  const [productId, setProductId] = useState<number>(activeProductId ?? 1)
+  const [summary, setSummary] = useState('')
+  const [description, setDescription] = useState('')
+  const [status, setStatus] = useState<InternalBug['status']>('open')
+  const [severity, setSeverity] = useState<InternalBug['severity']>('medium')
+  const [error, setError] = useState<string | null>(null)
+
+  const load = async () => {
+    try {
+      const res = await api.listInternalBugs({
+        product_id: activeProductId ?? undefined,
+        status: filterStatus || undefined,
+        severity: filterSeverity || undefined,
+        q: filterQ || undefined,
+      })
+      setBugs(res.items)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load bugs')
+    }
+  }
+
+  useEffect(() => {
+    void load()
+  }, [activeProductId, filterQ, filterStatus, filterSeverity])
+
+  const openNew = () => {
+    setEditing(null)
+    setProductId(activeProductId ?? products[0]?.id ?? 1)
+    setSummary('')
+    setDescription('')
+    setStatus('open')
+    setSeverity('medium')
+    setDrawerOpen(true)
+  }
+
+  const openEdit = (b: InternalBug) => {
+    setEditing(b)
+    setProductId(b.product_id)
+    setSummary(b.summary)
+    setDescription(b.description ?? '')
+    setStatus(b.status)
+    setSeverity(b.severity)
+    setDrawerOpen(true)
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!summary.trim()) return
+    try {
+      if (editing) {
+        await api.updateInternalBug(editing.id, {
+          summary: summary.trim(),
+          description: description.trim(),
+          status,
+          severity,
+        })
+        notify(`Bug #${editing.id} updated`)
+      } else {
+        const created = await api.createInternalBug({
+          product_id: productId,
+          summary: summary.trim(),
+          description: description.trim(),
+          severity,
+        })
+        notify(`Bug #${created.id} reported`)
+      }
+      setDrawerOpen(false)
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save bug')
+    }
+  }
+
+  const productMap = new Map(products.map((p) => [p.id, p.name]))
+
+  return (
+    <section>
+      {error && <p className="alert-error">{error}</p>}
+
+      <div className="filter-bar">
+        <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+          <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
+          <input
+            className="input"
+            placeholder="Search bugs…"
+            value={filterQ}
+            onChange={(e) => setFilterQ(e.target.value)}
+            style={{ width: '100%', paddingLeft: 30 }}
+          />
+        </div>
+        <select className="select" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+          <option value="">All statuses</option>
+          <option value="open">open</option>
+          <option value="in_progress">in_progress</option>
+          <option value="resolved">resolved</option>
+          <option value="closed">closed</option>
+        </select>
+        <select className="select" value={filterSeverity} onChange={(e) => setFilterSeverity(e.target.value)}>
+          <option value="">All severities</option>
+          <option value="critical">critical</option>
+          <option value="high">high</option>
+          <option value="medium">medium</option>
+          <option value="low">low</option>
+        </select>
+        <button type="button" className="btn btn-primary" onClick={openNew}>
+          <Plus size={15} /> Report Bug
+        </button>
+      </div>
+
+      <div className="table-wrap">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th style={{ width: 70 }}>ID</th>
+              <th>Summary</th>
+              <th>Product</th>
+              <th>Severity</th>
+              <th>Status</th>
+              <th>Created</th>
+              <th style={{ textAlign: 'right' }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {bugs.map((b) => (
+              <tr key={b.id} className="clickable" onClick={() => openEdit(b)}>
+                <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--muted)' }}>#{b.id}</td>
+                <td>
+                  <div style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Bug size={14} color="var(--danger)" />
+                    {b.summary}
+                  </div>
+                  {b.test_execution_id && (
+                    <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Execution #{b.test_execution_id}</div>
+                  )}
+                </td>
+                <td style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{productMap.get(b.product_id) ?? `#${b.product_id}`}</td>
+                <td><span className={`badge pill-${b.severity}`}>{b.severity}</span></td>
+                <td>
+                  <span className={`badge ${b.status === 'closed' || b.status === 'resolved' ? 'pill-passed' : b.status === 'in_progress' ? 'pill-running' : 'pill-failed'}`}>
+                    {b.status}
+                  </span>
+                </td>
+                <td style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>{new Date(b.created_at).toLocaleDateString()}</td>
+                <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    style={{ color: 'var(--danger)' }}
+                    onClick={async () => {
+                      if (!window.confirm(`Delete Bug #${b.id}?`)) return
+                      await api.deleteInternalBug(b.id)
+                      notify(`Deleted Bug #${b.id}`)
+                      await load()
+                    }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {bugs.length === 0 && (
+              <tr>
+                <td colSpan={7} style={{ textAlign: 'center', color: 'var(--muted)', padding: '2rem' }}>
+                  No bugs reported yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {drawerOpen && (
+        <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)}>
+          <div className="drawer-panel" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <div className="drawer-header">
+              <h3 style={{ margin: 0, fontSize: '1rem' }}>{editing ? `Bug #${editing.id}` : 'Report Bug'}</h3>
+              <button type="button" className="btn btn-ghost btn-icon" onClick={() => setDrawerOpen(false)}>
+                <X size={17} />
+              </button>
+            </div>
+            <div className="drawer-body">
+              <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '0.85rem' }}>
+                {!editing && (
+                  <select className="select" value={productId} onChange={(e) => setProductId(Number(e.target.value))}>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                )}
+                <input className="input" placeholder="Bug summary" value={summary} onChange={(e) => setSummary(e.target.value)} required />
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <select className="select" value={severity} onChange={(e) => setSeverity(e.target.value as InternalBug['severity'])}>
+                    <option value="low">low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                    <option value="critical">critical</option>
+                  </select>
+                  {editing && (
+                    <select className="select" value={status} onChange={(e) => setStatus(e.target.value as InternalBug['status'])}>
+                      <option value="open">open</option>
+                      <option value="in_progress">in_progress</option>
+                      <option value="resolved">resolved</option>
+                      <option value="closed">closed</option>
+                    </select>
+                  )}
+                </div>
+                <textarea className="textarea" rows={6} placeholder="Steps to reproduce / expected vs actual…" value={description} onChange={(e) => setDescription(e.target.value)} />
+                <div>
+                  <button type="submit" className="btn btn-primary">{editing ? 'Save changes' : 'Create bug'}</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}

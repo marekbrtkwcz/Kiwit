@@ -44,9 +44,10 @@ func RegisterRoutes(api huma.API, repo Repository, guard *auth.AccessGuard) {
 		Tags:        []string{"IssueTrackers"},
 	}, func(ctx context.Context, input *struct {
 		Body struct {
-			Name     string `json:"name" minLength:"1"`
-			Provider string `json:"provider" enum:"github,gitlab,jira"`
-			BaseURL  string `json:"base_url" minLength:"1"`
+			Name        string `json:"name" minLength:"1"`
+			Provider    string `json:"provider" enum:"github,gitlab,jira"`
+			BaseURL     string `json:"base_url" minLength:"1"`
+			APIUsername string `json:"api_username,omitempty" doc:"Optional username/email for Jira Cloud Basic Auth"`
 		}
 	}) (*struct{ Body Tracker }, error) {
 		if err := auth.CheckRole(ctx, "admin"); err != nil {
@@ -55,7 +56,7 @@ func RegisterRoutes(api huma.API, repo Repository, guard *auth.AccessGuard) {
 		if err := ValidateTrackerURL(input.Body.BaseURL); err != nil {
 			return nil, huma.Error400BadRequest(err.Error())
 		}
-		t, err := repo.CreateTracker(ctx, input.Body.Name, input.Body.Provider, input.Body.BaseURL)
+		t, err := repo.CreateTrackerWithAuth(ctx, input.Body.Name, input.Body.Provider, input.Body.BaseURL, input.Body.APIUsername)
 		if err != nil {
 			return nil, huma.Error409Conflict("failed to create tracker", err)
 		}
@@ -162,5 +163,104 @@ func RegisterRoutes(api huma.API, repo Repository, guard *auth.AccessGuard) {
 			return nil, huma.Error400BadRequest("failed to link reported bug", err)
 		}
 		return &struct{ Body Bug }{Body: b}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "sync-execution-bug",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/executions/{execution_id}/bugs/{bug_id}/sync",
+		Summary:     "Fetch live status of a linked bug from GitHub/GitLab/Jira",
+		Tags:        []string{"IssueTrackers"},
+	}, func(ctx context.Context, input *struct {
+		ExecutionID int64 `path:"execution_id"`
+		BugID       int64 `path:"bug_id"`
+		Body        struct {
+			APIToken string `json:"api_token,omitempty"`
+		}
+	}) (*struct{ Body Bug }, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
+		if err := guard.EnforceExecution(ctx, input.ExecutionID, false); err != nil {
+			return nil, err
+		}
+		b, err := repo.GetBugByID(ctx, input.BugID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, huma.Error404NotFound("bug not found")
+			}
+			return nil, huma.Error500InternalServerError("failed to load bug", err)
+		}
+		if b.TrackerID == nil {
+			return nil, huma.Error400BadRequest("bug is not associated with a configured issue tracker")
+		}
+		target, err := repo.GetTrackerByID(ctx, *b.TrackerID)
+		if err != nil {
+			return nil, huma.Error404NotFound("issue tracker not found")
+		}
+		token := input.Body.APIToken
+		if token == "" {
+			token = os.Getenv("KIWIT_TRACKER_TOKEN")
+		}
+		status, err := FetchIssueStatus(ctx, target, token, b.ExternalKey)
+		if err != nil {
+			return nil, huma.Error502BadGateway("failed to fetch remote issue status", err)
+		}
+		updated, err := repo.UpdateBugStatus(ctx, b.ID, status)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to persist synced status", err)
+		}
+		return &struct{ Body Bug }{Body: updated}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "comment-execution-bug",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/executions/{execution_id}/bugs/{bug_id}/comment",
+		Summary:     "Post a comment to a linked remote issue on GitHub/GitLab/Jira",
+		Tags:        []string{"IssueTrackers"},
+	}, func(ctx context.Context, input *struct {
+		ExecutionID int64 `path:"execution_id"`
+		BugID       int64 `path:"bug_id"`
+		Body        struct {
+			APIToken string `json:"api_token,omitempty"`
+			Body     string `json:"body" minLength:"1"`
+		}
+	}) (*struct {
+		Body struct {
+			OK bool `json:"ok"`
+		}
+	}, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
+		if err := guard.EnforceExecution(ctx, input.ExecutionID, true); err != nil {
+			return nil, err
+		}
+		b, err := repo.GetBugByID(ctx, input.BugID)
+		if err != nil {
+			return nil, huma.Error404NotFound("bug not found")
+		}
+		if b.TrackerID == nil {
+			return nil, huma.Error400BadRequest("bug is not associated with a configured issue tracker")
+		}
+		target, err := repo.GetTrackerByID(ctx, *b.TrackerID)
+		if err != nil {
+			return nil, huma.Error404NotFound("issue tracker not found")
+		}
+		token := input.Body.APIToken
+		if token == "" {
+			token = os.Getenv("KIWIT_TRACKER_TOKEN")
+		}
+		if err := PostIssueComment(ctx, target, token, b.ExternalKey, input.Body.Body); err != nil {
+			return nil, huma.Error502BadGateway("failed to post remote comment", err)
+		}
+		out := &struct {
+			Body struct {
+				OK bool `json:"ok"`
+			}
+		}{}
+		out.Body.OK = true
+		return out, nil
 	})
 }

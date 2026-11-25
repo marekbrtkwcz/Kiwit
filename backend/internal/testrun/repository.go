@@ -101,6 +101,7 @@ type Repository interface {
 	ListLinks(ctx context.Context, executionID int64) ([]ExecutionLink, error)
 	AddLink(ctx context.Context, executionID int64, name, url string) (ExecutionLink, error)
 	DeleteLink(ctx context.Context, executionID, linkID int64) error
+	ImportJUnitResults(ctx context.Context, testPlanID, buildID int64, summary string, results []ParsedCaseResult, autoCreate bool) (TestRun, int, error)
 }
 
 // SQLiteRepository implements Repository using database/sql (SQLite).
@@ -732,6 +733,64 @@ func (r *SQLiteRepository) DeleteLink(ctx context.Context, executionID, linkID i
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+func (r *SQLiteRepository) ImportJUnitResults(ctx context.Context, testPlanID, buildID int64, summary string, results []ParsedCaseResult, autoCreate bool) (TestRun, int, error) {
+	tr, err := r.Create(ctx, testPlanID, buildID, summary, "Imported from JUnit XML")
+	if err != nil {
+		return TestRun{}, 0, err
+	}
+	execs, err := r.ListExecutions(ctx, tr.ID)
+	if err != nil {
+		return tr, 0, err
+	}
+	byName := make(map[string]ExecutionItem, len(execs))
+	for _, ex := range execs {
+		byName[ex.Summary] = ex
+	}
+
+	var productID int64
+	if autoCreate {
+		_ = r.db.QueryRowContext(ctx, `SELECT product_id FROM test_plans WHERE id = ?`, testPlanID).Scan(&productID)
+	}
+
+	createdCases := 0
+	now := time.Now().UTC()
+	for _, res := range results {
+		if ex, ok := byName[res.Name]; ok {
+			_, _ = r.UpdateExecution(ctx, ex.ID, res.Status, res.Comment)
+			continue
+		}
+		if !autoCreate || productID == 0 || strings.TrimSpace(res.Name) == "" {
+			continue
+		}
+		ins, err := r.db.ExecContext(ctx, `
+			INSERT INTO test_cases (product_id, summary, format, priority, status, is_automated, created_at, updated_at)
+			VALUES (?, ?, 'steps', 'medium', 'confirmed', 1, ?, ?)`,
+			productID, res.Name, now, now,
+		)
+		if err != nil {
+			continue
+		}
+		caseID, _ := ins.LastInsertId()
+		_, _ = r.db.ExecContext(ctx, `
+			INSERT INTO test_case_revisions (test_case_id, version, summary, preconditions, format, gherkin_body, priority, status, steps_snapshot, created_at)
+			VALUES (?, 1, ?, '', 'steps', '', 'medium', 'confirmed', '[]', ?)`,
+			caseID, res.Name, now,
+		)
+		_, _ = r.db.ExecContext(ctx, `
+			INSERT OR IGNORE INTO test_plan_cases (test_plan_id, test_case_id, position)
+			VALUES (?, ?, COALESCE((SELECT MAX(position) + 1 FROM test_plan_cases WHERE test_plan_id = ?), 1))`,
+			testPlanID, caseID, testPlanID,
+		)
+		_, _ = r.db.ExecContext(ctx, `
+			INSERT INTO test_executions (test_run_id, test_case_id, status, comment, case_text_version, steps_snapshot, executed_at, created_at, updated_at)
+			VALUES (?, ?, ?, ?, 1, '[]', ?, ?, ?)`,
+			tr.ID, caseID, res.Status, res.Comment, now, now, now,
+		)
+		createdCases++
+	}
+	return tr, createdCases, nil
 }
 
 type stepSnapshot struct {

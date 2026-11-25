@@ -102,10 +102,30 @@ function ExecutionBugsPanel({ executionId, trackers }: { executionId: number; tr
           <Bug size={14} /> Bugs:
         </span>
         {bugs.map((b) => (
-          <a key={b.id} href={b.url} target="_blank" rel="noreferrer" className="badge" style={{ textDecoration: 'none' }}>
-            {b.external_key}{b.title ? `: ${b.title}` : ''}
-            <ExternalLink size={11} />
-          </a>
+          <span key={b.id} className="badge" style={{ gap: 5 }}>
+            <a href={b.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+              {b.external_key}{b.title ? `: ${b.title}` : ''} [{b.status}]
+              <ExternalLink size={11} />
+            </a>
+            {b.tracker_id && (
+              <button
+                type="button"
+                title="Sync live status"
+                onClick={async () => {
+                  try {
+                    const updated = await api.syncExecutionBug(executionId, b.id)
+                    setBugs((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))
+                    notify(`Synced ${updated.external_key}: ${updated.status}`)
+                  } catch (e) {
+                    setErr(e instanceof Error ? e.message : 'Sync failed')
+                  }
+                }}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--primary-text)', padding: 0, display: 'inline-flex' }}
+              >
+                <RefreshCw size={11} />
+              </button>
+            )}
+          </span>
         ))}
         <button type="button" className="btn btn-sm" onClick={() => setMode((m) => (m === 'link' ? 'none' : 'link'))}>
           {mode === 'link' ? 'Cancel' : '+ Link bug'}

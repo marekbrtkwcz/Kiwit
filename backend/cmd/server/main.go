@@ -23,6 +23,7 @@ import (
 
 	"github.com/kiwit/kiwit/internal/attachment"
 	"github.com/kiwit/kiwit/internal/auth"
+	"github.com/kiwit/kiwit/internal/bug"
 	"github.com/kiwit/kiwit/internal/comment"
 	"github.com/kiwit/kiwit/internal/environment"
 	"github.com/kiwit/kiwit/internal/issuetracker"
@@ -136,6 +137,7 @@ func main() {
 	testrun.RegisterRoutes(api, testRunRepo, notifier, guard)
 	testrun.RegisterExportRoutes(router, testRunRepo, guard)
 	issuetracker.RegisterRoutes(api, issueRepo, guard)
+	bug.RegisterRoutes(api, bug.NewStore(sqlDBConn, pgPoolConn), guard)
 	telemetry.RegisterRoutes(api, sqlDBConn, pgPoolConn)
 	comment.RegisterRoutes(api, commentRepo, guard)
 	notify.RegisterRoutes(api, notifier)

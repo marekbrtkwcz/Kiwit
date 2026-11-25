@@ -21,6 +21,7 @@ import (
 
 	"github.com/kiwit/kiwit/internal/attachment"
 	"github.com/kiwit/kiwit/internal/auth"
+	"github.com/kiwit/kiwit/internal/bug"
 	"github.com/kiwit/kiwit/internal/comment"
 	"github.com/kiwit/kiwit/internal/issuetracker"
 	"github.com/kiwit/kiwit/internal/management"
@@ -54,7 +55,7 @@ func TestHTTPE2E_Postgres(t *testing.T) {
 	// Clean all domain tables so the contract suite is idempotent on a shared Postgres instance.
 	_, err = pgPool.Exec(ctx, `
 		TRUNCATE TABLE
-			execution_links, bugs, issue_trackers, attachments, comments, email_settings,
+			internal_bugs, execution_links, bugs, issue_trackers, attachments, comments, email_settings,
 			test_executions, test_runs, test_plan_cases, test_plans,
 			test_case_revisions, test_case_steps, test_case_components,
 			test_case_tags, test_plan_tags, test_run_tags, test_cases,
@@ -116,6 +117,7 @@ func runE2ESuite(t *testing.T, sqlDB *sql.DB, pgPool *pgxpool.Pool) {
 	testrun.RegisterRoutes(api, trRepo, nil, guard)
 	testrun.RegisterExportRoutes(r, trRepo, guard)
 	issuetracker.RegisterRoutes(api, issueRepo, guard)
+	bug.RegisterRoutes(api, bug.NewStore(sqlDB, pgPool), guard)
 	telemetry.RegisterRoutes(api, sqlDB, pgPool)
 	comment.RegisterRoutes(api, commentRepo, guard)
 	notify.RegisterEmailRoutes(api, emailSettings, nil, guard)
@@ -399,6 +401,38 @@ func runE2ESuite(t *testing.T, sqlDB *sql.DB, pgPool *pgxpool.Pool) {
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	_ = res.Body.Close()
 
+	// Phase 4: built-in Bug Tracker with product_members isolation + JUnit auto_create_cases
+	res = doJSON(http.MethodPost, "/api/v1/bugs", testerAJWT, map[string]any{
+		"product_id": prod.ID, "test_execution_id": execID, "summary": "Login 500 error", "severity": "high",
+	})
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	var ibug struct{ ID int64 `json:"id"` }
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&ibug))
+	_ = res.Body.Close()
+
+	res = doJSON(http.MethodGet, "/api/v1/bugs", testerBJWT, nil)
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	var bugListB struct{ Items []map[string]any `json:"items"` }
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&bugListB))
+	_ = res.Body.Close()
+	require.Empty(t, bugListB.Items)
+
+	res = doJSON(http.MethodPost, "/api/v1/testruns/import/junit", testerAJWT, map[string]any{
+		"test_plan_id": tp.ID,
+		"build_id":     bld.ID,
+		"summary":      "CI Auto Import",
+		"xml":          `<testsuite name="ci"><testcase name="Auto Created Case"/></testsuite>`,
+	})
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	var junitOut struct {
+		CreatedCases int `json:"created_cases"`
+		TestRun      struct{ ID int64 `json:"id"` } `json:"test_run"`
+	}
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&junitOut))
+	_ = res.Body.Close()
+	require.Equal(t, 1, junitOut.CreatedCases)
+	_ = doJSON(http.MethodDelete, fmt.Sprintf("/api/v1/testruns/%d", junitOut.TestRun.ID), testerAJWT, nil)
+
 	// testerB cannot see testplans, testruns, executions, or export
 	res = doJSON(http.MethodGet, "/api/v1/testplans", testerBJWT, nil)
 	require.Equal(t, http.StatusOK, res.StatusCode)
@@ -436,7 +470,7 @@ func runE2ESuite(t *testing.T, sqlDB *sql.DB, pgPool *pgxpool.Pool) {
 	var bd telemetry.Breakdown
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&bd))
 	_ = res.Body.Close()
-	require.Equal(t, int64(1), bd.Automated)
+	require.Equal(t, int64(2), bd.Automated)
 	require.Equal(t, int64(0), bd.Manual)
 
 	// Upload attachment as testerA; testerB gets 403 on download

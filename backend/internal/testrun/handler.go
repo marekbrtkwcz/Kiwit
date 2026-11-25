@@ -406,19 +406,21 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 		OperationID: "import-junit-xml",
 		Method:      http.MethodPost,
 		Path:        "/api/v1/testruns/import/junit",
-		Summary:     "Import JUnit XML results from CI/CD",
+		Summary:     "Import JUnit XML results from CI/CD (with optional auto-creation of missing test cases)",
 		Tags:        []string{"TestRuns"},
 	}, func(ctx context.Context, input *struct {
 		Body struct {
-			TestPlanID int64  `json:"test_plan_id"`
-			BuildID    int64  `json:"build_id"`
-			Summary    string `json:"summary" minLength:"1"`
-			XML        string `json:"xml" minLength:"1"`
+			TestPlanID      int64  `json:"test_plan_id"`
+			BuildID         int64  `json:"build_id"`
+			Summary         string `json:"summary" minLength:"1"`
+			XML             string `json:"xml" minLength:"1"`
+			AutoCreateCases *bool  `json:"auto_create_cases,omitempty" doc:"Automatically create missing TestCases and attach them to the TestPlan (default: true)"`
 		}
 	}) (*struct {
 		Body struct {
-			TestRun TestRun            `json:"test_run"`
-			Results []ParsedCaseResult `json:"results"`
+			TestRun      TestRun            `json:"test_run"`
+			Results      []ParsedCaseResult `json:"results"`
+			CreatedCases int                `json:"created_cases"`
 		}
 	}, error) {
 		if err := auth.CheckRole(ctx, "tester"); err != nil {
@@ -431,29 +433,24 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 		if err != nil {
 			return nil, huma.Error400BadRequest("invalid JUnit XML", err)
 		}
-		tr, err := repo.Create(ctx, input.Body.TestPlanID, input.Body.BuildID, input.Body.Summary, "Imported from JUnit XML")
-		if err != nil {
-			return nil, huma.Error400BadRequest("failed to create test run", err)
+		autoCreate := true
+		if input.Body.AutoCreateCases != nil {
+			autoCreate = *input.Body.AutoCreateCases
 		}
-		if execs, err := repo.ListExecutions(ctx, tr.ID); err == nil {
-			byName := make(map[string]ParsedCaseResult, len(results))
-			for _, r := range results {
-				byName[r.Name] = r
-			}
-			for _, ex := range execs {
-				if r, ok := byName[ex.Summary]; ok {
-					_, _ = repo.UpdateExecution(ctx, ex.ID, r.Status, r.Comment)
-				}
-			}
+		tr, createdCases, err := repo.ImportJUnitResults(ctx, input.Body.TestPlanID, input.Body.BuildID, input.Body.Summary, results, autoCreate)
+		if err != nil {
+			return nil, huma.Error400BadRequest("failed to import JUnit results", err)
 		}
 		out := &struct {
 			Body struct {
-				TestRun TestRun            `json:"test_run"`
-				Results []ParsedCaseResult `json:"results"`
+				TestRun      TestRun            `json:"test_run"`
+				Results      []ParsedCaseResult `json:"results"`
+				CreatedCases int                `json:"created_cases"`
 			}
 		}{}
 		out.Body.TestRun = tr
 		out.Body.Results = results
+		out.Body.CreatedCases = createdCases
 		return out, nil
 	})
 

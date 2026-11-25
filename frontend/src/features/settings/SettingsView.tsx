@@ -35,6 +35,7 @@ export function SettingsView() {
   const [trackerName, setTrackerName] = useState('')
   const [trackerProvider, setTrackerProvider] = useState<'github' | 'gitlab' | 'jira'>('github')
   const [trackerURL, setTrackerURL] = useState('')
+  const [trackerUsername, setTrackerUsername] = useState('')
 
   const [envName, setEnvName] = useState('')
   const [envDesc, setEnvDesc] = useState('')
@@ -121,9 +122,15 @@ export function SettingsView() {
               e.preventDefault()
               if (!trackerName.trim() || !trackerURL.trim()) return
               void runAction(async () => {
-                await api.createIssueTracker({ name: trackerName.trim(), provider: trackerProvider, base_url: trackerURL.trim() })
+                await api.createIssueTracker({
+                  name: trackerName.trim(),
+                  provider: trackerProvider,
+                  base_url: trackerURL.trim(),
+                  api_username: trackerUsername.trim() || undefined,
+                })
                 setTrackerName('')
                 setTrackerURL('')
+                setTrackerUsername('')
               }, 'Issue tracker created.')
             }}
             style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}
@@ -134,7 +141,8 @@ export function SettingsView() {
               <option value="gitlab">GitLab</option>
               <option value="jira">Jira</option>
             </select>
-            <input className="input" placeholder="https://api.github.com/repos/org/repo" value={trackerURL} onChange={(e) => setTrackerURL(e.target.value)} required style={{ flex: 1, minWidth: 240 }} />
+            <input className="input" placeholder="https://api.github.com/repos/org/repo" value={trackerURL} onChange={(e) => setTrackerURL(e.target.value)} required style={{ flex: 1, minWidth: 220 }} />
+            <input className="input" placeholder="API Username / Email (Jira Cloud)" value={trackerUsername} onChange={(e) => setTrackerUsername(e.target.value)} style={{ minWidth: 200 }} />
             <button type="submit" className="btn btn-primary btn-sm">Add tracker</button>
           </form>
           {trackers.length > 0 && (

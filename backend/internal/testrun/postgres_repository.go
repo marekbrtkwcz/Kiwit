@@ -549,3 +549,62 @@ func (r *PostgresRepository) DeleteLink(ctx context.Context, executionID, linkID
 	}
 	return nil
 }
+
+func (r *PostgresRepository) ImportJUnitResults(ctx context.Context, testPlanID, buildID int64, summary string, results []ParsedCaseResult, autoCreate bool) (TestRun, int, error) {
+	tr, err := r.Create(ctx, testPlanID, buildID, summary, "Imported from JUnit XML")
+	if err != nil {
+		return TestRun{}, 0, err
+	}
+	execs, err := r.ListExecutions(ctx, tr.ID)
+	if err != nil {
+		return tr, 0, err
+	}
+	byName := make(map[string]ExecutionItem, len(execs))
+	for _, ex := range execs {
+		byName[ex.Summary] = ex
+	}
+
+	var productID int64
+	if autoCreate {
+		_ = r.pool.QueryRow(ctx, `SELECT product_id FROM test_plans WHERE id = $1`, testPlanID).Scan(&productID)
+	}
+
+	createdCases := 0
+	now := time.Now().UTC()
+	for _, res := range results {
+		if ex, ok := byName[res.Name]; ok {
+			_, _ = r.UpdateExecution(ctx, ex.ID, res.Status, res.Comment)
+			continue
+		}
+		if !autoCreate || productID == 0 || strings.TrimSpace(res.Name) == "" {
+			continue
+		}
+		var caseID int64
+		err := r.pool.QueryRow(ctx, `
+			INSERT INTO test_cases (product_id, summary, format, priority, status, is_automated, created_at, updated_at)
+			VALUES ($1, $2, 'steps', 'medium', 'confirmed', TRUE, $3, $4) RETURNING id`,
+			productID, res.Name, now, now,
+		).Scan(&caseID)
+		if err != nil {
+			continue
+		}
+		_, _ = r.pool.Exec(ctx, `
+			INSERT INTO test_case_revisions (test_case_id, version, summary, preconditions, format, gherkin_body, priority, status, steps_snapshot, created_at)
+			VALUES ($1, 1, $2, '', 'steps', '', 'medium', 'confirmed', '[]'::jsonb, $3)`,
+			caseID, res.Name, now,
+		)
+		_, _ = r.pool.Exec(ctx, `
+			INSERT INTO test_plan_cases (test_plan_id, test_case_id, position)
+			VALUES ($1, $2, COALESCE((SELECT MAX(position) + 1 FROM test_plan_cases WHERE test_plan_id = $1), 1))
+			ON CONFLICT DO NOTHING`,
+			testPlanID, caseID,
+		)
+		_, _ = r.pool.Exec(ctx, `
+			INSERT INTO test_executions (test_run_id, test_case_id, status, comment, case_text_version, steps_snapshot, executed_at, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, 1, '[]'::jsonb, $5, $6, $7)`,
+			tr.ID, caseID, res.Status, res.Comment, now, now, now,
+		)
+		createdCases++
+	}
+	return tr, createdCases, nil
+}
