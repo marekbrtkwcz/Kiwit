@@ -99,17 +99,6 @@ func (r *SQLiteRepository) ListExecutions(ctx context.Context, runID int64) ([]E
 	return items, rows.Err()
 }
 
-func (r *SQLiteRepository) Stop(ctx context.Context, runID int64) error {
-	res, err := r.db.ExecContext(ctx, `UPDATE test_runs SET stopped_at = ? WHERE id = ?`, time.Now().UTC(), runID)
-	if err != nil {
-		return fmt.Errorf("stop test run: %w", err)
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
-}
-
 func (r *SQLiteRepository) Create(ctx context.Context, testPlanID, buildID int64, summary, notes string) (TestRun, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
