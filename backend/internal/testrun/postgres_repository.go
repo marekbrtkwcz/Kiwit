@@ -56,8 +56,12 @@ func (r *PostgresRepository) Create(ctx context.Context, testPlanID, buildID int
 	}
 
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO test_executions (test_run_id, test_case_id, status, created_at, updated_at)
-		SELECT $1, test_case_id, 'idle', $2, $3 FROM test_plan_cases WHERE test_plan_id = $4 ORDER BY position ASC`,
+		INSERT INTO test_executions (test_run_id, test_case_id, status, steps_snapshot, created_at, updated_at)
+		SELECT $1, tpc.test_case_id, 'idle',
+			COALESCE((SELECT jsonb_agg(jsonb_build_object('position', s.position, 'action', s.action, 'expected_result', s.expected_result) ORDER BY s.position)
+			          FROM test_case_steps s WHERE s.test_case_id = tpc.test_case_id), '[]'::jsonb),
+			$2, $3
+		FROM test_plan_cases tpc WHERE tpc.test_plan_id = $4 ORDER BY tpc.position ASC`,
 		runID, now, now, testPlanID,
 	); err != nil {
 		return TestRun{}, fmt.Errorf("insert executions: %w", err)

@@ -57,6 +57,8 @@ func TestRequireRoleMiddleware(t *testing.T) {
 	t.Cleanup(func() { _ = sqlDB.Close() })
 
 	svc := auth.NewService(sqlDB, "test-jwt-secret")
+	_, err = svc.Register(ctx, "admin@kiwit.local", "admin", "supersecret123")
+	require.NoError(t, err)
 	_, err = svc.Register(ctx, "tester@kiwit.local", "tester", "supersecret123")
 	require.NoError(t, err)
 	testerJWT, _, err := svc.Login(ctx, "tester@kiwit.local", "supersecret123")

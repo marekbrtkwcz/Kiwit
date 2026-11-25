@@ -22,7 +22,7 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 
 func (r *PostgresRepository) List(ctx context.Context) ([]TestCase, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, product_id, summary, preconditions, format, gherkin_body, priority, status, created_at, updated_at
+		SELECT id, product_id, category_id, summary, preconditions, format, gherkin_body, priority, status, created_at, updated_at
 		FROM test_cases ORDER BY id ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("query test cases: %w", err)
@@ -32,17 +32,39 @@ func (r *PostgresRepository) List(ctx context.Context) ([]TestCase, error) {
 	items := make([]TestCase, 0)
 	for rows.Next() {
 		var tc TestCase
+		var catID sql.NullInt64
 		if err := rows.Scan(
-			&tc.ID, &tc.ProductID, &tc.Summary, &tc.Preconditions,
+			&tc.ID, &tc.ProductID, &catID, &tc.Summary, &tc.Preconditions,
 			&tc.Format, &tc.GherkinBody, &tc.Priority, &tc.Status,
 			&tc.CreatedAt, &tc.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan test case: %w", err)
 		}
+		if catID.Valid {
+			tc.CategoryID = &catID.Int64
+		}
 		tc.Steps = []Step{}
 		items = append(items, tc)
 	}
-	return items, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for i := range items {
+		sRows, err := r.pool.Query(ctx, `SELECT position, action, expected_result FROM test_case_steps WHERE test_case_id = $1 ORDER BY position ASC`, items[i].ID)
+		if err != nil {
+			return nil, fmt.Errorf("query steps: %w", err)
+		}
+		for sRows.Next() {
+			var st Step
+			if err := sRows.Scan(&st.Position, &st.Action, &st.ExpectedResult); err != nil {
+				sRows.Close()
+				return nil, fmt.Errorf("scan step: %w", err)
+			}
+			items[i].Steps = append(items[i].Steps, st)
+		}
+		sRows.Close()
+	}
+	return items, nil
 }
 
 func (r *PostgresRepository) Create(ctx context.Context, p UpsertParams) (TestCase, error) {
@@ -55,9 +77,9 @@ func (r *PostgresRepository) Create(ctx context.Context, p UpsertParams) (TestCa
 	now := time.Now().UTC()
 	var id int64
 	err = tx.QueryRow(ctx, `
-		INSERT INTO test_cases (product_id, summary, preconditions, format, gherkin_body, priority, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-		p.ProductID, p.Summary, p.Preconditions, p.Format, p.GherkinBody, p.Priority, p.Status, now, now,
+		INSERT INTO test_cases (product_id, category_id, summary, preconditions, format, gherkin_body, priority, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+		p.ProductID, p.CategoryID, p.Summary, p.Preconditions, p.Format, p.GherkinBody, p.Priority, p.Status, now, now,
 	).Scan(&id)
 	if err != nil {
 		return TestCase{}, fmt.Errorf("insert test case: %w", err)
@@ -96,9 +118,9 @@ func (r *PostgresRepository) Update(ctx context.Context, id int64, p UpsertParam
 	now := time.Now().UTC()
 	tag, err := tx.Exec(ctx, `
 		UPDATE test_cases
-		SET product_id = $1, summary = $2, preconditions = $3, format = $4, gherkin_body = $5, priority = $6, status = $7, updated_at = $8
-		WHERE id = $9`,
-		p.ProductID, p.Summary, p.Preconditions, p.Format, p.GherkinBody, p.Priority, p.Status, now, id,
+		SET product_id = $1, category_id = $2, summary = $3, preconditions = $4, format = $5, gherkin_body = $6, priority = $7, status = $8, updated_at = $9
+		WHERE id = $10`,
+		p.ProductID, p.CategoryID, p.Summary, p.Preconditions, p.Format, p.GherkinBody, p.Priority, p.Status, now, id,
 	)
 	if err != nil {
 		return TestCase{}, fmt.Errorf("update test case: %w", err)

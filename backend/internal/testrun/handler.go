@@ -152,6 +152,17 @@ func RegisterRoutes(api huma.API, repo Repository) {
 		if err != nil {
 			return nil, huma.Error400BadRequest("failed to create test run", err)
 		}
+		if execs, err := repo.ListExecutions(ctx, tr.ID); err == nil {
+			byName := make(map[string]ParsedCaseResult, len(results))
+			for _, r := range results {
+				byName[r.Name] = r
+			}
+			for _, ex := range execs {
+				if r, ok := byName[ex.Summary]; ok {
+					_, _ = repo.UpdateExecution(ctx, ex.ID, r.Status, r.Comment)
+				}
+			}
+		}
 		out := &struct {
 			Body struct {
 				TestRun TestRun            `json:"test_run"`

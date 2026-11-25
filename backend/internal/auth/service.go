@@ -51,22 +51,34 @@ func (s *Service) Register(ctx context.Context, email, username, password string
 
 	now := time.Now().UTC()
 	if s.pgPool != nil {
+		var count int
+		_ = s.pgPool.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&count)
+		role := "tester"
+		if count == 0 {
+			role = "admin"
+		}
 		var id int64
 		err := s.pgPool.QueryRow(ctx, `
 			INSERT INTO users (email, username, password_hash, role, is_active, created_at, updated_at)
-			VALUES ($1, $2, $3, 'tester', TRUE, $4, $5) RETURNING id`,
-			email, username, string(hash), now, now,
+			VALUES ($1, $2, $3, $4, TRUE, $5, $6) RETURNING id`,
+			email, username, string(hash), role, now, now,
 		).Scan(&id)
 		if err != nil {
 			return User{}, fmt.Errorf("insert user: %w", err)
 		}
-		return User{ID: id, Email: email, Username: username, Role: "tester"}, nil
+		return User{ID: id, Email: email, Username: username, Role: role}, nil
 	}
 
+	var count int
+	_ = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&count)
+	role := "tester"
+	if count == 0 {
+		role = "admin"
+	}
 	res, err := s.db.ExecContext(ctx, `
 		INSERT INTO users (email, username, password_hash, role, is_active, created_at, updated_at)
-		VALUES (?, ?, ?, 'tester', 1, ?, ?)`,
-		email, username, string(hash), now, now,
+		VALUES (?, ?, ?, ?, 1, ?, ?)`,
+		email, username, string(hash), role, now, now,
 	)
 	if err != nil {
 		return User{}, fmt.Errorf("insert user: %w", err)
@@ -75,7 +87,7 @@ func (s *Service) Register(ctx context.Context, email, username, password string
 	if err != nil {
 		return User{}, fmt.Errorf("last insert id: %w", err)
 	}
-	return User{ID: id, Email: email, Username: username, Role: "tester"}, nil
+	return User{ID: id, Email: email, Username: username, Role: role}, nil
 }
 
 func (s *Service) Login(ctx context.Context, email, password string) (string, User, error) {

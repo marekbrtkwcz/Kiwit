@@ -2,6 +2,8 @@
 dist/
 *.exe
 *.out
+*.db
+uploads/
 
 # Environment
 .env
@@ -10,6 +12,7 @@ dist/
 # Frontend
 frontend/node_modules/
 frontend/dist/
+*.tsbuildinfo
 
 # IDE
 .vscode/
