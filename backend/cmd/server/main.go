@@ -113,6 +113,7 @@ func main() {
 	api := humachi.New(router, huma.DefaultConfig("Kiwit TCMS API", "0.1.0"))
 	auth.RegisterRoutes(api, authSvc)
 	management.RegisterRoutes(api, productRepo)
+	management.RegisterRelationRoutes(api, management.NewRelationStore(sqlDBConn, pgPoolConn))
 	testcase.RegisterRoutes(api, testCaseRepo)
 	testplan.RegisterRoutes(api, testPlanRepo)
 	notifier := notify.NewWebhookClient(os.Getenv("KIWIT_WEBHOOK_URL"))
