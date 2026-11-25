@@ -122,6 +122,7 @@ func main() {
 	telemetry.RegisterRoutes(api, sqlDBConn, pgPoolConn)
 	comment.RegisterRoutes(api, commentRepo)
 	notify.RegisterRoutes(api, notifier)
+	notify.RegisterEmailRoutes(api, notify.NewSettingsStore(sqlDBConn, pgPoolConn), notify.NewEmailClient(notify.LoadSMTPConfigFromEnv()))
 	environment.RegisterRoutes(api, environment.NewStore(sqlDBConn, pgPoolConn))
 	pluginReg := plugin.NewRegistry()
 	pluginReg.InitAll(api)
