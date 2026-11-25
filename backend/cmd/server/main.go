@@ -24,6 +24,7 @@ import (
 	"github.com/kiwit/kiwit/internal/attachment"
 	"github.com/kiwit/kiwit/internal/auth"
 	"github.com/kiwit/kiwit/internal/comment"
+	"github.com/kiwit/kiwit/internal/environment"
 	"github.com/kiwit/kiwit/internal/issuetracker"
 	"github.com/kiwit/kiwit/internal/management"
 	"github.com/kiwit/kiwit/internal/notify"
@@ -120,6 +121,7 @@ func main() {
 	telemetry.RegisterRoutes(api, sqlDBConn, pgPoolConn)
 	comment.RegisterRoutes(api, commentRepo)
 	notify.RegisterRoutes(api, notifier)
+	environment.RegisterRoutes(api, environment.NewStore(sqlDBConn, pgPoolConn))
 	attachment.RegisterRoutes(router, attachmentRepo, "./uploads")
 
 	router.Handle("/*", web.SPAHandler())

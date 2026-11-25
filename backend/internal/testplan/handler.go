@@ -12,6 +12,7 @@ type TestPlan struct {
 	ID          int64     `json:"id"`
 	ProductID   int64     `json:"product_id"`
 	VersionID   int64     `json:"version_id"`
+	ParentID    *int64    `json:"parent_id,omitempty"`
 	Name        string    `json:"name"`
 	Description string    `json:"description,omitempty"`
 	IsActive    bool      `json:"is_active"`
