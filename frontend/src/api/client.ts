@@ -271,6 +271,7 @@ export interface VisualComparison {
   attachment_id: number
   diff_percent: number
   verdict: 'match' | 'mismatch' | 'no-baseline'
+  ai_verdict?: string
   created_at: string
 }
 
@@ -869,6 +870,14 @@ export const api = {
   deleteAIServer: (id: number) => request<void>(`/api/v1/admin/ai-servers/${id}`, { method: 'DELETE' }),
   aiGenerateTests: (body: { product_id: number; requirement_id?: number; text?: string; max_scenarios?: number }) =>
     request<{ created: { id: number; summary: string }[]; gherkin: string; model: string; scenarios: number }>('/api/v1/ai/generate-tests', { method: 'POST', body: JSON.stringify(body) }),
+  aiSearch: (query: string) =>
+    request<{ model: string; filters: Record<string, unknown>; explanation: string; items: { type: string; title: string; row: Record<string, unknown> }[]; llm_model: string }>('/api/v1/ai/search', { method: 'POST', body: JSON.stringify({ query }) }),
+  aiVisualVerdict: (comparisonId: number) =>
+    request<{ verdict: 'real-defect' | 'acceptable-change' | 'unclear'; confidence: number; explanation: string; diff_percent: number; pixel_verdict: string; model: string }>('/api/v1/ai/visual-verdict', { method: 'POST', body: JSON.stringify({ comparison_id: comparisonId }) }),
+  aiGenerateCharter: (objective: string) =>
+    request<{ charter: string; model: string }>('/api/v1/ai/generate-charter', { method: 'POST', body: JSON.stringify({ objective }) }),
+  aiNotesToFindings: (sessionId: number) =>
+    request<{ findings: string[]; model: string }>('/api/v1/ai/notes-to-findings', { method: 'POST', body: JSON.stringify({ session_id: sessionId }) }),
   listVisualBaselines: (caseId: number) =>
     request<{ items: VisualBaseline[] }>(`/api/v1/testcases/${caseId}/visual-baselines`),
   addVisualBaseline: (caseId: number, attachmentId: number, label?: string) =>

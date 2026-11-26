@@ -64,6 +64,11 @@ export const dict = {
       cmdkNavigation: 'Nawigacja',
       cmdkTestCases: 'Scenariusze testowe',
       cmdkEmpty: 'Brak wyników.',
+      cmdkAISearch: 'Szukaj z AI',
+      cmdkAISearchHint: 'Opisz szukaną frazę po polsku, np. „nieudane uruchomienia z ostatniego tygodnia”',
+      cmdkAIResults: 'Wyniki AI',
+      cmdkAIErr: 'AI nie było w stanie przetworzyć zapytania. Skonfiguruj KIWIT_LLM_API_KEY.',
+      cmdkAIOpen: 'Otwórz',
     },
     notifications: {
       title: 'Powiadomienia',
@@ -432,6 +437,11 @@ export const dict = {
       cmdkNavigation: 'Navigation',
       cmdkTestCases: 'Test Cases',
       cmdkEmpty: 'No results.',
+      cmdkAISearch: 'Search with AI',
+      cmdkAIResults: 'AI results',
+      cmdkAISearchHint: 'Describe what you need, e.g. "failed test runs from last week"',
+      cmdkAIErr: 'AI could not process the query. Configure KIWIT_LLM_API_KEY.',
+      cmdkAIOpen: 'Open',
     },
     notifications: {
       title: 'Notifications',

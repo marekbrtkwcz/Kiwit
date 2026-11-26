@@ -9,11 +9,14 @@ import {
   PlayCircle,
   Search,
   Settings,
+  Sparkles,
   UserCircle2,
 } from 'lucide-react'
 import { api, getAuthToken, TestCase } from '../api/client'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useI18n } from '../i18n'
+
+type AIHit = { type: string; title: string; row: Record<string, unknown> }
 
 export function CommandPalette() {
   const { cmdkOpen, setCmdkOpen, activeProductId } = useWorkspace()
@@ -21,11 +24,16 @@ export function CommandPalette() {
   const navigate = useNavigate()
   const [q, setQ] = useState('')
   const [cases, setCases] = useState<TestCase[]>([])
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiErr, setAiErr] = useState('')
+  const [aiRes, setAiRes] = useState<{ explanation: string; model: string; items: AIHit[] } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!cmdkOpen) return
     setQ('')
+    setAiRes(null)
+    setAiErr('')
     setTimeout(() => inputRef.current?.focus(), 20)
     if (getAuthToken()) {
       void api
@@ -68,6 +76,40 @@ export function CommandPalette() {
     navigate(path)
   }
 
+  const runAI = async () => {
+    const query = q.trim()
+    if (query.length < 3 || aiBusy) return
+    setAiBusy(true)
+    setAiErr('')
+    setAiRes(null)
+    try {
+      const r = await api.aiSearch(query)
+      setAiRes({ explanation: r.explanation, model: r.model, items: r.items })
+    } catch {
+      setAiErr(t.shell.cmdkAIErr)
+    } finally {
+      setAiBusy(false)
+    }
+  }
+
+  const hitPath = (hit: AIHit): string | null => {
+    const id = Number(hit.row.id)
+    switch (hit.type) {
+      case 'test_case':
+        return `/cases/${id}`
+      case 'test_run':
+        return `/runs/${id}`
+      case 'test_plan':
+        return `/plans/${id}`
+      case 'product':
+        return '/products'
+      default:
+        return null
+    }
+  }
+
+  const canAskAI = q.trim().length >= 3
+
   return (
     <div className="cmdk-backdrop" onClick={() => setCmdkOpen(false)}>
       <div className="cmdk-dialog" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
@@ -78,11 +120,70 @@ export function CommandPalette() {
             className="cmdk-input"
             placeholder={t.shell.cmdkPlaceholder}
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={(e) => {
+              setQ(e.target.value)
+              setAiRes(null)
+              setAiErr('')
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && canAskAI && e.ctrlKey) void runAI()
+            }}
           />
           <span className="kbd">ESC</span>
         </div>
         <div className="cmdk-list">
+          {canAskAI && (
+            <div style={{ marginBottom: '0.4rem' }}>
+              <button type="button" className="cmdk-item" onClick={() => void runAI()} disabled={aiBusy}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.55rem' }}>
+                  <Sparkles size={15} color="var(--accent)" />
+                  {aiBusy ? '…' : `${t.shell.cmdkAISearch}: ${q.trim()}`}
+                </span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>Ctrl+Enter</span>
+              </button>
+              <div style={{ fontSize: '0.7rem', color: 'var(--muted)', padding: '0.15rem 0.7rem 0.35rem' }}>
+                {t.shell.cmdkAISearchHint}
+              </div>
+            </div>
+          )}
+
+          {aiErr && (
+            <div style={{ padding: '0.6rem 0.7rem', color: 'var(--danger, #b00)', fontSize: '0.8rem' }}>{aiErr}</div>
+          )}
+
+          {aiRes && (
+            <div style={{ marginBottom: '0.4rem' }}>
+              <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)', padding: '0.35rem 0.7rem', textTransform: 'uppercase' }}>
+                {t.shell.cmdkAIResults} ({aiRes.model})
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--muted)', padding: '0 0.7rem 0.35rem' }}>{aiRes.explanation}</div>
+              {aiRes.items.length === 0 && (
+                <div style={{ padding: '0.5rem 0.7rem', color: 'var(--muted)', fontSize: '0.8rem' }}>{t.shell.cmdkEmpty}</div>
+              )}
+              {aiRes.items.slice(0, 12).map((hit, i) => {
+                const path = hitPath(hit)
+                const content = (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <span className="badge" style={{ fontFamily: 'var(--font-mono)' }}>
+                      {hit.type} #{String(hit.row.id ?? '?')}
+                    </span>
+                    <span>{hit.title}</span>
+                  </span>
+                )
+                return path ? (
+                  <button key={i} type="button" className="cmdk-item" onClick={() => go(path)}>
+                    {content}
+                    <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{t.shell.cmdkAIOpen}</span>
+                  </button>
+                ) : (
+                  <div key={i} className="cmdk-item" style={{ cursor: 'default' }}>
+                    {content}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
           {filteredNav.length > 0 && (
             <div style={{ marginBottom: '0.4rem' }}>
               <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)', padding: '0.35rem 0.7rem', textTransform: 'uppercase' }}>
@@ -120,7 +221,7 @@ export function CommandPalette() {
             </div>
           )}
 
-          {filteredNav.length === 0 && filteredCases.length === 0 && (
+          {filteredNav.length === 0 && filteredCases.length === 0 && !canAskAI && (
             <div style={{ padding: '1.25rem', textAlign: 'center', color: 'var(--muted)', fontSize: '0.85rem' }}>
               {t.shell.cmdkEmpty}
             </div>

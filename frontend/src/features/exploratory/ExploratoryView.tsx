@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Compass, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Compass, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { api, ExploratorySession, Product } from '../../api/client'
 import { ConfirmDialog, EmptyState, LoadingSkeleton } from '../../components/UiPrimitives'
 import { useWorkspace } from '../../context/WorkspaceContext'
@@ -22,6 +22,7 @@ export function ExploratoryView() {
   const [editing, setEditing] = useState<ExploratorySession | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<ExploratorySession | null>(null)
   const [form, setForm] = useState<FormState>({ product_id: 0, charter: '', timebox_minutes: 60, notes: '', findings: '[]' })
+  const [aiBusy, setAiBusy] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -153,10 +154,57 @@ export function ExploratoryView() {
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
-              <input className="input" placeholder="Charter (mission, e.g. Explore checkout flow for edge cases)" value={form.charter} onChange={(e) => setForm({ ...form, charter: e.target.value })} />
+              <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                <input style={{ flex: 1 }} className="input" placeholder="Charter (mission, e.g. Explore checkout flow for edge cases)" value={form.charter} onChange={(e) => setForm({ ...form, charter: e.target.value })} />
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  disabled={aiBusy === 'charter'}
+                  title="AI drafts a session charter from your objective"
+                  onClick={async () => {
+                    const objective = form.charter.trim() || window.prompt('Describe the session objective (area + what worries you)') || ''
+                    if (!objective.trim()) return
+                    setAiBusy('charter')
+                    try {
+                      const res = await api.aiGenerateCharter(objective)
+                      setForm((f) => ({ ...f, charter: res.charter }))
+                    } catch (err) {
+                      notify(err instanceof Error ? err.message : 'AI charter failed', 'error')
+                    } finally {
+                      setAiBusy('')
+                    }
+                  }}
+                >
+                  <Sparkles size={13} /> {aiBusy === 'charter' ? '…' : 'AI charter'}
+                </button>
+              </div>
               <input className="input" type="number" min={5} step={5} value={form.timebox_minutes} onChange={(e) => setForm({ ...form, timebox_minutes: Number(e.target.value) })} />
               <textarea className="input" rows={4} placeholder="Notes during the session" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-              <textarea className="input" rows={3} placeholder='Findings as JSON array: ["bug: coupon applied twice"]' value={form.findings} onChange={(e) => setForm({ ...form, findings: e.target.value })} />
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.3rem' }}>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    disabled={aiBusy === 'findings' || !editing}
+                    title={editing ? 'AI extracts structured findings from this session notes' : 'Save the session first, then use AI findings'}
+                    onClick={async () => {
+                      if (!editing) return
+                      setAiBusy('findings')
+                      try {
+                        const res = await api.aiNotesToFindings(editing.id)
+                        setForm((f) => ({ ...f, findings: JSON.stringify(res.findings, null, 2) }))
+                      } catch (err) {
+                        notify(err instanceof Error ? err.message : 'AI findings failed', 'error')
+                      } finally {
+                        setAiBusy('')
+                      }
+                    }}
+                  >
+                    <Sparkles size={13} /> {aiBusy === 'findings' ? '…' : 'AI findings'}
+                  </button>
+                </div>
+                <textarea className="input" rows={3} placeholder='Findings as JSON array: ["bug: coupon applied twice"]' value={form.findings} onChange={(e) => setForm({ ...form, findings: e.target.value })} />
+              </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.75rem' }}>
               <button type="button" className="btn" onClick={() => setShowForm(false)}>Cancel</button>

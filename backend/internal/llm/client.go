@@ -50,7 +50,7 @@ func (c Config) Enabled() bool { return c.APIKey != "" }
 
 type chatMessage struct {
 	Role    string `json:"role"`
-	Content string `json:"content"`
+	Content any    `json:"content"` // string, or a vision content array
 }
 
 type chatRequest struct {
@@ -73,15 +73,20 @@ type chatResponse struct {
 
 // Chat sends a system+user prompt to the configured LLM and returns the text.
 func (c Config) Chat(ctx context.Context, system, user string) (string, error) {
+	return c.post(ctx, []chatMessage{
+		{Role: "system", Content: system},
+		{Role: "user", Content: user},
+	})
+}
+
+// post sends the messages to the chat/completions endpoint with retry.
+func (c Config) post(ctx context.Context, messages []chatMessage) (string, error) {
 	if !c.Enabled() {
 		return "", fmt.Errorf("LLM not configured (set KIWIT_LLM_API_KEY)")
 	}
 	body, err := json.Marshal(chatRequest{
-		Model: c.Model,
-		Messages: []chatMessage{
-			{Role: "system", Content: system},
-			{Role: "user", Content: user},
-		},
+		Model:       c.Model,
+		Messages:    messages,
 		Temperature: c.Temperature,
 		MaxTokens:   c.MaxTokens,
 	})

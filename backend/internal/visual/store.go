@@ -25,6 +25,7 @@ type Comparison struct {
 	AttachmentID int64     `json:"attachment_id"`
 	DiffPercent  float64   `json:"diff_percent"`
 	Verdict      string    `json:"verdict" enum:"match,mismatch,no-baseline"`
+	AIVerdict    string    `json:"ai_verdict,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 
@@ -38,7 +39,7 @@ func NewStore(db *sql.DB, pg *pgxpool.Pool) *Store {
 }
 
 const baselineCols = `id, test_case_id, attachment_id, label, created_at`
-const comparisonCols = `id, execution_id, baseline_id, attachment_id, diff_percent, verdict, created_at`
+const comparisonCols = `id, execution_id, baseline_id, attachment_id, diff_percent, verdict, ai_verdict, created_at`
 
 func scanBaseline(row interface{ Scan(...any) error }) (Baseline, error) {
 	var b Baseline
@@ -48,7 +49,7 @@ func scanBaseline(row interface{ Scan(...any) error }) (Baseline, error) {
 
 func scanComparison(row interface{ Scan(...any) error }) (Comparison, error) {
 	var c Comparison
-	err := row.Scan(&c.ID, &c.ExecutionID, &c.BaselineID, &c.AttachmentID, &c.DiffPercent, &c.Verdict, &c.CreatedAt)
+	err := row.Scan(&c.ID, &c.ExecutionID, &c.BaselineID, &c.AttachmentID, &c.DiffPercent, &c.Verdict, &c.AIVerdict, &c.CreatedAt)
 	return c, err
 }
 
@@ -188,6 +189,24 @@ func (s *Store) ListComparisons(ctx context.Context, executionID int64) ([]Compa
 		out = append(out, c)
 	}
 	return out, rows.Err()
+}
+
+// GetComparison loads a single comparison record.
+func (s *Store) GetComparison(ctx context.Context, id int64) (Comparison, error) {
+	if s.pg != nil {
+		return scanComparison(s.pg.QueryRow(ctx, fmt.Sprintf("SELECT %s FROM visual_comparisons WHERE id = $1", comparisonCols), id))
+	}
+	return scanComparison(s.db.QueryRowContext(ctx, fmt.Sprintf("SELECT %s FROM visual_comparisons WHERE id = ?", comparisonCols), id))
+}
+
+// UpdateAIVerdict persists an LLM judgement (JSON string) on a comparison.
+func (s *Store) UpdateAIVerdict(ctx context.Context, id int64, verdict string) error {
+	if s.pg != nil {
+		_, err := s.pg.Exec(ctx, `UPDATE visual_comparisons SET ai_verdict = $1 WHERE id = $2`, verdict, id)
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, `UPDATE visual_comparisons SET ai_verdict = ? WHERE id = ?`, verdict, id)
+	return err
 }
 
 // ExecutionCaseID resolves the test case of an execution (for baseline lookup).

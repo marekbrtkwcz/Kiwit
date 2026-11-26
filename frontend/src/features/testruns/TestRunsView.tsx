@@ -257,6 +257,7 @@ export function TestRunsView() {
   const [activeExecId, setActiveExecId] = useState<number | null>(null)
   const [selectedExecIds, setSelectedExecIds] = useState<number[]>([])
   const [visualResults, setVisualResults] = useState<Record<number, VisualComparison[]>>({})
+  const [aiVerdicts, setAiVerdicts] = useState<Record<number, { verdict: string; confidence: number; explanation: string } | 'busy'>>({})
   const [bulkStatus, setBulkStatus] = useState('passed')
 
   const [filterStatus, setFilterStatus] = useState<'' | 'running' | 'stopped'>('')
@@ -848,13 +849,48 @@ export function TestRunsView() {
                     {visualResults[activeExec.id] && visualResults[activeExec.id].length > 0 && (
                       <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem', display: 'grid', gap: '0.3rem' }}>
                         <strong style={{ fontSize: '0.85rem' }}>Visual comparisons</strong>
-                        {visualResults[activeExec.id].map((c) => (
-                          <div key={c.id} style={{ fontSize: '0.82rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        {visualResults[activeExec.id].map((c) => {
+                          const av = aiVerdicts[c.id]
+                          let stored: { verdict: string; confidence: number; explanation: string } | null = null
+                          if (!av && c.ai_verdict) { try { stored = JSON.parse(c.ai_verdict) } catch { stored = null } }
+                          const verdict = av === 'busy' ? null : (av ?? stored)
+                          return (
+                          <div key={c.id} style={{ fontSize: '0.82rem', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                             <span className={`badge badge-${c.verdict === 'match' ? 'passed' : c.verdict === 'mismatch' ? 'failed' : 'idle'}`}>{c.verdict}</span>
                             <span>{c.diff_percent.toFixed(2)}% diff</span>
                             <span style={{ color: 'var(--muted)' }}>{new Date(c.created_at).toLocaleTimeString()}</span>
+                            {c.verdict === 'mismatch' && (
+                              <button
+                                type="button"
+                                className="btn btn-sm"
+                                disabled={av === 'busy'}
+                                title="AI judges whether this diff is a real defect or acceptable change"
+                                onClick={async () => {
+                                  setAiVerdicts((prev) => ({ ...prev, [c.id]: 'busy' }))
+                                  try {
+                                    const res = await api.aiVisualVerdict(c.id)
+                                    setAiVerdicts((prev) => ({ ...prev, [c.id]: { verdict: res.verdict, confidence: res.confidence, explanation: res.explanation } }))
+                                    const list = await api.listVisualComparisons(activeExec.id)
+                                    setVisualResults((prev) => ({ ...prev, [activeExec.id]: list.items ?? [] }))
+                                  } catch (err) {
+                                    setAiVerdicts((prev) => { const n = { ...prev }; delete n[c.id]; return n })
+                                    notify(err instanceof Error ? err.message : 'AI verdict failed', 'error')
+                                  }
+                                }}
+                              >
+                                {av === 'busy' ? 'AI…' : 'AI ocena'}
+                              </button>
+                            )}
+                            {av === 'busy' && <span style={{ color: 'var(--muted)' }}>AI analizuje diff…</span>}
+                            {verdict && (
+                              <span style={{ display: 'inline-flex', gap: '0.4rem', alignItems: 'center' }}>
+                                <span className={`badge badge-${verdict.verdict === 'real-defect' ? 'failed' : verdict.verdict === 'acceptable-change' ? 'passed' : 'idle'}`}>AI: {verdict.verdict}</span>
+                                <span style={{ color: 'var(--muted)' }}>{verdict.confidence}% — {verdict.explanation}</span>
+                              </span>
+                            )}
                           </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     )}
                     <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
