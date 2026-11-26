@@ -380,6 +380,7 @@ export interface Requirement {
   status: 'draft' | 'approved' | 'obsolete'
   priority: string
   category?: string
+  ai_quality?: string
   author_id?: number
   created_at: string
   updated_at: string
@@ -874,6 +875,10 @@ export const api = {
     request<{ model: string; filters: Record<string, unknown>; explanation: string; items: { type: string; title: string; row: Record<string, unknown> }[]; llm_model: string }>('/api/v1/ai/search', { method: 'POST', body: JSON.stringify({ query }) }),
   aiVisualVerdict: (comparisonId: number) =>
     request<{ verdict: 'real-defect' | 'acceptable-change' | 'unclear'; confidence: number; explanation: string; diff_percent: number; pixel_verdict: string; model: string }>('/api/v1/ai/visual-verdict', { method: 'POST', body: JSON.stringify({ comparison_id: comparisonId }) }),
+  aiAnalyzeRequirement: (requirementId: number) =>
+    request<{ quality_score: number; verdict: 'good' | 'needs-work' | 'poor'; summary: string; issues: { type: string; severity: string; description: string }[]; suggestions: string[]; model: string }>('/api/v1/ai/analyze-requirement', { method: 'POST', body: JSON.stringify({ requirement_id: requirementId }) }),
+  aiRegressionScope: (requirementId: number) =>
+    request<{ summary: string; retest: { case_id: number; summary: string; reason: string; priority: string }[]; risks: string[]; gaps: string[]; model: string }>('/api/v1/ai/regression-scope', { method: 'POST', body: JSON.stringify({ requirement_id: requirementId }) }),
   aiGenerateCharter: (objective: string) =>
     request<{ charter: string; model: string }>('/api/v1/ai/generate-charter', { method: 'POST', body: JSON.stringify({ objective }) }),
   aiNotesToFindings: (sessionId: number) =>

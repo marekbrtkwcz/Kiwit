@@ -20,19 +20,20 @@ type Requirement struct {
 	Status      string    `json:"status" enum:"draft,approved,obsolete"`
 	Priority    string    `json:"priority"`
 	Category    string    `json:"category,omitempty"`
+	AIQuality   string    `json:"ai_quality,omitempty"`
 	AuthorID    *int64    `json:"author_id,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type CoverageEntry struct {
-	TestCaseID        int64      `json:"test_case_id"`
-	Summary           string     `json:"summary"`
-	Status            string     `json:"status"`
-	LatestExecutionID *int64     `json:"latest_execution_id,omitempty"`
-	LatestExecStatus  string     `json:"latest_execution_status,omitempty"`
-	LatestRunID       *int64     `json:"latest_run_id,omitempty"`
-	LinkedAt          time.Time  `json:"linked_at"`
+	TestCaseID        int64     `json:"test_case_id"`
+	Summary           string    `json:"summary"`
+	Status            string    `json:"status"`
+	LatestExecutionID *int64    `json:"latest_execution_id,omitempty"`
+	LatestExecStatus  string    `json:"latest_execution_status,omitempty"`
+	LatestRunID       *int64    `json:"latest_run_id,omitempty"`
+	LinkedAt          time.Time `json:"linked_at"`
 }
 
 type Store struct {
@@ -44,11 +45,11 @@ func NewStore(db *sql.DB, pg *pgxpool.Pool) *Store {
 	return &Store{db: db, pg: pg}
 }
 
-const requirementCols = `id, product_id, key, name, description, version, status, priority, category, author_id, created_at, updated_at`
+const requirementCols = `id, product_id, key, name, description, version, status, priority, category, ai_quality, author_id, created_at, updated_at`
 
 func scanRequirement(row interface{ Scan(...any) error }) (Requirement, error) {
 	var r Requirement
-	err := row.Scan(&r.ID, &r.ProductID, &r.Key, &r.Name, &r.Description, &r.Version, &r.Status, &r.Priority, &r.Category, &r.AuthorID, &r.CreatedAt, &r.UpdatedAt)
+	err := row.Scan(&r.ID, &r.ProductID, &r.Key, &r.Name, &r.Description, &r.Version, &r.Status, &r.Priority, &r.Category, &r.AIQuality, &r.AuthorID, &r.CreatedAt, &r.UpdatedAt)
 	return r, err
 }
 
@@ -290,6 +291,16 @@ func (s *Store) Coverage(ctx context.Context, requirementID int64) ([]CoverageEn
 		out = append(out, c)
 	}
 	return out, rows.Err()
+}
+
+// UpdateAIQuality persists an LLM quality analysis (JSON string) on a requirement.
+func (s *Store) UpdateAIQuality(ctx context.Context, id int64, analysis string) error {
+	if s.pg != nil {
+		_, err := s.pg.Exec(ctx, `UPDATE requirements SET ai_quality = $1, updated_at = NOW() WHERE id = $2`, analysis, id)
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, `UPDATE requirements SET ai_quality = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, analysis, id)
+	return err
 }
 
 func (s *Store) RequirementsForCase(ctx context.Context, testCaseID int64) ([]Requirement, error) {

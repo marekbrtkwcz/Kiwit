@@ -293,6 +293,7 @@ func main() {
 	ai.RegisterSearchRoutes(api, llm.NewServerStore(sqlDBConn, pgPoolConn), sqlDBConn, pgPoolConn)
 	ai.RegisterVisualRoutes(api, llm.NewServerStore(sqlDBConn, pgPoolConn), visual.NewStore(sqlDBConn, pgPoolConn), attachmentRepo, store, guard)
 	ai.RegisterExploratoryRoutes(api, llm.NewServerStore(sqlDBConn, pgPoolConn), exploratory.NewStore(sqlDBConn, pgPoolConn), guard)
+	ai.RegisterRequirementRoutes(api, llm.NewServerStore(sqlDBConn, pgPoolConn), requirement.NewStore(sqlDBConn, pgPoolConn), guard)
 	xmlrpc.NewHandlerWithWebhooks(authSvc, sqlDBConn, version.VERSION, cfg.UploadDir, webhookStore).Register(router)
 	initdb.Register(router, initdb.NewStore(sqlDBConn, pgPoolConn))
 	menu.Register(router)

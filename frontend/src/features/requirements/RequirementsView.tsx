@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Bot,
   ChevronDown,
   ChevronUp,
+  Crosshair,
   Link2,
   Pencil,
   Plus,
   Search,
+  ShieldCheck,
   Trash2,
   X,
 } from 'lucide-react'
@@ -34,6 +37,8 @@ interface FormState {
   category: string
 }
 
+type AiPanelState = { kind: 'quality' | 'regression'; req: Requirement; data: unknown } | 'busy' | null
+
 const emptyForm = (productId: number): FormState => ({
   product_id: productId,
   key: '',
@@ -47,6 +52,7 @@ const emptyForm = (productId: number): FormState => ({
 
 export function RequirementsView() {
   const { notify, notifyAction } = useWorkspace()
+  const navigate = useNavigate()
   const [items, setItems] = useState<Requirement[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -56,6 +62,7 @@ export function RequirementsView() {
   const [products, setProducts] = useState<Product[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Requirement | null>(null)
+  const [aiPanel, setAiPanel] = useState<AiPanelState>(null)
   const [form, setForm] = useState<FormState>(emptyForm(0))
   const [confirmDelete, setConfirmDelete] = useState<Requirement | null>(null)
   const [expandedId, setExpandedId] = useState<number | null>(null)
@@ -270,6 +277,41 @@ export function RequirementsView() {
                     >
                       <Bot size={14} />
                     </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      title="AI quality analysis: clarity, testability, missing acceptance criteria"
+                      onClick={async () => {
+                        setAiPanel('busy')
+                        try {
+                          const data = await api.aiAnalyzeRequirement(r.id)
+                          setAiPanel({ kind: 'quality', req: r, data })
+                          await load()
+                        } catch (err) {
+                          setAiPanel(null)
+                          notify(err instanceof Error ? err.message : 'AI analysis failed', 'error')
+                        }
+                      }}
+                    >
+                      <ShieldCheck size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      title="AI regression scope: what to retest when this requirement changes"
+                      onClick={async () => {
+                        setAiPanel('busy')
+                        try {
+                          const data = await api.aiRegressionScope(r.id)
+                          setAiPanel({ kind: 'regression', req: r, data })
+                        } catch (err) {
+                          setAiPanel(null)
+                          notify(err instanceof Error ? err.message : 'AI regression scope failed', 'error')
+                        }
+                      }}
+                    >
+                      <Crosshair size={14} />
+                    </button>
                     <button type="button" className="btn btn-sm" title="Edit" onClick={() => openEdit(r)}>
                       <Pencil size={14} />
                     </button>
@@ -360,6 +402,89 @@ export function RequirementsView() {
               <button type="button" className="btn btn-primary" onClick={submit} disabled={!form.key || !form.name || !form.product_id}>
                 {editing ? 'Save' : 'Create'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {aiPanel === 'busy' && (
+        <div className="modal-backdrop">
+          <div className="modal" role="dialog" aria-modal="true">
+            <p style={{ margin: 0 }}>AI analizuje…</p>
+          </div>
+        </div>
+      )}
+
+      {aiPanel && aiPanel !== 'busy' && (
+        <div className="modal-backdrop" onClick={() => setAiPanel(null)}>
+          <div className="modal" style={{ maxWidth: 720, maxHeight: '80vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="AI analysis result">
+            {aiPanel.kind === 'quality' ? (() => {
+              const d = aiPanel.data as { quality_score: number; verdict: string; summary: string; issues: { type: string; severity: string; description: string }[]; suggestions: string[]; model: string }
+              return (
+                <>
+                  <h2>AI: jakość wymagania {aiPanel.req.key}</h2>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', margin: '0.5rem 0' }}>
+                    <span className={`badge badge-${d.verdict === 'good' ? 'passed' : d.verdict === 'poor' ? 'failed' : 'idle'}`}>{d.verdict}</span>
+                    <span className="badge">{d.quality_score}/100</span>
+                    <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>{d.model}</span>
+                  </div>
+                  <p style={{ fontSize: '0.9rem' }}>{d.summary}</p>
+                  {d.issues.length > 0 && (
+                    <div style={{ margin: '0.5rem 0' }}>
+                      <strong style={{ fontSize: '0.85rem' }}>Problemy</strong>
+                      <ul style={{ margin: '0.3rem 0', paddingLeft: '1.1rem', fontSize: '0.85rem' }}>
+                        {d.issues.map((i, idx) => (
+                          <li key={idx}><span className={`badge badge-${i.severity === 'high' ? 'failed' : i.severity === 'medium' ? 'idle' : 'passed'}`}>{i.type}/{i.severity}</span> {i.description}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {d.suggestions.length > 0 && (
+                    <div>
+                      <strong style={{ fontSize: '0.85rem' }}>Sugestie</strong>
+                      <ul style={{ margin: '0.3rem 0', paddingLeft: '1.1rem', fontSize: '0.85rem' }}>
+                        {d.suggestions.map((s, idx) => (<li key={idx}>{s}</li>))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              )
+            })() : (() => {
+              const d = aiPanel.data as { summary: string; retest: { case_id: number; summary: string; reason: string; priority: string }[]; risks: string[]; gaps: string[]; model: string }
+              return (
+                <>
+                  <h2>AI: zakres regresji dla {aiPanel.req.key}</h2>
+                  <p style={{ fontSize: '0.9rem' }}>{d.summary}</p>
+                  {d.retest.length > 0 && (
+                    <table className="table" style={{ margin: '0.5rem 0' }}>
+                      <thead><tr><th>Przypadek</th><th>Priorytet</th><th>Powód</th></tr></thead>
+                      <tbody>
+                        {d.retest.map((rt) => (
+                          <tr key={rt.case_id}>
+                            <td><button type="button" className="btn btn-sm" onClick={() => { setAiPanel(null); navigate(`/cases/${rt.case_id}`) }}>#{rt.case_id} {rt.summary}</button></td>
+                            <td><span className={`badge badge-${rt.priority === 'high' ? 'failed' : rt.priority === 'medium' ? 'idle' : 'passed'}`}>{rt.priority}</span></td>
+                            <td style={{ fontSize: '0.82rem' }}>{rt.reason}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                  {d.risks.length > 0 && (
+                    <div><strong style={{ fontSize: '0.85rem' }}>Ryzyka</strong>
+                      <ul style={{ margin: '0.3rem 0', paddingLeft: '1.1rem', fontSize: '0.85rem' }}>{d.risks.map((x, i) => (<li key={i}>{x}</li>))}</ul>
+                    </div>
+                  )}
+                  {d.gaps.length > 0 && (
+                    <div><strong style={{ fontSize: '0.85rem' }}>Luki w pokryciu</strong>
+                      <ul style={{ margin: '0.3rem 0', paddingLeft: '1.1rem', fontSize: '0.85rem' }}>{d.gaps.map((x, i) => (<li key={i}>{x}</li>))}</ul>
+                    </div>
+                  )}
+                  <div style={{ color: 'var(--muted)', fontSize: '0.75rem' }}>{d.model}</div>
+                </>
+              )
+            })()}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
+              <button type="button" className="btn" onClick={() => setAiPanel(null)}>Zamknij</button>
             </div>
           </div>
         </div>
