@@ -17,3 +17,6 @@ frontend/dist/
 # IDE
 .vscode/
 .idea/
+
+# Workflow artifacts
+plans/
