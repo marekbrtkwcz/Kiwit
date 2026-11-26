@@ -873,12 +873,12 @@ func queryExecutionDashboard(ctx context.Context, db *sql.DB, pgPool *pgxpool.Po
 // UXMetricRow aggregates UX custom fields (sus_score, task_time_sec, error_count)
 // collected on test executions, per product.
 type UXMetricRow struct {
-	ProductID     int64   `json:"product_id"`
-	ProductName   string  `json:"product_name"`
-	Sessions      int64   `json:"sessions"`
-	AvgSUS        float64 `json:"avg_sus"`
+	ProductID      int64   `json:"product_id"`
+	ProductName    string  `json:"product_name"`
+	Sessions       int64   `json:"sessions"`
+	AvgSUS         float64 `json:"avg_sus"`
 	AvgTaskTimeSec float64 `json:"avg_task_time_sec"`
-	AvgErrors     float64 `json:"avg_errors"`
+	AvgErrors      float64 `json:"avg_errors"`
 }
 
 func queryUXMetrics(ctx context.Context, db *sql.DB, pgPool *pgxpool.Pool, f Filter) ([]UXMetricRow, error) {
@@ -940,4 +940,34 @@ func queryUXMetrics(ctx context.Context, db *sql.DB, pgPool *pgxpool.Pool, f Fil
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// TLDRData aggregates the telemetry queries the AI dashboard summary uses.
+type TLDRData struct {
+	Summary   Summary
+	Breakdown Breakdown
+	Health    []CaseHealth
+	Exec      ExecutionDashboard
+}
+
+// QueryTLDRData runs the summary, breakdown, case-health and execution
+// dashboard queries for one filter. Exported for the AI TL;DR endpoint.
+func QueryTLDRData(ctx context.Context, db *sql.DB, pgPool *pgxpool.Pool, f Filter) (TLDRData, error) {
+	s, err := querySummary(ctx, db, pgPool, f)
+	if err != nil {
+		return TLDRData{}, err
+	}
+	bd, err := queryBreakdown(ctx, db, pgPool, f)
+	if err != nil {
+		return TLDRData{}, err
+	}
+	hl, err := queryHealth(ctx, db, pgPool, f)
+	if err != nil {
+		return TLDRData{}, err
+	}
+	ed, err := queryExecutionDashboard(ctx, db, pgPool, f)
+	if err != nil {
+		return TLDRData{}, err
+	}
+	return TLDRData{Summary: s, Breakdown: bd, Health: hl, Exec: ed}, nil
 }

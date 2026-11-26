@@ -11,6 +11,7 @@ import {
   PieChart as PieIcon,
   PlayCircle,
   RotateCcw,
+  Sparkles,
   Users,
 } from 'lucide-react'
 import {
@@ -50,7 +51,7 @@ const monoStyle: React.CSSProperties = {
 
 export function DashboardView() {
   const { t } = useI18n()
-  const { activeProductId } = useWorkspace()
+  const { activeProductId, notify } = useWorkspace()
   const navigate = useNavigate()
 
   const [from, setFrom] = useState('')
@@ -64,6 +65,24 @@ export function DashboardView() {
   const [dash, setDash] = useState<DashboardSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [uxMetrics, setUxMetrics] = useState<UXMetricRow[]>([])
+  const [tldr, setTldr] = useState<string | null>(null)
+  const [tldrBusy, setTldrBusy] = useState(false)
+
+  const generateTldr = async () => {
+    setTldrBusy(true)
+    try {
+      const res = await api.aiDashboardTldr({
+        product_id: activeProductId ?? undefined,
+        from: from || undefined,
+        to: to || undefined,
+      })
+      setTldr(res.summary)
+    } catch (e) {
+      notify(e instanceof Error ? e.message : 'AI generation failed', 'error')
+    } finally {
+      setTldrBusy(false)
+    }
+  }
 
   useEffect(() => {
     const params = {
@@ -214,7 +233,23 @@ export function DashboardView() {
             {t.dashboard.resetFilters}
           </button>
         )}
+        <button type="button" className="btn btn-sm" onClick={generateTldr} disabled={tldrBusy}>
+          <Sparkles size={14} />
+          {tldrBusy ? t.dashboard.aiTldrBusy : t.dashboard.aiTldr}
+        </button>
       </div>
+
+      {tldr && (
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">
+              <Sparkles size={16} />
+              {t.dashboard.aiTldr}
+            </h3>
+          </div>
+          <p style={{ margin: 0, fontSize: '0.9rem', lineHeight: 1.5 }}>{tldr}</p>
+        </div>
+      )}
 
       {/* KPI cards */}
       <div className="stat-grid">

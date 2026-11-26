@@ -334,6 +334,8 @@ export const dict = {
     },
     dashboard: {
       loading: 'Ładowanie telemetrii…',
+      aiTldr: 'AI — TL;DR dnia',
+      aiTldrBusy: 'Generuję…',
       products: 'Produkty',
       testCases: 'Scenariusze',
       testPlans: 'Plany testowe',
@@ -707,6 +709,8 @@ export const dict = {
     },
     dashboard: {
       loading: 'Loading telemetry…',
+      aiTldr: 'AI — daily TL;DR',
+      aiTldrBusy: 'Generating…',
       products: 'Products',
       testCases: 'Test Cases',
       testPlans: 'Test Plans',
