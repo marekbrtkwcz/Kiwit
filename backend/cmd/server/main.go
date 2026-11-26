@@ -52,6 +52,7 @@ import (
 	"github.com/kiwit/kiwit/internal/platform/config"
 	"github.com/kiwit/kiwit/internal/platform/db"
 	"github.com/kiwit/kiwit/internal/platform/logging"
+	"github.com/kiwit/kiwit/internal/platform/secrets"
 	"github.com/kiwit/kiwit/internal/plugin"
 	"github.com/kiwit/kiwit/internal/property"
 	"github.com/kiwit/kiwit/internal/report"
@@ -93,6 +94,11 @@ func main() {
 		}
 		out = io.MultiWriter(os.Stdout, fw)
 	}
+	// Secrets known at startup are scrubbed from all log sinks (stdout, file,
+	// admin log viewer). Runtime secrets (SMTP, webhooks, LLM, reset tokens)
+	// register themselves in the vault where they are read.
+	secrets.DefaultVault().Register(cfg.JWTSecret, cfg.S3SecretKey, cfg.LDAPBindPassword, os.Getenv("KIWIT_LLM_API_KEY"))
+	out = secrets.DefaultVault().Writer(out)
 	opts := &slog.HandlerOptions{Level: level}
 	var base slog.Handler
 	if cfg.LogFormat == "text" {
@@ -360,6 +366,7 @@ func main() {
 			from = "kiwit@localhost"
 		}
 		emailClient.SetConfig(notify.SMTPConfig{Host: host, Port: port, Username: user, Password: pass, From: from})
+		secrets.DefaultVault().Register(pass)
 	}
 	for _, k := range []string{settings.KeySMTPHost, settings.KeySMTPPort, settings.KeySMTPUser, settings.KeySMTPPass, settings.KeySMTPFrom} {
 		settings.OnChange(k, func(string) { applySMTP() })

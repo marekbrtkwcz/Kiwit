@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/kiwit/kiwit/internal/platform/secrets"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -168,7 +169,8 @@ func (s *Service) AdminRequestPasswordReset(ctx context.Context, targetUserID in
 		s.issuePasswordResetLink(ctx, targetUserID, userEmail)
 		return "", true, nil
 	}
-	resetURL := s.buildResetURL(s.createPlainResetToken(ctx, targetUserID))
+	plainToken := s.createPlainResetToken(ctx, targetUserID)
+	resetURL := s.buildResetURL(plainToken)
 	slog.Info("password reset requested without SMTP; reset link follows", "user_id", targetUserID, "reset_url", resetURL)
 	return resetURL, false, nil
 }
@@ -308,6 +310,9 @@ func (s *Service) createPlainResetToken(ctx context.Context, userID int64) strin
 		slog.Error("failed to create password reset token", "user_id", userID, "err", err)
 		return ""
 	}
+	// The plain reset token is a credential: register it so it is scrubbed
+	// from every log sink (it can appear in logged reset URLs).
+	secrets.DefaultVault().Register(plain)
 	return plain
 }
 

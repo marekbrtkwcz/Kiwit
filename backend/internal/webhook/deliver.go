@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/kiwit/kiwit/internal/platform/secrets"
 	"log/slog"
 	"net"
 	"net/http"
@@ -101,6 +102,7 @@ func Deliver(ctx context.Context, w Webhook, p Payload) (int, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "Kiwit-Webhook/1.0")
 	req.Header.Set("X-Kiwit-Event", p.Event)
+	secrets.DefaultVault().Register(w.Secret)
 	if sig := Sign(w.Secret, time.Now().Unix(), body); sig != "" {
 		req.Header.Set("X-Kiwit-Signature", sig)
 	}

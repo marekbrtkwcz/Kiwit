@@ -10,6 +10,10 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"log/slog"
+
+	"github.com/kiwit/kiwit/internal/platform/secrets"
 )
 
 // Config is read from environment:
@@ -80,10 +84,23 @@ func (c Config) Chat(ctx context.Context, system, user string) (string, error) {
 }
 
 // post sends the messages to the chat/completions endpoint with retry.
+// Every call is logged (model, duration, outcome) without prompt or response
+// content; the API key is registered in the secret vault for log redaction.
 func (c Config) post(ctx context.Context, messages []chatMessage) (string, error) {
+	start := time.Now()
+	var callErr error
+	defer func() {
+		if callErr != nil {
+			slog.Warn("llm call", "model", c.Model, "duration_ms", time.Since(start).Milliseconds(), "ok", false, "err", callErr.Error())
+		} else {
+			slog.Info("llm call", "model", c.Model, "duration_ms", time.Since(start).Milliseconds(), "ok", true)
+		}
+	}()
 	if !c.Enabled() {
-		return "", fmt.Errorf("LLM not configured (set KIWIT_LLM_API_KEY)")
+		callErr = fmt.Errorf("LLM not configured (set KIWIT_LLM_API_KEY)")
+		return "", callErr
 	}
+	secrets.DefaultVault().Register(c.APIKey)
 	body, err := json.Marshal(chatRequest{
 		Model:       c.Model,
 		Messages:    messages,
@@ -91,14 +108,9 @@ func (c Config) post(ctx context.Context, messages []chatMessage) (string, error
 		MaxTokens:   c.MaxTokens,
 	})
 	if err != nil {
-		return "", err
+		callErr = err
+		return "", callErr
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/chat/completions", bytes.NewReader(body))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.APIKey)
 	timeout := time.Duration(c.TimeoutSec) * time.Second
 	if timeout <= 0 {
 		timeout = 60 * time.Second
@@ -110,6 +122,13 @@ func (c Config) post(ctx context.Context, messages []chatMessage) (string, error
 	client := &http.Client{Timeout: timeout}
 	var lastErr error
 	for attempt := 0; attempt < retries; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/chat/completions", bytes.NewReader(body))
+		if err != nil {
+			callErr = err
+			return "", callErr
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+c.APIKey)
 		resp, err := client.Do(req)
 		if err != nil {
 			lastErr = fmt.Errorf("LLM request failed: %w", err)
@@ -127,17 +146,21 @@ func (c Config) post(ctx context.Context, messages []chatMessage) (string, error
 		}
 		var cr chatResponse
 		if err := json.Unmarshal(respBody, &cr); err != nil {
-			return "", fmt.Errorf("invalid LLM response: %w", err)
+			callErr = fmt.Errorf("invalid LLM response: %w", err)
+			return "", callErr
 		}
 		if cr.Error != nil {
-			return "", fmt.Errorf("LLM error: %s", cr.Error.Message)
+			callErr = fmt.Errorf("LLM error: %s", cr.Error.Message)
+			return "", callErr
 		}
 		if len(cr.Choices) == 0 {
-			return "", fmt.Errorf("LLM returned no choices")
+			callErr = fmt.Errorf("LLM returned no choices")
+			return "", callErr
 		}
 		return cr.Choices[0].Message.Content, nil
 	}
-	return "", lastErr
+	callErr = lastErr
+	return "", callErr
 }
 
 func truncate(s string, n int) string {

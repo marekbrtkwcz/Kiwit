@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"log/slog"
+
+	"github.com/kiwit/kiwit/internal/platform/secrets"
 )
 
 // LogEntry is one log record kept for the in-app log viewer.
@@ -43,7 +45,10 @@ func (r *Ring) Handle(_ context.Context, rec slog.Record) error {
 		attrs[a.Key] = a.Value.String()
 		return true
 	})
-	e := LogEntry{Time: rec.Time, Level: strings.ToLower(rec.Level.String()), Message: rec.Message, Attrs: attrs}
+	e := LogEntry{Time: rec.Time, Level: strings.ToLower(rec.Level.String()), Message: secrets.DefaultVault().Redact(rec.Message), Attrs: attrs}
+	for k, val := range attrs {
+		attrs[k] = secrets.DefaultVault().Redact(val)
+	}
 	if len(attrs) == 0 {
 		e.Attrs = nil
 	}
