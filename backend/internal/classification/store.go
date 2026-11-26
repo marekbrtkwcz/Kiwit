@@ -28,7 +28,7 @@ func (s *Store) List(ctx context.Context) ([]Classification, error) {
 			return nil, err
 		}
 		defer rows.Close()
-		var out []Classification
+		out := []Classification{}
 		for rows.Next() {
 			var c Classification
 			if err := rows.Scan(&c.ID, &c.Name); err != nil {
@@ -43,7 +43,7 @@ func (s *Store) List(ctx context.Context) ([]Classification, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Classification
+	out := []Classification{}
 	for rows.Next() {
 		var c Classification
 		if err := rows.Scan(&c.ID, &c.Name); err != nil {

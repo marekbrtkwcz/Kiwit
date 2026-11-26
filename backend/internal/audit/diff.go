@@ -55,7 +55,7 @@ func longestCommonSubseq(a, b []string) []string {
 			}
 		}
 	}
-	var out []string
+	out := []string{}
 	i, j := 0, 0
 	for i < n && j < m {
 		if a[i] == b[j] {

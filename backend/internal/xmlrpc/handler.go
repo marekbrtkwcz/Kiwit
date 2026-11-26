@@ -166,7 +166,7 @@ func (h *Handler) filterRows(table string, cols []string, relations ...map[strin
 		}
 		defer rows.Close()
 		colNames, _ := rows.Columns()
-		var out []map[string]any
+		out := []map[string]any{}
 		for rows.Next() {
 			vals := make([]any, len(colNames))
 			ptrs := make([]any, len(colNames))
@@ -218,7 +218,7 @@ func (h *Handler) sortKeys(r *http.Request, args []any) (any, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []map[string]any
+	out := []map[string]any{}
 	for rows.Next() {
 		var caseID, pos int64
 		if err := rows.Scan(&caseID, &pos); err != nil {

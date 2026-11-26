@@ -41,7 +41,7 @@ func (s *Store) List(ctx context.Context, entityType string, entityID int64) ([]
 			return nil, err
 		}
 		defer rows.Close()
-		var out []Link
+		out := []Link{}
 		for rows.Next() {
 			var l Link
 			if err := rows.Scan(&l.ID, &l.EntityType, &l.EntityID, &l.Name, &l.URL, &l.CreatedAt); err != nil {
@@ -56,7 +56,7 @@ func (s *Store) List(ctx context.Context, entityType string, entityID int64) ([]
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Link
+	out := []Link{}
 	for rows.Next() {
 		var l Link
 		if err := rows.Scan(&l.ID, &l.EntityType, &l.EntityID, &l.Name, &l.URL, &l.CreatedAt); err != nil {

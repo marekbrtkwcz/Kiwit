@@ -93,7 +93,7 @@ func (s *Store) ListAll(ctx context.Context, limit int) ([]Entry, error) {
 }
 
 func scanRows(rows pgx.Rows) ([]Entry, error) {
-	var out []Entry
+	out := []Entry{}
 	for rows.Next() {
 		var e Entry
 		var oldJSON, newJSON []byte
@@ -108,7 +108,7 @@ func scanRows(rows pgx.Rows) ([]Entry, error) {
 }
 
 func scanSQLRows(rows *sql.Rows) ([]Entry, error) {
-	var out []Entry
+	out := []Entry{}
 	for rows.Next() {
 		var e Entry
 		var oldJSON, newJSON []byte

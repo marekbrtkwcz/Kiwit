@@ -167,7 +167,7 @@ func (h *Handler) telemetryHealth(r *http.Request, args []any) (any, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []map[string]any
+	out := []map[string]any{}
 	for rows.Next() {
 		var id, total, failed, passed int64
 		var summary string

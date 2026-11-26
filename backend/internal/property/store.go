@@ -39,7 +39,7 @@ func (s *Store) List(ctx context.Context, entityType string, entityID int64) ([]
 			return nil, err
 		}
 		defer rows.Close()
-		var out []Property
+		out := []Property{}
 		for rows.Next() {
 			var p Property
 			if err := rows.Scan(&p.ID, &p.EntityType, &p.EntityID, &p.Name, &p.Value); err != nil {
@@ -54,7 +54,7 @@ func (s *Store) List(ctx context.Context, entityType string, entityID int64) ([]
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Property
+	out := []Property{}
 	for rows.Next() {
 		var p Property
 		if err := rows.Scan(&p.ID, &p.EntityType, &p.EntityID, &p.Name, &p.Value); err != nil {
@@ -108,7 +108,7 @@ func (s *Store) ListRunCC(ctx context.Context, runID int64) ([]int64, error) {
 			return nil, err
 		}
 		defer rows.Close()
-		var out []int64
+		out := []int64{}
 		for rows.Next() {
 			var id int64
 			if err := rows.Scan(&id); err != nil {
@@ -123,7 +123,7 @@ func (s *Store) ListRunCC(ctx context.Context, runID int64) ([]int64, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []int64
+	out := []int64{}
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {

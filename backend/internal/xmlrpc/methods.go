@@ -244,7 +244,7 @@ func (h *Handler) tcComments(r *http.Request, args []any) (any, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []map[string]any
+	out := []map[string]any{}
 	for rows.Next() {
 		var id, authorID int64
 		var body, created string
@@ -265,7 +265,7 @@ func (h *Handler) tcHistory(r *http.Request, args []any) (any, error) {
 		return []map[string]any{}, nil
 	}
 	defer rows.Close()
-	var out []map[string]any
+	out := []map[string]any{}
 	for rows.Next() {
 		var id int64
 		var summary, updated string
@@ -347,7 +347,7 @@ func (h *Handler) tpGetCases(r *http.Request, args []any) (any, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []map[string]any
+	out := []map[string]any{}
 	for rows.Next() {
 		var id, pos int64
 		var summary string
@@ -415,7 +415,7 @@ func (h *Handler) trGetCases(r *http.Request, args []any) (any, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []map[string]any
+	out := []map[string]any{}
 	for rows.Next() {
 		var id int64
 		var summary string
@@ -451,7 +451,7 @@ func (h *Handler) trGetCC(r *http.Request, args []any) (any, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []int64
+	out := []int64{}
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err == nil {
@@ -500,7 +500,7 @@ func (h *Handler) groupUsers(r *http.Request, args []any) (any, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []map[string]any
+	out := []map[string]any{}
 	for rows.Next() {
 		var id int64
 		var name string
@@ -565,7 +565,7 @@ func (h *Handler) getLinks(entityType string) func(r *http.Request, args []any) 
 			return nil, err
 		}
 		defer rows.Close()
-		var out []map[string]any
+		out := []map[string]any{}
 		for rows.Next() {
 			var id int64
 			var name, url string

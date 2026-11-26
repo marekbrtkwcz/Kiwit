@@ -53,7 +53,7 @@ func (s *Store) ListForCase(ctx context.Context, caseID int64) ([]Dataset, error
 			return nil, err
 		}
 		defer rows.Close()
-		var out []Dataset
+		out := []Dataset{}
 		for rows.Next() {
 			d, err := scanRow(rows)
 			if err != nil {
@@ -68,7 +68,7 @@ func (s *Store) ListForCase(ctx context.Context, caseID int64) ([]Dataset, error
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Dataset
+	out := []Dataset{}
 	for rows.Next() {
 		d, err := scanRow(rows)
 		if err != nil {

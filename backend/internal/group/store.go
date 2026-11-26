@@ -34,7 +34,7 @@ func (s *Store) List(ctx context.Context) ([]Group, error) {
 			return nil, err
 		}
 		defer rows.Close()
-		var out []Group
+		out := []Group{}
 		for rows.Next() {
 			var g Group
 			if err := rows.Scan(&g.ID, &g.Name, &g.CreatedAt); err != nil {
@@ -49,7 +49,7 @@ func (s *Store) List(ctx context.Context) ([]Group, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Group
+	out := []Group{}
 	for rows.Next() {
 		var g Group
 		if err := rows.Scan(&g.ID, &g.Name, &g.CreatedAt); err != nil {
@@ -92,7 +92,7 @@ func (s *Store) Members(ctx context.Context, groupID int64) ([]int64, error) {
 			return nil, err
 		}
 		defer rows.Close()
-		var out []int64
+		out := []int64{}
 		for rows.Next() {
 			var uid int64
 			if err := rows.Scan(&uid); err != nil {
@@ -107,7 +107,7 @@ func (s *Store) Members(ctx context.Context, groupID int64) ([]int64, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []int64
+	out := []int64{}
 	for rows.Next() {
 		var uid int64
 		if err := rows.Scan(&uid); err != nil {
@@ -151,7 +151,7 @@ func (s *Store) ListProductPerms(ctx context.Context, groupID int64) ([]GroupPro
 			return nil, err
 		}
 		defer rows.Close()
-		var out []GroupProductPerm
+		out := []GroupProductPerm{}
 		for rows.Next() {
 			var p GroupProductPerm
 			if err := rows.Scan(&p.GroupID, &p.ProductID, &p.Role); err != nil {
@@ -166,7 +166,7 @@ func (s *Store) ListProductPerms(ctx context.Context, groupID int64) ([]GroupPro
 		return nil, err
 	}
 	defer rows.Close()
-	var out []GroupProductPerm
+	out := []GroupProductPerm{}
 	for rows.Next() {
 		var p GroupProductPerm
 		if err := rows.Scan(&p.GroupID, &p.ProductID, &p.Role); err != nil {
@@ -207,7 +207,7 @@ func (s *Store) GroupsForUser(ctx context.Context, userID int64) ([]int64, error
 			return nil, err
 		}
 		defer rows.Close()
-		var out []int64
+		out := []int64{}
 		for rows.Next() {
 			var gid int64
 			if err := rows.Scan(&gid); err != nil {
@@ -222,7 +222,7 @@ func (s *Store) GroupsForUser(ctx context.Context, userID int64) ([]int64, error
 		return nil, err
 	}
 	defer rows.Close()
-	var out []int64
+	out := []int64{}
 	for rows.Next() {
 		var gid int64
 		if err := rows.Scan(&gid); err != nil {

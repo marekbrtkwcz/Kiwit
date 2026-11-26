@@ -78,7 +78,7 @@ func (h *Handler) execGetComments(r *http.Request, args []any) (any, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []map[string]any
+	out := []map[string]any{}
 	for rows.Next() {
 		var id, authorID int64
 		var body, created string
@@ -206,7 +206,7 @@ func (h *Handler) planTree(r *http.Request, args []any) (any, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []map[string]any
+	out := []map[string]any{}
 	for rows.Next() {
 		var id, parentID int64
 		var name string

@@ -68,7 +68,7 @@ func RegisterRoutes(api huma.API, s *Store) {
 }
 
 func (s *Store) Search(ctx context.Context, terms []string, limit int) ([]Result, error) {
-	var out []Result
+	out := []Result{}
 	var err error
 	if s.pg != nil {
 		out, err = s.searchPG(ctx, terms, limit)
@@ -96,7 +96,7 @@ func likeClauses(cols []string, terms []string, ph func(i int) string) (string, 
 }
 
 func (s *Store) searchSQLite(ctx context.Context, terms []string, limit int) ([]Result, error) {
-	var out []Result
+	out := []Result{}
 	// Test cases (summary + preconditions + steps)
 	q, args := likeClauses([]string{"tc.summary", "tc.preconditions", "(SELECT GROUP_CONCAT(action || ' ' || expected_result) FROM test_case_steps st WHERE st.test_case_id = tc.id)"}, terms, func(i int) string { return "?" })
 	rows, err := s.db.QueryContext(ctx, `SELECT 'test_case', tc.id, tc.summary FROM test_cases tc WHERE `+q+` ORDER BY tc.id DESC LIMIT ?`, append(args, limit)...)
@@ -146,7 +146,7 @@ func (s *Store) searchSQLite(ctx context.Context, terms []string, limit int) ([]
 }
 
 func (s *Store) searchPG(ctx context.Context, terms []string, limit int) ([]Result, error) {
-	var out []Result
+	out := []Result{}
 	// PostgreSQL: use to_tsvector for real full-text search.
 	vector := "to_tsvector('simple', coalesce(tc.summary,'') || ' ' || coalesce(tc.preconditions,'') || ' ' || coalesce((SELECT string_agg(st.action || ' ' || st.expected_result, ' ') FROM test_case_steps st WHERE st.test_case_id = tc.id), ''))"
 	plainq := strings.Join(terms, " & ")

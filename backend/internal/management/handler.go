@@ -195,7 +195,7 @@ func RegisterRoutes(api huma.API, repo ProductRepository, guard *auth.AccessGuar
 		Summary:     "List products",
 		Tags:        []string{"Management"},
 	}, func(ctx context.Context, input *struct{}) (*ListProductsOutput, error) {
-		var items []Product
+		items := []Product{}
 		var err error
 		if u, ok := auth.UserFromContext(ctx); ok && u.Role != "admin" {
 			items, err = repo.ListProductsForUser(ctx, u.ID)

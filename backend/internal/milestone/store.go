@@ -71,7 +71,7 @@ func (s *Store) List(ctx context.Context, versionID int64) ([]Milestone, error) 
 			return nil, err
 		}
 		defer rows.Close()
-		var out []Milestone
+		out := []Milestone{}
 		for rows.Next() {
 			m, err := scanRow(rows)
 			if err != nil {
@@ -86,7 +86,7 @@ func (s *Store) List(ctx context.Context, versionID int64) ([]Milestone, error) 
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Milestone
+	out := []Milestone{}
 	for rows.Next() {
 		m, err := scanRow(rows)
 		if err != nil {
@@ -188,7 +188,7 @@ func (s *Store) Runs(ctx context.Context, milestoneID int64) ([]int64, error) {
 			return nil, err
 		}
 		defer rows.Close()
-		var out []int64
+		out := []int64{}
 		for rows.Next() {
 			var id int64
 			if err := rows.Scan(&id); err != nil {
@@ -203,7 +203,7 @@ func (s *Store) Runs(ctx context.Context, milestoneID int64) ([]int64, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []int64
+	out := []int64{}
 	for rows.Next() {
 		var id int64
 		if err := rows.Scan(&id); err != nil {

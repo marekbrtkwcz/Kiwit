@@ -86,7 +86,7 @@ func (h *Handler) listAttachments(entityType string) func(r *http.Request, args 
 			return nil, err
 		}
 		defer rows.Close()
-		var out []map[string]any
+		out := []map[string]any{}
 		for rows.Next() {
 			var id, size int64
 			var name string
@@ -173,7 +173,7 @@ func (h *Handler) xmlSearch(r *http.Request, args []any) (any, error) {
 		return []map[string]any{}, nil
 	}
 	terms := strings.Fields(q)
-	var out []map[string]any
+	out := []map[string]any{}
 	for _, t := range terms {
 		rows, err := h.db.QueryContext(r.Context(), `SELECT 'test_case', id, summary FROM test_cases WHERE LOWER(summary) LIKE ? LIMIT 10`, "%"+t+"%")
 		if err != nil {

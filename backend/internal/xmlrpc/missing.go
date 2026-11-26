@@ -134,7 +134,7 @@ func (h *Handler) envProperties(r *http.Request, args []any) (any, error) {
 		return nil, fmt.Errorf("environment %d not found", envID)
 	}
 	// Return as list of {name, value} dicts like kiwitcms
-	var out []map[string]any
+	out := []map[string]any{}
 	if props != "" && props != "{}" {
 		// simple JSON object parse — properties stored as {"key":"val"}
 		out = jsonObjectToList(props)
@@ -194,7 +194,7 @@ func (h *Handler) groupPermissions(r *http.Request, args []any) (any, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []map[string]any
+	out := []map[string]any{}
 	for rows.Next() {
 		var pid int64
 		var pname, role string
@@ -296,7 +296,7 @@ func (h *Handler) entityProperties(entityType string) func(r *http.Request, args
 			return nil, err
 		}
 		defer rows.Close()
-		var out []map[string]any
+		out := []map[string]any{}
 		for rows.Next() {
 			var id, eid int64
 			var name, value string
@@ -395,7 +395,7 @@ func (h *Handler) tcGetNotificationCC(r *http.Request, args []any) (any, error) 
 		return nil, err
 	}
 	defer rows.Close()
-	var out []map[string]any
+	out := []map[string]any{}
 	for rows.Next() {
 		var email string
 		if err := rows.Scan(&email); err == nil {
@@ -616,7 +616,7 @@ func (h *Handler) reqGetCases(r *http.Request, args []any) (any, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []map[string]any
+	out := []map[string]any{}
 	for rows.Next() {
 		var id int64
 		var summary, status string

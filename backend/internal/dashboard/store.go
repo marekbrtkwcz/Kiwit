@@ -42,7 +42,7 @@ func NewStore(db *sql.DB, pg *pgxpool.Pool) *Store {
 // Get returns the personalized dashboard snapshot for a user: runs they manage
 // or test plus the most recent audit activity.
 func (s *Store) Get(ctx context.Context, userID int64) (Snapshot, error) {
-	var snap Snapshot
+	snap := Snapshot{MyRuns: []MyRun{}, RecentActivity: []Activity{}}
 	if s.pg != nil {
 		rows, err := s.pg.Query(ctx, `
 			SELECT id, summary, test_plan_id, stopped_at, started_at FROM test_runs

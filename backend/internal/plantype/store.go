@@ -28,7 +28,7 @@ func (s *Store) List(ctx context.Context) ([]PlanType, error) {
 			return nil, err
 		}
 		defer rows.Close()
-		var out []PlanType
+		out := []PlanType{}
 		for rows.Next() {
 			var t PlanType
 			if err := rows.Scan(&t.ID, &t.Name); err != nil {
@@ -43,7 +43,7 @@ func (s *Store) List(ctx context.Context) ([]PlanType, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []PlanType
+	out := []PlanType{}
 	for rows.Next() {
 		var t PlanType
 		if err := rows.Scan(&t.ID, &t.Name); err != nil {

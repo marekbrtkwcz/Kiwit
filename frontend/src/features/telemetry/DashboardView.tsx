@@ -79,9 +79,9 @@ export function DashboardView() {
     ])
       .then(([s, tr, mx, hl, bd, ed]) => {
         setSummary(s)
-        setTrends(tr.items)
-        setMatrix(mx.items)
-        setHealth(hl.items)
+        setTrends(tr.items ?? [])
+        setMatrix(mx.items ?? [])
+        setHealth(hl.items ?? [])
         setBreakdown(bd)
         setExecDash(ed)
         setError(null)
@@ -140,11 +140,11 @@ export function DashboardView() {
                 {t.dashboard.myRuns}
               </h3>
             </div>
-            {dash.my_runs.length === 0 ? (
+            {(dash.my_runs ?? []).length === 0 ? (
               <p style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>{t.dashboard.noRuns}</p>
             ) : (
               <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '0.4rem' }}>
-                {dash.my_runs.map((r) => (
+                {(dash.my_runs ?? []).map((r) => (
                   <li key={r.id}>
                     <a
                       href={`/runs/${r.id}`}
@@ -173,11 +173,11 @@ export function DashboardView() {
                 {t.dashboard.recentActivity}
               </h3>
             </div>
-            {dash.recent_activity.length === 0 ? (
+            {(dash.recent_activity ?? []).length === 0 ? (
               <p style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>{t.dashboard.noActivity}</p>
             ) : (
               <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '0.4rem', fontSize: '0.85rem' }}>
-                {dash.recent_activity.map((a) => (
+                {(dash.recent_activity ?? []).map((a) => (
                   <li key={a.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
                     <span>
                       <strong>{a.actor_name}</strong> {a.action} {a.entity_type} #{a.entity_id}

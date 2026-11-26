@@ -100,7 +100,7 @@ func (s *Store) List(ctx context.Context, f filter, limit, offset int) ([]Requir
 		if err != nil {
 			return nil, 0, err
 		}
-		var out []Requirement
+		out := []Requirement{}
 		for rows.Next() {
 			r, err := scanRequirement(rows)
 			if err != nil {
@@ -127,7 +127,7 @@ func (s *Store) List(ctx context.Context, f filter, limit, offset int) ([]Requir
 	if err != nil {
 		return nil, 0, err
 	}
-	var out []Requirement
+	out := []Requirement{}
 	for rows.Next() {
 		r, err := scanRequirement(rows)
 		if err != nil {
@@ -266,7 +266,7 @@ func (s *Store) Coverage(ctx context.Context, requirementID int64) ([]CoverageEn
 			return nil, err
 		}
 		defer rows.Close()
-		var out []CoverageEntry
+		out := []CoverageEntry{}
 		for rows.Next() {
 			var c CoverageEntry
 			if err := rows.Scan(&c.TestCaseID, &c.Summary, &c.Status, &c.LinkedAt, &c.LatestExecutionID, &c.LatestExecStatus, &c.LatestRunID); err != nil {
@@ -281,7 +281,7 @@ func (s *Store) Coverage(ctx context.Context, requirementID int64) ([]CoverageEn
 		return nil, err
 	}
 	defer rows.Close()
-	var out []CoverageEntry
+	out := []CoverageEntry{}
 	for rows.Next() {
 		var c CoverageEntry
 		if err := rows.Scan(&c.TestCaseID, &c.Summary, &c.Status, &c.LinkedAt, &c.LatestExecutionID, &c.LatestExecStatus, &c.LatestRunID); err != nil {
@@ -301,7 +301,7 @@ func (s *Store) RequirementsForCase(ctx context.Context, testCaseID int64) ([]Re
 			return nil, err
 		}
 		defer rows.Close()
-		var out []Requirement
+		out := []Requirement{}
 		for rows.Next() {
 			r, err := scanRequirement(rows)
 			if err != nil {
@@ -316,7 +316,7 @@ func (s *Store) RequirementsForCase(ctx context.Context, testCaseID int64) ([]Re
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Requirement
+	out := []Requirement{}
 	for rows.Next() {
 		r, err := scanRequirement(rows)
 		if err != nil {

@@ -88,13 +88,13 @@ export function AuthView() {
   const loadAccountData = async () => {
     try {
       const tokRes = await api.listApiTokens()
-      setTokens(tokRes.items)
+      setTokens(tokRes.items ?? [])
     } catch {
       setTokens([])
     }
     try {
       const uRes = await api.listUsers()
-      setUsers(uRes.items)
+      setUsers(uRes.items ?? [])
       setIsAdmin(true)
     } catch {
       setUsers([])
@@ -102,7 +102,7 @@ export function AuthView() {
     }
     try {
       const gRes = await api.listGroups()
-      setGroups(gRes.items)
+      setGroups(gRes.items ?? [])
     } catch {
       setGroups([])
     }
@@ -111,7 +111,7 @@ export function AuthView() {
   const reloadGroups = async () => {
     try {
       const gRes = await api.listGroups()
-      setGroups(gRes.items)
+      setGroups(gRes.items ?? [])
     } catch { /* ignore */ }
   }
 
