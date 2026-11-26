@@ -47,6 +47,8 @@ func Default() MenuResponse {
 				Item{Label: "Search Test Plans", URL: "/plans", Icon: "folder-kanban"},
 				Item{Label: "Search Test Cases", URL: "/cases", Icon: "file-check"},
 				Item{Label: "Search Test Runs", URL: "/runs", Icon: "play-circle"},
+				Item{Label: "Requirements", URL: "/requirements", Icon: "clipboard-list"},
+				Item{Label: "Milestones", URL: "/milestones", Icon: "flag"},
 				Item{Label: "Search Test Executions", URL: "/dashboard", Icon: "layout-dashboard"},
 				Item{Label: "Search Bugs", URL: "/bugs", Icon: "bug"},
 			}},

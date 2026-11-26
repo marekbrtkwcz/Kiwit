@@ -1,6 +1,7 @@
 package attachment
 
 import (
+	"strings"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
@@ -121,6 +122,30 @@ func RegisterRoutes(r chi.Router, repo Repository, store storage.Storage, guard 
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"items": items})
+	})
+
+	r.Get("/api/v1/executions/{id}/screenshots", func(w http.ResponseWriter, req *http.Request) {
+		id, err := strconv.ParseInt(chi.URLParam(req, "id"), 10, 64)
+		if err != nil || id <= 0 {
+			http.Error(w, `{"detail":"invalid execution id"}`, http.StatusBadRequest)
+			return
+		}
+		if auth.WriteAccessError(w, guard.EnforceExecution(req.Context(), id, false)) {
+			return
+		}
+		items, err := repo.ListByEntity(req.Context(), "test_execution", id)
+		if err != nil {
+			http.Error(w, `{"detail":"failed to list attachments"}`, http.StatusInternalServerError)
+			return
+		}
+		out := make([]Attachment, 0)
+		for _, a := range items {
+			if strings.HasPrefix(a.ContentType, "image/") {
+				out = append(out, a)
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"items": out})
 	})
 
 	r.Get("/api/v1/attachments/{id}/download", func(w http.ResponseWriter, req *http.Request) {

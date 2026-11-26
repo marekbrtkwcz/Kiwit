@@ -116,8 +116,9 @@ export function TestCasesView() {
   const [newCategory, setNewCategory] = useState('')
   const [summary, setSummary] = useState('')
   const [preconditions, setPreconditions] = useState('')
-  const [format, setFormat] = useState<'steps' | 'gherkin'>('steps')
+  const [format, setFormat] = useState<'steps' | 'gherkin' | 'markdown' | 'checklist'>('steps')
   const [gherkinBody, setGherkinBody] = useState('')
+  const [mdPreview, setMdPreview] = useState('')
   const [priority, setPriority] = useState<TestCase['priority']>('medium')
   const [status, setStatus] = useState<TestCase['status']>('confirmed')
   const [isAutomated, setIsAutomated] = useState(false)
@@ -139,6 +140,7 @@ export function TestCasesView() {
     setPreconditions(tc.preconditions ?? '')
     setFormat(tc.format)
     setGherkinBody(tc.gherkin_body ?? '')
+    setMdPreview('')
     setPriority(tc.priority)
     setStatus(tc.status)
     setIsAutomated(Boolean(tc.is_automated))
@@ -251,7 +253,7 @@ export function TestCasesView() {
         summary: summary.trim(),
         preconditions: preconditions.trim(),
         format,
-        gherkin_body: format === 'gherkin' ? gherkinBody : '',
+        gherkin_body: format === 'steps' ? '' : gherkinBody,
         priority,
         status,
         is_automated: isAutomated,
@@ -426,7 +428,7 @@ export function TestCasesView() {
                 <td>
                   <div style={{ fontWeight: 500 }}>{tc.summary}</div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
-                    {tc.format === 'gherkin' ? 'Gherkin' : `${tc.steps.length} ${t.testcases.stepsCount}`}
+                    {tc.format === 'steps' ? `${tc.steps.length} ${t.testcases.stepsCount}` : tc.format}
                   </div>
                 </td>
                 <td style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
@@ -601,9 +603,11 @@ export function TestCasesView() {
                       <option value="confirmed">confirmed</option>
                       <option value="disabled">disabled</option>
                     </select>
-                    <select className="select" value={format} onChange={(e) => setFormat(e.target.value as 'steps' | 'gherkin')}>
+                    <select className="select" value={format} onChange={(e) => setFormat(e.target.value as 'steps' | 'gherkin' | 'markdown' | 'checklist')}>
                       <option value="steps">Steps</option>
                       <option value="gherkin">Gherkin</option>
+                      <option value="markdown">Markdown</option>
+                      <option value="checklist">Checklist</option>
                     </select>
                     {templates.length > 0 && (
                       <select
@@ -643,7 +647,48 @@ export function TestCasesView() {
                     )}
                   </div>
 
-                  {format === 'gherkin' ? (
+                  {format === 'markdown' ? (
+                    <div style={{ display: 'grid', gap: '0.4rem' }}>
+                      <textarea
+                        className="textarea"
+                        rows={7}
+                        placeholder="Markdown body — use Preview to render"
+                        value={gherkinBody}
+                        onChange={(e) => setGherkinBody(e.target.value)}
+                      />
+                      <div>
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          onClick={async () => {
+                            try {
+                              const res = await api.renderMarkdown(gherkinBody)
+                              setMdPreview(res.html)
+                            } catch {
+                              setMdPreview('')
+                            }
+                          }}
+                        >
+                          Preview
+                        </button>
+                      </div>
+                      {mdPreview && (
+                        <div
+                          className="markdown-body"
+                          style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '0.6rem' }}
+                          dangerouslySetInnerHTML={{ __html: mdPreview }}
+                        />
+                      )}
+                    </div>
+                  ) : format === 'checklist' ? (
+                    <textarea
+                      className="textarea"
+                      rows={7}
+                      placeholder={"One check per line"}
+                      value={gherkinBody}
+                      onChange={(e) => setGherkinBody(e.target.value)}
+                    />
+                  ) : format === 'gherkin' ? (
                     <textarea
                       className="textarea"
                       rows={7}

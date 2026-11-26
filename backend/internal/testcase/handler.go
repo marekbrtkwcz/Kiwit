@@ -32,7 +32,7 @@ type TestCase struct {
 	Requirement     string    `json:"requirement,omitempty"`
 	ExtraLink       string    `json:"extra_link,omitempty"`
 	Notes           string    `json:"notes,omitempty"`
-	Format          string    `json:"format" enum:"steps,gherkin"`
+	Format          string    `json:"format" enum:"steps,gherkin,markdown,checklist"`
 	GherkinBody     string    `json:"gherkin_body,omitempty"`
 	Priority        string    `json:"priority"`
 	Status          string    `json:"status" enum:"draft,confirmed,disabled"`
@@ -54,7 +54,7 @@ type TestCaseBody struct {
 	Requirement     string `json:"requirement,omitempty"`
 	ExtraLink       string `json:"extra_link,omitempty"`
 	Notes           string `json:"notes,omitempty"`
-	Format          string `json:"format,omitempty" default:"steps" enum:"steps,gherkin"`
+	Format          string `json:"format,omitempty" default:"steps" enum:"steps,gherkin,markdown,checklist"`
 	GherkinBody     string `json:"gherkin_body,omitempty"`
 	Priority        string `json:"priority,omitempty" default:"medium" minLength:"1" maxLength:"64"`
 	Status          string `json:"status,omitempty" default:"confirmed" enum:"draft,confirmed,disabled"`

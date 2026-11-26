@@ -3,7 +3,9 @@ import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from 're
 import {
   Bug,
   CheckCircle2,
+  ClipboardList,
   FileCheck2,
+  Flag,
   FolderKanban,
   LayoutDashboard,
   Menu,
@@ -23,7 +25,9 @@ import { CommandPalette } from './components/CommandPalette'
 import { useWorkspace, WorkspaceProvider } from './context/WorkspaceContext'
 import { AuthView } from './features/auth/AuthView'
 import { BugsView } from './features/bugs/BugsView'
+import { MilestonesView } from './features/milestones/MilestonesView'
 import { ProductsView } from './features/management/ProductsView'
+import { RequirementsView } from './features/requirements/RequirementsView'
 import { NotificationBell } from './features/notifications/NotificationBell'
 import { SettingsView } from './features/settings/SettingsView'
 import { DashboardView } from './features/telemetry/DashboardView'
@@ -34,6 +38,8 @@ import { I18nProvider, Lang, useI18n } from './i18n'
 
 // iconMap maps backend icon names (lucide kebab-case) to components.
 const iconMap: Record<string, typeof LayoutDashboard> = {
+  'clipboard-list': ClipboardList,
+  flag: Flag,
   'layout-dashboard': LayoutDashboard,
   'file-check': FileCheck2,
   'folder-kanban': FolderKanban,
@@ -246,6 +252,8 @@ function AppShell() {
             <Route path="/dashboard" element={<DashboardView />} />
             <Route path="/products" element={<ProductsView />} />
             <Route path="/cases" element={<TestCasesView />} />
+            <Route path="/requirements" element={<RequirementsView />} />
+            <Route path="/milestones" element={<MilestonesView />} />
             <Route path="/cases/:id" element={<TestCasesView />} />
             <Route path="/plans" element={<TestPlansView />} />
             <Route path="/plans/:id" element={<TestPlansView />} />

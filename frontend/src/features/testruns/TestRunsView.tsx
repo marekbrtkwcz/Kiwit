@@ -22,6 +22,7 @@ import { api, BugItem, Build, EnvironmentItem, ExecutionLinkItem, IssueTrackerIt
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 import { AttachmentsPanel } from '../attachments/AttachmentsPanel'
+import { ScreenshotsGallery } from '../attachments/ScreenshotsGallery'
 import { CommentsPanel } from '../comments/CommentsPanel'
 import { EntityTagsBar } from '../management/EntityTagsBar'
 
@@ -737,6 +738,9 @@ export function TestRunsView() {
                     </div>
                     <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
                       <ExecutionBugsPanel executionId={activeExec.id} trackers={trackers} />
+                    </div>
+                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+                      <ScreenshotsGallery executionId={activeExec.id} />
                     </div>
                     <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
                       <AttachmentsPanel entityType="test_execution" entityId={activeExec.id} />

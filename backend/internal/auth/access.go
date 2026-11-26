@@ -225,6 +225,30 @@ func (g *AccessGuard) EnforceTestRun(ctx context.Context, testRunID int64, requi
 	return g.enforceResolved(ctx, pid, err, "test run not found", requireWrite)
 }
 
+func (g *AccessGuard) EnforceMilestone(ctx context.Context, milestoneID int64, requireWrite bool) error {
+	if g == nil {
+		return nil
+	}
+	pid, err := g.lookupProductID(ctx,
+		`SELECT v.product_id FROM milestones m JOIN versions v ON v.id = m.version_id WHERE m.id = $1`,
+		`SELECT v.product_id FROM milestones m JOIN versions v ON v.id = m.version_id WHERE m.id = ?`,
+		milestoneID,
+	)
+	return g.enforceResolved(ctx, pid, err, "milestone not found", requireWrite)
+}
+
+func (g *AccessGuard) EnforceRequirement(ctx context.Context, requirementID int64, requireWrite bool) error {
+	if g == nil {
+		return nil
+	}
+	pid, err := g.lookupProductID(ctx,
+		`SELECT product_id FROM requirements WHERE id = $1`,
+		`SELECT product_id FROM requirements WHERE id = ?`,
+		requirementID,
+	)
+	return g.enforceResolved(ctx, pid, err, "requirement not found", requireWrite)
+}
+
 func (g *AccessGuard) EnforceExecution(ctx context.Context, executionID int64, requireWrite bool) error {
 	if g == nil {
 		return nil
@@ -251,6 +275,10 @@ func (g *AccessGuard) EnforceEntity(ctx context.Context, entityType string, enti
 		return g.EnforceTestRun(ctx, entityID, requireWrite)
 	case "test_execution":
 		return g.EnforceExecution(ctx, entityID, requireWrite)
+	case "requirement":
+		return g.EnforceRequirement(ctx, entityID, requireWrite)
+	case "milestone":
+		return g.EnforceMilestone(ctx, entityID, requireWrite)
 	default:
 		return huma.Error400BadRequest("unsupported entity_type")
 	}

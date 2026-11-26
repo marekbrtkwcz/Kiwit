@@ -67,6 +67,23 @@ func (h *Handler) registerMissingMethods() {
 	h.register("Bug.details", h.bugDetails)
 	h.register("User.add_attachment", h.addAttachment("user"))
 	h.register("Attachment.remove_attachment", h.removeAttachment) // alias for Attachment.remove
+
+	// --- Requirements + traceability ---
+	h.register("Requirement.filter", h.filterRows("requirements", []string{"id", "product_id", "key", "name", "description", "version", "status", "priority", "category", "author_id", "created_at", "updated_at"}))
+	h.register("Requirement.create", h.simpleCreate("requirements", []string{"product_id", "key", "name", "description", "version", "status", "priority", "category", "author_id"}))
+	h.register("Requirement.update", h.simpleUpdate("requirements", []string{"product_id", "key", "name", "description", "version", "status", "priority", "category"}))
+	h.register("Requirement.remove", h.reqRemove)
+	h.register("Requirement.link_case", h.reqLinkCase)
+	h.register("Requirement.unlink_case", h.reqUnlinkCase)
+	h.register("Requirement.get_cases", h.reqGetCases)
+
+	// --- Milestones (release / go-no-go) ---
+	h.register("Milestone.filter", h.filterRows("milestones", []string{"id", "version_id", "name", "description", "due_date", "status", "signoff_decision", "signoff_note", "created_at", "updated_at"}))
+	h.register("Milestone.create", h.simpleCreate("milestones", []string{"version_id", "name", "description", "due_date", "status"}))
+	h.register("Milestone.update", h.simpleUpdate("milestones", []string{"version_id", "name", "description", "due_date", "status"}))
+	h.register("Milestone.remove", h.msRemove)
+	h.register("Milestone.add_run", h.msLinkRun)
+	h.register("Milestone.remove_run", h.msUnlinkRun)
 }
 
 // --- generic update helper ---
@@ -560,5 +577,81 @@ func (h *Handler) runRemoveTag(r *http.Request, args []any) (any, error) {
 	tagName := argStr(args[1])
 	_, err := h.db.ExecContext(r.Context(),
 		`DELETE FROM test_run_tags WHERE test_run_id = ? AND tag_id IN (SELECT id FROM tags WHERE name = ?)`, runID, tagName)
+	return map[string]any{"ok": err == nil}, err
+}
+
+func (h *Handler) reqLinkCase(r *http.Request, args []any) (any, error) {
+	if h.db == nil {
+		return nil, errNoDB
+	}
+	reqID := argInt(args[0])
+	caseID := argInt(args[1])
+	_, err := h.db.ExecContext(r.Context(), `INSERT OR IGNORE INTO requirement_coverage (requirement_id, test_case_id) VALUES (?, ?)`, reqID, caseID)
+	return map[string]any{"ok": err == nil}, err
+}
+
+func (h *Handler) reqUnlinkCase(r *http.Request, args []any) (any, error) {
+	if h.db == nil {
+		return nil, errNoDB
+	}
+	reqID := argInt(args[0])
+	caseID := argInt(args[1])
+	_, err := h.db.ExecContext(r.Context(), `DELETE FROM requirement_coverage WHERE requirement_id = ? AND test_case_id = ?`, reqID, caseID)
+	return map[string]any{"ok": err == nil}, err
+}
+
+func (h *Handler) reqGetCases(r *http.Request, args []any) (any, error) {
+	if h.db == nil {
+		return nil, errNoDB
+	}
+	reqID := argInt(args[0])
+	rows, err := h.db.QueryContext(r.Context(), `SELECT tc.id, tc.summary, tc.status FROM requirement_coverage rc JOIN test_cases tc ON tc.id = rc.test_case_id WHERE rc.requirement_id = ? ORDER BY tc.id`, reqID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []map[string]any
+	for rows.Next() {
+		var id int64
+		var summary, status string
+		if err := rows.Scan(&id, &summary, &status); err != nil {
+			return nil, err
+		}
+		out = append(out, map[string]any{"id": id, "summary": summary, "status": status})
+	}
+	return out, rows.Err()
+}
+
+func (h *Handler) reqRemove(r *http.Request, args []any) (any, error) {
+	if h.db == nil {
+		return nil, errNoDB
+	}
+	id := argInt(args[0])
+	_, err := h.db.ExecContext(r.Context(), `DELETE FROM requirements WHERE id = ?`, id)
+	return map[string]any{"ok": err == nil}, err
+}
+
+func (h *Handler) msRemove(r *http.Request, args []any) (any, error) {
+	if h.db == nil {
+		return nil, errNoDB
+	}
+	id := argInt(args[0])
+	_, err := h.db.ExecContext(r.Context(), `DELETE FROM milestones WHERE id = ?`, id)
+	return map[string]any{"ok": err == nil}, err
+}
+
+func (h *Handler) msLinkRun(r *http.Request, args []any) (any, error) {
+	if h.db == nil {
+		return nil, errNoDB
+	}
+	_, err := h.db.ExecContext(r.Context(), `INSERT OR IGNORE INTO milestone_runs (milestone_id, test_run_id) VALUES (?, ?)`, argInt(args[0]), argInt(args[1]))
+	return map[string]any{"ok": err == nil}, err
+}
+
+func (h *Handler) msUnlinkRun(r *http.Request, args []any) (any, error) {
+	if h.db == nil {
+		return nil, errNoDB
+	}
+	_, err := h.db.ExecContext(r.Context(), `DELETE FROM milestone_runs WHERE milestone_id = ? AND test_run_id = ?`, argInt(args[0]), argInt(args[1]))
 	return map[string]any{"ok": err == nil}, err
 }

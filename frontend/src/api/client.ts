@@ -28,7 +28,7 @@ export interface TestCase {
   requirement?: string
   extra_link?: string
   notes?: string
-  format: 'steps' | 'gherkin'
+  format: 'steps' | 'gherkin' | 'markdown' | 'checklist'
   gherkin_body?: string
   priority: string
   status: 'draft' | 'confirmed' | 'disabled'
@@ -230,6 +230,58 @@ export interface UserGroup {
   name: string
   created_at?: string
   members?: number[]
+}
+
+export interface Requirement {
+  id: number
+  product_id: number
+  key: string
+  name: string
+  description?: string
+  version: string
+  status: 'draft' | 'approved' | 'obsolete'
+  priority: string
+  category?: string
+  author_id?: number
+  created_at: string
+  updated_at: string
+}
+
+export interface CoverageEntry {
+  test_case_id: number
+  summary: string
+  status: string
+  latest_execution_id?: number
+  latest_execution_status?: string
+  latest_run_id?: number
+  linked_at: string
+}
+
+export interface Milestone {
+  id: number
+  version_id: number
+  name: string
+  description?: string
+  due_date?: string
+  status: 'planned' | 'in_progress' | 'done'
+  signoff_decision?: 'go' | 'no-go'
+  signoff_user_id?: number
+  signoff_note?: string
+  signoff_at?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface MilestoneProgress {
+  milestone_id: number
+  total: number
+  passed: number
+  failed: number
+  blocked: number
+  skipped: number
+  running: number
+  idle: number
+  percent_done: string
 }
 
 export interface ApiTokenInfo {
@@ -570,6 +622,46 @@ export const api = {
   createCategory: (name: string) =>
     request<Category>('/api/v1/categories', { method: 'POST', body: JSON.stringify({ name }) }),
 
+  listRequirements: (params?: { q?: string; product_id?: number; status?: string; priority?: string; category?: string; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams()
+    if (params?.q) qs.set('q', params.q)
+    if (params?.product_id) qs.set('product_id', String(params.product_id))
+    if (params?.status) qs.set('status', params.status)
+    if (params?.priority) qs.set('priority', params.priority)
+    if (params?.category) qs.set('category', params.category)
+    if (params?.limit) qs.set('limit', String(params.limit))
+    if (params?.offset) qs.set('offset', String(params.offset))
+    const s = qs.toString()
+    return request<{ items: Requirement[]; total: number }>(`/api/v1/requirements${s ? `?${s}` : ''}`)
+  },
+  createRequirement: (body: Omit<Requirement, 'id' | 'created_at' | 'updated_at'>) =>
+    request<Requirement>('/api/v1/requirements', { method: 'POST', body: JSON.stringify(body) }),
+  updateRequirement: (id: number, body: Omit<Requirement, 'id' | 'created_at' | 'updated_at'>) =>
+    request<Requirement>(`/api/v1/requirements/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteRequirement: (id: number) => request<void>(`/api/v1/requirements/${id}`, { method: 'DELETE' }),
+  linkRequirementCase: (id: number, testCaseId: number) =>
+    request<void>(`/api/v1/requirements/${id}/link-case`, { method: 'POST', body: JSON.stringify({ test_case_id: testCaseId }) }),
+  unlinkRequirementCase: (id: number, testCaseId: number) =>
+    request<void>(`/api/v1/requirements/${id}/unlink-case`, { method: 'POST', body: JSON.stringify({ test_case_id: testCaseId }) }),
+  requirementCoverage: (id: number) => request<{ items: CoverageEntry[] }>(`/api/v1/requirements/${id}/coverage`),
+  testCaseRequirements: (id: number) => request<{ items: Requirement[] }>(`/api/v1/testcases/${id}/requirements`),
+  listMilestones: (versionId?: number) =>
+    request<{ items: Milestone[] }>(`/api/v1/milestones${versionId ? `?version_id=${versionId}` : ''}`),
+  createMilestone: (body: { version_id: number; name: string; description?: string; due_date?: string; status?: string }) =>
+    request<Milestone>('/api/v1/milestones', { method: 'POST', body: JSON.stringify(body) }),
+  updateMilestone: (id: number, body: { version_id: number; name: string; description?: string; due_date?: string; status?: string }) =>
+    request<Milestone>(`/api/v1/milestones/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteMilestone: (id: number) => request<void>(`/api/v1/milestones/${id}`, { method: 'DELETE' }),
+  milestoneSignoff: (id: number, body: { decision: 'go' | 'no-go'; note?: string }) =>
+    request<Milestone>(`/api/v1/milestones/${id}/signoff`, { method: 'POST', body: JSON.stringify(body) }),
+  milestoneProgress: (id: number) => request<MilestoneProgress>(`/api/v1/milestones/${id}/progress`),
+  milestoneLinkRun: (id: number, testRunId: number) =>
+    request<void>(`/api/v1/milestones/${id}/link-run`, { method: 'POST', body: JSON.stringify({ test_run_id: testRunId }) }),
+  milestoneUnlinkRun: (id: number, testRunId: number) =>
+    request<void>(`/api/v1/milestones/${id}/unlink-run`, { method: 'POST', body: JSON.stringify({ test_run_id: testRunId }) }),
+  milestoneRuns: (id: number) => request<{ items: number[] }>(`/api/v1/milestones/${id}/runs`),
+  renderMarkdown: (md: string) =>
+    request<{ html: string }>('/api/v1/markdown/render', { method: 'POST', body: JSON.stringify({ markdown: md }) }),
   listTestCases: (params?: {
     q?: string
     product_id?: number
@@ -711,6 +803,17 @@ export const api = {
     downloadAuthenticated(`/api/v1/attachments/${id}/download`, filename),
   deleteAttachment: (id: number) =>
     request<void>(`/api/v1/attachments/${id}`, { method: 'DELETE' }),
+  listExecutionScreenshots: (executionId: number) =>
+    request<{ items: AttachmentItem[] }>(`/api/v1/executions/${executionId}/screenshots`),
+  fetchAttachmentBlob: async (id: number): Promise<string> => {
+    const token = getAuthToken()
+    const res = await fetch(`/api/v1/attachments/${id}/download`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const blob = await res.blob()
+    return URL.createObjectURL(blob)
+  },
   getTelemetrySummary: (params?: TelemetryFilterParams) =>
     request<TelemetrySummary>(`/api/v1/telemetry/summary${buildTelemetryQuery(params)}`),
   getExecutionTrends: (params?: TelemetryFilterParams) =>

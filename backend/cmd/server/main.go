@@ -35,6 +35,7 @@ import (
 	"github.com/kiwit/kiwit/internal/issuetracker"
 	"github.com/kiwit/kiwit/internal/linkref"
 	"github.com/kiwit/kiwit/internal/menu"
+	"github.com/kiwit/kiwit/internal/milestone"
 	"github.com/kiwit/kiwit/internal/permissions"
 	"github.com/kiwit/kiwit/internal/markdown"
 	"github.com/kiwit/kiwit/internal/management"
@@ -45,6 +46,7 @@ import (
 	"github.com/kiwit/kiwit/internal/platform/db"
 	"github.com/kiwit/kiwit/internal/plugin"
 	"github.com/kiwit/kiwit/internal/property"
+	"github.com/kiwit/kiwit/internal/requirement"
 	"github.com/kiwit/kiwit/internal/search"
 	"github.com/kiwit/kiwit/internal/settings"
 	"github.com/kiwit/kiwit/internal/storage"
@@ -224,6 +226,8 @@ func main() {
 	audit.RegisterRoutes(api, auditStore, guard)
 	dashboard.RegisterRoutes(api, dashboard.NewStore(sqlDBConn, pgPoolConn))
 	testcase.RegisterRoutes(api, testCaseRepo, emailSettings, emailClient, guard, auditStore)
+	requirement.RegisterRoutes(api, requirement.NewStore(sqlDBConn, pgPoolConn), guard)
+	milestone.RegisterRoutes(api, milestone.NewStore(sqlDBConn, pgPoolConn), guard)
 	testcase.RegisterTemplateRoutes(api, sqlDBConn, pgPoolConn)
 	testplan.RegisterRoutes(api, testPlanRepo, emailSettings, emailClient, guard, auditStore)
 	notifier := notify.NewWebhookClient(os.Getenv("KIWIT_WEBHOOK_URL"))
