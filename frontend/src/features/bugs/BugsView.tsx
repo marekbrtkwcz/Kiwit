@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bot, Bug, Plus, Search, Trash2, X } from 'lucide-react'
+import { Bot, Bug, Plus, ScanSearch, Search, Trash2, X } from 'lucide-react'
 import { api, InternalBug } from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
@@ -13,6 +13,7 @@ export function BugsView() {
   const [filterSeverity, setFilterSeverity] = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editing, setEditing] = useState<InternalBug | null>(null)
+  const [triage, setTriage] = useState<{ duplicates: { bug_id: number; confidence: number; reason: string }[]; suggested_severity: string; suggested_status: string; triage_note: string; model: string } | 'busy' | null>(null)
 
   const [productId, setProductId] = useState<number>(activeProductId ?? 1)
   const [summary, setSummary] = useState('')
@@ -162,6 +163,23 @@ export function BugsView() {
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
+                    title="AI triage: possible duplicates and severity proposal"
+                    onClick={async () => {
+                      setTriage('busy')
+                      try {
+                        const res = await api.aiTriageBug(b.id)
+                        setTriage(res)
+                      } catch (err) {
+                        setTriage(null)
+                        notify(err instanceof Error ? err.message : 'AI triage failed', 'error')
+                      }
+                    }}
+                  >
+                    <ScanSearch size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
                     style={{ color: 'var(--danger)' }}
                     title={t.common.delete}
                     onClick={async () => {
@@ -186,6 +204,50 @@ export function BugsView() {
           </tbody>
         </table>
       </div>
+
+      {triage === 'busy' && (
+        <div className="modal-backdrop">
+          <div className="modal" role="dialog" aria-modal="true">
+            <p style={{ margin: 0 }}>AI triage…</p>
+          </div>
+        </div>
+      )}
+
+      {triage && triage !== 'busy' && (
+        <div className="modal-backdrop" onClick={() => setTriage(null)}>
+          <div className="modal" style={{ maxWidth: 640, maxHeight: '80vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="AI triage result">
+            <h2 style={{ marginTop: 0 }}>AI triage</h2>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', margin: '0.5rem 0', flexWrap: 'wrap' }}>
+              <span className="badge">suggested severity: {triage.suggested_severity}</span>
+              <span className="badge">suggested status: {triage.suggested_status}</span>
+              <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>{triage.model}</span>
+            </div>
+            <p style={{ fontSize: '0.9rem' }}>{triage.triage_note}</p>
+            {triage.duplicates.length > 0 ? (
+              <div>
+                <strong style={{ fontSize: '0.85rem' }}>Możliwe duplikaty</strong>
+                <table className="table" style={{ margin: '0.4rem 0' }}>
+                  <thead><tr><th>Bug</th><th>Pewność</th><th>Powód</th></tr></thead>
+                  <tbody>
+                    {triage.duplicates.map((d) => (
+                      <tr key={d.bug_id}>
+                        <td><span className="badge">#{d.bug_id}</span></td>
+                        <td><span className={`badge badge-${d.confidence >= 70 ? 'failed' : d.confidence >= 40 ? 'idle' : 'passed'}`}>{d.confidence}%</span></td>
+                        <td style={{ fontSize: '0.82rem' }}>{d.reason}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>Brak duplikatów wśród otwartych bugów tego produktu.</div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
+              <button type="button" className="btn" onClick={() => setTriage(null)}>Zamknij</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {drawerOpen && (
         <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)}>
