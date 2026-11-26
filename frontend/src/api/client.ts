@@ -770,6 +770,15 @@ export const api = {
     request<TestCase>(`/api/v1/testcases/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   cloneTestCase: (id: number, summary?: string) =>
     request<TestCase>(`/api/v1/testcases/${id}/clone`, { method: 'POST', body: JSON.stringify({ summary: summary || '' }) }),
+  fetchReportHtml: async (milestoneIds: number[]): Promise<string> => {
+    const token = getAuthToken()
+    const res = await fetch(`/api/v1/reports/multi/html?milestone_ids=${milestoneIds.join(',')}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const blob = await res.blob()
+    return URL.createObjectURL(blob)
+  },
   listVisualBaselines: (caseId: number) =>
     request<{ items: VisualBaseline[] }>(`/api/v1/testcases/${caseId}/visual-baselines`),
   addVisualBaseline: (caseId: number, attachmentId: number, label?: string) =>

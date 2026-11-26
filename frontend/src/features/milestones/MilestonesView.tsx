@@ -43,6 +43,7 @@ export function MilestonesView() {
   const [runs, setRuns] = useState<TestRun[]>([])
   const [runId, setRunId] = useState(0)
   const [signoffNote, setSignoffNote] = useState('')
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -185,6 +186,22 @@ export function MilestonesView() {
     <div className="view">
       <div className="view-header">
         <h1>Milestones &amp; Releases</h1>
+        <button
+          type="button"
+          className="btn"
+          disabled={selectedIds.length === 0}
+          onClick={async () => {
+            try {
+              const url = await api.fetchReportHtml(selectedIds)
+              window.open(url, '_blank', 'noopener,noreferrer')
+              setTimeout(() => URL.revokeObjectURL(url), 60_000)
+            } catch {
+              notify('Failed to generate report', 'error')
+            }
+          }}
+        >
+          Report ({selectedIds.length})
+        </button>
         <button type="button" className="btn btn-primary" onClick={openCreate}>
           <Plus size={16} /> New Milestone
         </button>
@@ -217,6 +234,14 @@ export function MilestonesView() {
         <table className="table">
           <thead>
             <tr>
+              <th style={{ width: '2rem' }}>
+                <input
+                  type="checkbox"
+                  checked={items.length > 0 && selectedIds.length === items.length}
+                  onChange={() => setSelectedIds(selectedIds.length === items.length ? [] : items.map((m) => m.id))}
+                  aria-label="Select all milestones"
+                />
+              </th>
               <th>Name</th>
               <th>Due</th>
               <th>Status</th>
@@ -229,6 +254,14 @@ export function MilestonesView() {
             {items.map((m) => (
               <>
                 <tr key={m.id}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(m.id)}
+                      onChange={() => setSelectedIds((prev) => prev.includes(m.id) ? prev.filter((x) => x !== m.id) : [...prev, m.id])}
+                      aria-label={`Select milestone ${m.name}`}
+                    />
+                  </td>
                   <td>
                     <button type="button" className="btn btn-sm" onClick={() => toggleExpand(m.id)} style={{ marginRight: '0.25rem' }}>
                       {expandedId === m.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -256,7 +289,7 @@ export function MilestonesView() {
                 </tr>
                 {expandedId === m.id && (
                   <tr key={`${m.id}-detail`}>
-                    <td colSpan={6}>
+                    <td colSpan={7}>
                       <div style={{ padding: '0.5rem 0', display: 'grid', gap: '0.5rem' }}>
                         {progress[m.id] && (
                           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', fontSize: '0.85rem' }}>

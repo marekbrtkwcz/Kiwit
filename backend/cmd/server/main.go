@@ -49,6 +49,7 @@ import (
 	"github.com/kiwit/kiwit/internal/platform/db"
 	"github.com/kiwit/kiwit/internal/plugin"
 	"github.com/kiwit/kiwit/internal/property"
+	"github.com/kiwit/kiwit/internal/report"
 	"github.com/kiwit/kiwit/internal/requirement"
 	"github.com/kiwit/kiwit/internal/search"
 	"github.com/kiwit/kiwit/internal/settings"
@@ -281,6 +282,7 @@ func main() {
 	}
 	attachment.RegisterRoutes(router, attachmentRepo, store, guard)
 	visual.RegisterRoutes(api, visual.NewStore(sqlDBConn, pgPoolConn), attachmentRepo, store, guard)
+	report.RegisterRoutes(api, router, report.NewStore(sqlDBConn, pgPoolConn), guard)
 	xmlrpc.NewHandlerWithWebhooks(authSvc, sqlDBConn, version.VERSION, cfg.UploadDir, webhookStore).Register(router)
 	initdb.Register(router, initdb.NewStore(sqlDBConn, pgPoolConn))
 	menu.Register(router)
