@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -36,6 +37,11 @@ type Config struct {
 	LDAPUserFilter    string // e.g. (uid=%s)
 	LDAPUsernameAttr  string
 	LDAPEmailAttr     string
+	LogLevel          string
+	LogFormat         string // "json" (default) or "text"
+	LogFile           string // empty = stdout only
+	LogMaxSizeMB      int
+	LogMaxFiles       int
 }
 
 // LDAPEnabled reports whether LDAP auth is configured.
@@ -77,6 +83,11 @@ func Load() Config {
 		LDAPUserFilter:    getEnv("KIWIT_LDAP_USER_FILTER", "(uid=%s)"),
 		LDAPUsernameAttr:  getEnv("KIWIT_LDAP_USERNAME_ATTR", "uid"),
 		LDAPEmailAttr:     getEnv("KIWIT_LDAP_EMAIL_ATTR", "mail"),
+		LogLevel:          strings.ToLower(getEnv("KIWIT_LOG_LEVEL", "info")),
+		LogFormat:         strings.ToLower(getEnv("KIWIT_LOG_FORMAT", "json")),
+		LogFile:           getEnv("KIWIT_LOG_FILE", ""),
+		LogMaxSizeMB:      getEnvInt("KIWIT_LOG_MAX_SIZE", 10),
+		LogMaxFiles:       getEnvInt("KIWIT_LOG_MAX_FILES", 3),
 	}
 }
 
@@ -86,6 +97,18 @@ func getEnvBool(key string, fallback bool) bool {
 		return fallback
 	}
 	return v == "1" || v == "true" || v == "yes"
+}
+
+func getEnvInt(key string, fallback int) int {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n <= 0 {
+		return fallback
+	}
+	return n
 }
 
 // Validate checks that required security settings are configured safely for the active environment.

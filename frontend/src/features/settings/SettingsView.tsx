@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bell, Bug, Layers, Sliders, Webhook as WebhookIcon } from 'lucide-react'
+import { Bell, Bug, Layers, ScrollText, Sliders, Webhook as WebhookIcon } from 'lucide-react'
 import {
   api,
   EmailSettingsItem,
@@ -16,6 +16,7 @@ import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 import { CustomFieldDefsSection } from './CustomFieldDefsSection'
 import { AIServersSection } from './AIServersSection'
+import { LogViewerSection } from './LogViewerSection'
 
 function parseProperties(raw: string): Record<string, string> {
   const out: Record<string, string> = {}
@@ -31,7 +32,7 @@ function parseProperties(raw: string): Record<string, string> {
 export function SettingsView() {
   const { t } = useI18n()
   const { notify } = useWorkspace()
-  const [tab, setTab] = useState<'trackers' | 'env' | 'dicts' | 'notify' | 'webhooks'>('trackers')
+  const [tab, setTab] = useState<'trackers' | 'env' | 'dicts' | 'notify' | 'webhooks' | 'logs'>('trackers')
 
   const [trackers, setTrackers] = useState<IssueTrackerItem[]>([])
   const [environments, setEnvironments] = useState<EnvironmentItem[]>([])
@@ -149,6 +150,11 @@ export function SettingsView() {
         {isAdmin && (
           <button type="button" className={`tab-btn ${tab === 'webhooks' ? 'active' : ''}`} onClick={() => setTab('webhooks')}>
             <WebhookIcon size={15} /> {t.settings.tabWebhooks} ({webhooks.length})
+          </button>
+        )}
+        {isAdmin && (
+          <button type="button" className={`tab-btn ${tab === 'logs' ? 'active' : ''}`} onClick={() => setTab('logs')}>
+            <ScrollText size={15} /> {t.settings.tabLogs}
           </button>
         )}
       </div>
@@ -475,6 +481,8 @@ export function SettingsView() {
           </form>
         </div>
       )}
+
+      {isAdmin && tab === 'logs' && <LogViewerSection />}
 
       {isAdmin && tab === 'webhooks' && (
         <div className="card" style={{ display: 'grid', gap: '0.85rem' }}>

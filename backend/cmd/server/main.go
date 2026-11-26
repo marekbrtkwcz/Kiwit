@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -25,9 +26,9 @@ import (
 	"github.com/kiwit/kiwit/internal/attachment"
 	"github.com/kiwit/kiwit/internal/audit"
 	"github.com/kiwit/kiwit/internal/auth"
-	"github.com/kiwit/kiwit/internal/captcha"
 	"github.com/kiwit/kiwit/internal/bug"
 	"github.com/kiwit/kiwit/internal/campaign"
+	"github.com/kiwit/kiwit/internal/captcha"
 	"github.com/kiwit/kiwit/internal/classification"
 	"github.com/kiwit/kiwit/internal/comment"
 	"github.com/kiwit/kiwit/internal/customfield"
@@ -40,16 +41,17 @@ import (
 	"github.com/kiwit/kiwit/internal/issuetracker"
 	"github.com/kiwit/kiwit/internal/linkref"
 	"github.com/kiwit/kiwit/internal/llm"
+	"github.com/kiwit/kiwit/internal/management"
+	"github.com/kiwit/kiwit/internal/markdown"
 	"github.com/kiwit/kiwit/internal/menu"
 	"github.com/kiwit/kiwit/internal/milestone"
-	"github.com/kiwit/kiwit/internal/permissions"
-	"github.com/kiwit/kiwit/internal/markdown"
-	"github.com/kiwit/kiwit/internal/management"
 	"github.com/kiwit/kiwit/internal/notification"
 	"github.com/kiwit/kiwit/internal/notify"
+	"github.com/kiwit/kiwit/internal/permissions"
 	"github.com/kiwit/kiwit/internal/plantype"
 	"github.com/kiwit/kiwit/internal/platform/config"
 	"github.com/kiwit/kiwit/internal/platform/db"
+	"github.com/kiwit/kiwit/internal/platform/logging"
 	"github.com/kiwit/kiwit/internal/plugin"
 	"github.com/kiwit/kiwit/internal/property"
 	"github.com/kiwit/kiwit/internal/report"
@@ -61,18 +63,47 @@ import (
 	"github.com/kiwit/kiwit/internal/testcase"
 	"github.com/kiwit/kiwit/internal/testplan"
 	"github.com/kiwit/kiwit/internal/testrun"
-	"github.com/kiwit/kiwit/internal/web"
 	"github.com/kiwit/kiwit/internal/version"
 	"github.com/kiwit/kiwit/internal/visual"
+	"github.com/kiwit/kiwit/internal/web"
 	"github.com/kiwit/kiwit/internal/webhook"
 	"github.com/kiwit/kiwit/internal/xmlrpc"
 )
 
 func main() {
 	cfg := config.Load()
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
+
+	// Logging: level and format from env, optional rotating file output,
+	// plus an in-memory ring for the admin log viewer.
+	level := slog.LevelInfo
+	switch cfg.LogLevel {
+	case "debug":
+		level = slog.LevelDebug
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	}
+	out := io.Writer(os.Stdout)
+	if cfg.LogFile != "" {
+		fw, err := logging.NewRotateWriter(cfg.LogFile, int64(cfg.LogMaxSizeMB)*1024*1024, cfg.LogMaxFiles)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "failed to open KIWIT_LOG_FILE:", err)
+			os.Exit(1)
+		}
+		out = io.MultiWriter(os.Stdout, fw)
+	}
+	opts := &slog.HandlerOptions{Level: level}
+	var base slog.Handler
+	if cfg.LogFormat == "text" {
+		base = slog.NewTextHandler(out, opts)
+	} else {
+		base = slog.NewJSONHandler(out, opts)
+	}
+	logRing := logging.NewRing(2000, level)
+	logger := slog.New(logging.NewFanout(base, logRing))
+	slog.SetDefault(logger)
+
 	if err := cfg.Validate(); err != nil {
 		logger.Error("invalid configuration", "err", err)
 		os.Exit(1)
@@ -289,6 +320,7 @@ func main() {
 	campaign.RegisterRoutes(api, campaign.NewStore(sqlDBConn, pgPoolConn), guard)
 	ai.RegisterRoutes(api, llm.NewServerStore(sqlDBConn, pgPoolConn), testCaseRepo, requirement.NewStore(sqlDBConn, pgPoolConn), guard)
 	ai.RegisterServerRoutes(api, llm.NewServerStore(sqlDBConn, pgPoolConn))
+	logging.RegisterRoutes(api, logRing)
 	ai.RegisterExtraRoutes(api, llm.NewServerStore(sqlDBConn, pgPoolConn), testRunRepo, guard)
 	ai.RegisterSearchRoutes(api, llm.NewServerStore(sqlDBConn, pgPoolConn), sqlDBConn, pgPoolConn)
 	ai.RegisterVisualRoutes(api, llm.NewServerStore(sqlDBConn, pgPoolConn), visual.NewStore(sqlDBConn, pgPoolConn), attachmentRepo, store, guard)

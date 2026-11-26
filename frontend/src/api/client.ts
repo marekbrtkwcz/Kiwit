@@ -891,6 +891,13 @@ export const api = {
     request<{ datasets: { name: string; params: string; rationale: string }[]; model: string }>('/api/v1/ai/generate-datasets', { method: 'POST', body: JSON.stringify({ test_case_id: caseId, count }) }),
   aiDashboardTldr: (body: { product_id?: number; from?: string; to?: string }) =>
     request<{ summary: string; model: string }>('/api/v1/ai/dashboard-tldr', { method: 'POST', body: JSON.stringify(body) }),
+  getLogs: (params?: { level?: string; limit?: number }) => {
+    const q = new URLSearchParams()
+    if (params?.level) q.set('level', params.level)
+    if (params?.limit) q.set('limit', String(params.limit))
+    const qs = q.toString()
+    return request<{ items: { time: string; level: string; message: string; attrs?: Record<string, string> }[] }>(`/api/v1/admin/logs${qs ? `?${qs}` : ''}`)
+  },
   listVisualBaselines: (caseId: number) =>
     request<{ items: VisualBaseline[] }>(`/api/v1/testcases/${caseId}/visual-baselines`),
   addVisualBaseline: (caseId: number, attachmentId: number, label?: string) =>
