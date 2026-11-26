@@ -29,6 +29,7 @@ import { useI18n } from '../../i18n'
 import { AttachmentsPanel } from '../attachments/AttachmentsPanel'
 import { CaseDatasetsPanel } from './CaseDatasetsPanel'
 import { CustomFieldsPanel } from '../../components/CustomFieldsPanel'
+import { VisualBaselinesPanel } from './VisualBaselinesPanel'
 import { CommentsPanel } from '../comments/CommentsPanel'
 import { EntityTagsBar } from '../management/EntityTagsBar'
 
@@ -771,6 +772,9 @@ export function TestCasesView() {
                   </div>
                   <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
                     <CustomFieldsPanel entityType="test_case" entityId={editingId} />
+                  </div>
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+                    <VisualBaselinesPanel caseId={editingId} />
                   </div>
                 </>
               )}

@@ -18,7 +18,7 @@ import {
   XCircle,
   Ban,
 } from 'lucide-react'
-import { api, BugItem, Build, EnvironmentItem, ExecutionLinkItem, IssueTrackerItem, TestExecution, TestPlan, TestRun } from '../../api/client'
+import { api, VisualComparison, BugItem, Build, EnvironmentItem, ExecutionLinkItem, IssueTrackerItem, TestExecution, TestPlan, TestRun } from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 import { AttachmentsPanel } from '../attachments/AttachmentsPanel'
@@ -255,6 +255,7 @@ export function TestRunsView() {
   const [executions, setExecutions] = useState<TestExecution[]>([])
   const [activeExecId, setActiveExecId] = useState<number | null>(null)
   const [selectedExecIds, setSelectedExecIds] = useState<number[]>([])
+  const [visualResults, setVisualResults] = useState<Record<number, VisualComparison[]>>({})
   const [bulkStatus, setBulkStatus] = useState('passed')
 
   const [filterStatus, setFilterStatus] = useState<'' | 'running' | 'stopped'>('')
@@ -786,6 +787,28 @@ export function TestRunsView() {
                       <button
                         type="button"
                         className="btn btn-sm"
+                        title="Compare first screenshot of this execution against the latest visual baseline"
+                        onClick={async () => {
+                          try {
+                            const shots = await api.listExecutionScreenshots(activeExec.id)
+                            if ((shots.items ?? []).length === 0) {
+                              notify('No screenshots on this execution', 'error')
+                              return
+                            }
+                            const res = await api.visualCompare(activeExec.id, shots.items[0].id)
+                            notify(`Visual: ${res.verdict} (${res.diff_percent.toFixed(2)}% diff)`)
+                            const list = await api.listVisualComparisons(activeExec.id)
+                            setVisualResults((prev) => ({ ...prev, [activeExec.id]: list.items ?? [] }))
+                          } catch (err) {
+                            notify(err instanceof Error ? err.message : 'Visual compare failed', 'error')
+                          }
+                        }}
+                      >
+                        Visual compare
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
                         title="Create one execution per dataset of this test case"
                         onClick={async () => {
                           try {
@@ -806,6 +829,18 @@ export function TestRunsView() {
                     <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
                       <ExecutionBugsPanel executionId={activeExec.id} trackers={trackers} />
                     </div>
+                    {visualResults[activeExec.id] && visualResults[activeExec.id].length > 0 && (
+                      <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem', display: 'grid', gap: '0.3rem' }}>
+                        <strong style={{ fontSize: '0.85rem' }}>Visual comparisons</strong>
+                        {visualResults[activeExec.id].map((c) => (
+                          <div key={c.id} style={{ fontSize: '0.82rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                            <span className={`badge badge-${c.verdict === 'match' ? 'passed' : c.verdict === 'mismatch' ? 'failed' : 'idle'}`}>{c.verdict}</span>
+                            <span>{c.diff_percent.toFixed(2)}% diff</span>
+                            <span style={{ color: 'var(--muted)' }}>{new Date(c.created_at).toLocaleTimeString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
                       <ScreenshotsGallery executionId={activeExec.id} />
                     </div>

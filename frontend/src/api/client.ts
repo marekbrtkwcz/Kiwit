@@ -192,6 +192,24 @@ export interface TestExecution {
   dataset_name?: string
 }
 
+export interface VisualBaseline {
+  id: number
+  test_case_id: number
+  attachment_id: number
+  label?: string
+  created_at: string
+}
+
+export interface VisualComparison {
+  id: number
+  execution_id: number
+  baseline_id: number
+  attachment_id: number
+  diff_percent: number
+  verdict: 'match' | 'mismatch' | 'no-baseline'
+  created_at: string
+}
+
 export interface ExploratorySession {
   id: number
   product_id: number
@@ -752,6 +770,15 @@ export const api = {
     request<TestCase>(`/api/v1/testcases/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   cloneTestCase: (id: number, summary?: string) =>
     request<TestCase>(`/api/v1/testcases/${id}/clone`, { method: 'POST', body: JSON.stringify({ summary: summary || '' }) }),
+  listVisualBaselines: (caseId: number) =>
+    request<{ items: VisualBaseline[] }>(`/api/v1/testcases/${caseId}/visual-baselines`),
+  addVisualBaseline: (caseId: number, attachmentId: number, label?: string) =>
+    request<VisualBaseline>(`/api/v1/testcases/${caseId}/visual-baselines`, { method: 'POST', body: JSON.stringify({ attachment_id: attachmentId, label }) }),
+  deleteVisualBaseline: (id: number) => request<void>(`/api/v1/visual-baselines/${id}`, { method: 'DELETE' }),
+  visualCompare: (executionId: number, attachmentId: number, baselineId = 0) =>
+    request<VisualComparison>(`/api/v1/executions/${executionId}/visual-compare`, { method: 'POST', body: JSON.stringify({ attachment_id: attachmentId, baseline_id: baselineId }) }),
+  listVisualComparisons: (executionId: number) =>
+    request<{ items: VisualComparison[] }>(`/api/v1/executions/${executionId}/visual-comparisons`),
   listExploratory: (productId?: number) =>
     request<{ items: ExploratorySession[] }>(`/api/v1/exploratory${productId ? `?product_id=${productId}` : ''}`),
   createExploratory: (body: { product_id: number; test_run_id?: number; charter: string; timebox_minutes?: number; notes?: string; findings?: string }) =>
