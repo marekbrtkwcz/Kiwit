@@ -15,7 +15,7 @@ import (
 
 // RegisterExtraRoutes mounts AI helpers: run summary, bug severity suggestion,
 // Gherkin → automation code.
-func RegisterExtraRoutes(api huma.API, cfg llm.Config, runRepo testrun.Repository, guard *auth.AccessGuard) {
+func RegisterExtraRoutes(api huma.API, servers *llm.ServerStore, runRepo testrun.Repository, guard *auth.AccessGuard) {
 	// POST /api/v1/ai/summarize-run — narrative summary of a test run.
 	huma.Register(api, huma.Operation{
 		OperationID: "ai-summarize-run",
@@ -26,6 +26,7 @@ func RegisterExtraRoutes(api huma.API, cfg llm.Config, runRepo testrun.Repositor
 	}, func(ctx context.Context, input *struct {
 		Body struct {
 			TestRunID int64 `json:"test_run_id"`
+			ServerID  int64 `json:"server_id,omitempty"`
 		}
 	}) (*struct {
 		Body struct {
@@ -36,8 +37,9 @@ func RegisterExtraRoutes(api huma.API, cfg llm.Config, runRepo testrun.Repositor
 		if err := auth.CheckWriteRole(ctx, "admin", "tester"); err != nil {
 			return nil, err
 		}
-		if !cfg.Enabled() {
-			return nil, huma.Error503ServiceUnavailable("LLM not configured — set KIWIT_LLM_API_KEY")
+		cfg, _, err := resolve(ctx, servers, input.Body.ServerID)
+		if err != nil {
+			return nil, err
 		}
 		if err := guard.EnforceTestRun(ctx, input.Body.TestRunID, false); err != nil {
 			return nil, err
@@ -89,6 +91,7 @@ func RegisterExtraRoutes(api huma.API, cfg llm.Config, runRepo testrun.Repositor
 		Body struct {
 			Summary     string `json:"summary"`
 			Description string `json:"description,omitempty"`
+			ServerID    int64  `json:"server_id,omitempty"`
 		}
 	}) (*struct {
 		Body struct {
@@ -100,8 +103,9 @@ func RegisterExtraRoutes(api huma.API, cfg llm.Config, runRepo testrun.Repositor
 		if err := auth.CheckWriteRole(ctx, "admin", "tester"); err != nil {
 			return nil, err
 		}
-		if !cfg.Enabled() {
-			return nil, huma.Error503ServiceUnavailable("LLM not configured — set KIWIT_LLM_API_KEY")
+		cfg, _, err := resolve(ctx, servers, input.Body.ServerID)
+		if err != nil {
+			return nil, err
 		}
 		if strings.TrimSpace(input.Body.Summary) == "" {
 			return nil, huma.Error400BadRequest("summary required")
@@ -148,7 +152,8 @@ func RegisterExtraRoutes(api huma.API, cfg llm.Config, runRepo testrun.Repositor
 		Tags:        []string{"AI"},
 	}, func(ctx context.Context, input *struct {
 		Body struct {
-			Gherkin string `json:"gherkin"`
+			Gherkin  string `json:"gherkin"`
+			ServerID int64  `json:"server_id,omitempty"`
 		}
 	}) (*struct {
 		Body struct {
@@ -159,8 +164,9 @@ func RegisterExtraRoutes(api huma.API, cfg llm.Config, runRepo testrun.Repositor
 		if err := auth.CheckWriteRole(ctx, "admin", "tester"); err != nil {
 			return nil, err
 		}
-		if !cfg.Enabled() {
-			return nil, huma.Error503ServiceUnavailable("LLM not configured — set KIWIT_LLM_API_KEY")
+		cfg, _, err := resolve(ctx, servers, input.Body.ServerID)
+		if err != nil {
+			return nil, err
 		}
 		if strings.TrimSpace(input.Body.Gherkin) == "" {
 			return nil, huma.Error400BadRequest("gherkin required")

@@ -192,6 +192,35 @@ export interface TestExecution {
   dataset_name?: string
 }
 
+export interface AIServer {
+  id: number
+  name: string
+  provider: string
+  base_url: string
+  model: string
+  api_key?: string
+  temperature: number
+  max_tokens: number
+  timeout_sec: number
+  retries: number
+  is_default: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface AIServerInput {
+  name: string
+  provider?: string
+  base_url: string
+  model: string
+  api_key?: string
+  temperature?: number
+  max_tokens?: number
+  timeout_sec?: number
+  retries?: number
+  is_default?: boolean
+}
+
 export interface Campaign {
   id: number
   product_id: number
@@ -832,6 +861,12 @@ export const api = {
     request<{ severity: string; title: string; model: string }>('/api/v1/ai/suggest-bug', { method: 'POST', body: JSON.stringify(body) }),
   aiGenerateSteps: (gherkin: string) =>
     request<{ code: string; model: string }>('/api/v1/ai/generate-steps', { method: 'POST', body: JSON.stringify({ gherkin }) }),
+  listAIServers: () => request<{ items: AIServer[] }>('/api/v1/admin/ai-servers'),
+  createAIServer: (body: AIServerInput) =>
+    request<AIServer>('/api/v1/admin/ai-servers', { method: 'POST', body: JSON.stringify(body) }),
+  updateAIServer: (id: number, body: AIServerInput) =>
+    request<AIServer>(`/api/v1/admin/ai-servers/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteAIServer: (id: number) => request<void>(`/api/v1/admin/ai-servers/${id}`, { method: 'DELETE' }),
   aiGenerateTests: (body: { product_id: number; requirement_id?: number; text?: string; max_scenarios?: number }) =>
     request<{ created: { id: number; summary: string }[]; gherkin: string; model: string; scenarios: number }>('/api/v1/ai/generate-tests', { method: 'POST', body: JSON.stringify(body) }),
   listVisualBaselines: (caseId: number) =>

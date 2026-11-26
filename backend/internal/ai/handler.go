@@ -30,7 +30,7 @@ type generateOutput struct {
 // RegisterRoutes mounts the AI test-generation endpoint.
 // POST /api/v1/ai/generate-tests — LLM writes Gherkin from a requirement,
 // scenarios become draft gherkin test cases linked to the requirement.
-func RegisterRoutes(api huma.API, cfg llm.Config, tcRepo testcase.Repository, reqStore *requirement.Store, guard *auth.AccessGuard) {
+func RegisterRoutes(api huma.API, servers *llm.ServerStore, tcRepo testcase.Repository, reqStore *requirement.Store, guard *auth.AccessGuard) {
 	huma.Register(api, huma.Operation{
 		OperationID: "ai-generate-tests",
 		Method:      http.MethodPost,
@@ -43,13 +43,15 @@ func RegisterRoutes(api huma.API, cfg llm.Config, tcRepo testcase.Repository, re
 			RequirementID  int64  `json:"requirement_id,omitempty" doc:"Use this requirement's text as input and link results"`
 			Text           string `json:"text,omitempty" doc:"Free-form requirement text (used when requirement_id is 0)"`
 			MaxScenarios   int    `json:"max_scenarios,omitempty" default:"5"`
+			ServerID       int64  `json:"server_id,omitempty" doc:"AI server to use (0 = default)"`
 		}
 	}) (*generateOutput, error) {
 		if err := auth.CheckWriteRole(ctx, "admin", "tester"); err != nil {
 			return nil, err
 		}
-		if !cfg.Enabled() {
-			return nil, huma.Error503ServiceUnavailable("LLM not configured — set KIWIT_LLM_API_KEY (and KIWIT_LLM_BASE_URL / KIWIT_LLM_MODEL)")
+		cfg, serverName, err := resolve(ctx, servers, input.Body.ServerID)
+		if err != nil {
+			return nil, err
 		}
 		if err := guard.EnforceProduct(ctx, input.Body.ProductID, true); err != nil {
 			return nil, err
@@ -122,7 +124,7 @@ func RegisterRoutes(api huma.API, cfg llm.Config, tcRepo testcase.Repository, re
 		out := &generateOutput{}
 		out.Body.Created = created
 		out.Body.Gherkin = gherkin
-		out.Body.Model = cfg.Model
+		out.Body.Model = cfg.Model + " (" + serverName + ")"
 		out.Body.Scenarios = len(created)
 		return out, nil
 	})
