@@ -296,6 +296,7 @@ func main() {
 	ai.RegisterRequirementRoutes(api, llm.NewServerStore(sqlDBConn, pgPoolConn), requirement.NewStore(sqlDBConn, pgPoolConn), guard)
 	ai.RegisterBugRoutes(api, llm.NewServerStore(sqlDBConn, pgPoolConn), bug.NewStore(sqlDBConn, pgPoolConn), guard)
 	ai.RegisterReportRoutes(api, llm.NewServerStore(sqlDBConn, pgPoolConn), report.NewStore(sqlDBConn, pgPoolConn), guard)
+	ai.RegisterDatasetRoutes(api, llm.NewServerStore(sqlDBConn, pgPoolConn), testCaseRepo, dataset.NewStore(sqlDBConn, pgPoolConn), customfield.NewStore(sqlDBConn, pgPoolConn), guard)
 	xmlrpc.NewHandlerWithWebhooks(authSvc, sqlDBConn, version.VERSION, cfg.UploadDir, webhookStore).Register(router)
 	initdb.Register(router, initdb.NewStore(sqlDBConn, pgPoolConn))
 	menu.Register(router)

@@ -887,6 +887,8 @@ export const api = {
     request<{ charter: string; model: string }>('/api/v1/ai/generate-charter', { method: 'POST', body: JSON.stringify({ objective }) }),
   aiNotesToFindings: (sessionId: number) =>
     request<{ findings: string[]; model: string }>('/api/v1/ai/notes-to-findings', { method: 'POST', body: JSON.stringify({ session_id: sessionId }) }),
+  aiGenerateDatasets: (caseId: number, count = 5) =>
+    request<{ datasets: { name: string; params: string; rationale: string }[]; model: string }>('/api/v1/ai/generate-datasets', { method: 'POST', body: JSON.stringify({ test_case_id: caseId, count }) }),
   listVisualBaselines: (caseId: number) =>
     request<{ items: VisualBaseline[] }>(`/api/v1/testcases/${caseId}/visual-baselines`),
   addVisualBaseline: (caseId: number, attachmentId: number, label?: string) =>

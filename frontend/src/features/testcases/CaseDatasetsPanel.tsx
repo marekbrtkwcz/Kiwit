@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Database, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Database, Pencil, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import { api, Dataset } from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
+
+type Proposal = { name: string; params: string; rationale: string }
 
 // CaseDatasetsPanel manages data-driven datasets of a test case.
 export function CaseDatasetsPanel({ caseId }: { caseId: number }) {
@@ -10,6 +12,10 @@ export function CaseDatasetsPanel({ caseId }: { caseId: number }) {
   const [name, setName] = useState('')
   const [params, setParams] = useState('{}')
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [aiBusy, setAiBusy] = useState(false)
+  const [proposals, setProposals] = useState<Proposal[] | null>(null)
+  const [selected, setSelected] = useState<Record<number, boolean>>({})
+  const [saving, setSaving] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -53,10 +59,46 @@ export function CaseDatasetsPanel({ caseId }: { caseId: number }) {
     }
   }
 
+  const generate = async () => {
+    setAiBusy(true)
+    setProposals(null)
+    try {
+      const res = await api.aiGenerateDatasets(caseId)
+      setProposals(res.datasets)
+      setSelected(Object.fromEntries(res.datasets.map((_, i) => [i, true])))
+    } catch (e) {
+      notify(e instanceof Error ? e.message : 'AI generation failed', 'error')
+    } finally {
+      setAiBusy(false)
+    }
+  }
+
+  const saveProposals = async () => {
+    if (!proposals) return
+    setSaving(true)
+    try {
+      for (let i = 0; i < proposals.length; i++) {
+        if (selected[i]) {
+          await api.createDataset(caseId, { name: proposals[i].name, params: proposals[i].params })
+        }
+      }
+      notify('Datasets added')
+      setProposals(null)
+      await load()
+    } catch {
+      notify('Params must be valid JSON', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div style={{ display: 'grid', gap: '0.45rem' }}>
       <strong style={{ fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
         <Database size={14} /> Datasets (data-driven)
+        <button type="button" className="btn btn-sm" onClick={generate} disabled={aiBusy} aria-label="Generate datasets with AI">
+          <Sparkles size={12} /> {aiBusy ? 'Generating…' : 'AI'}
+        </button>
       </strong>
       {items.map((d) => (
         <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}>
@@ -95,6 +137,31 @@ export function CaseDatasetsPanel({ caseId }: { caseId: number }) {
           </button>
         )}
       </div>
+      {proposals && (
+        <div className="modal-backdrop" onClick={() => setProposals(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="AI dataset proposals">
+            <h2>AI dataset proposals</h2>
+            <div style={{ display: 'grid', gap: '0.5rem', maxHeight: '50vh', overflowY: 'auto' }}>
+              {proposals.map((p, i) => (
+                <label key={i} style={{ display: 'grid', gap: '0.15rem', padding: '0.35rem', border: '1px solid var(--border)', borderRadius: 6 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}>
+                    <input type="checkbox" checked={!!selected[i]} onChange={(e) => setSelected((s) => ({ ...s, [i]: e.target.checked }))} />
+                    <strong>{p.name}</strong>
+                  </span>
+                  <code style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)' }}>{p.params}</code>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{p.rationale}</span>
+                </label>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
+              <button type="button" className="btn" onClick={() => setProposals(null)}>Cancel</button>
+              <button type="button" className="btn btn-primary" onClick={saveProposals} disabled={saving || !Object.values(selected).some(Boolean)}>
+                {saving ? 'Saving…' : 'Add selected'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
