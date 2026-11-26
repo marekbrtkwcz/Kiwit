@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
+  Bot,
   ChevronDown,
   ChevronUp,
   Link2,
@@ -252,6 +253,22 @@ export function RequirementsView() {
                   <td style={{ display: 'flex', gap: '0.25rem' }}>
                     <button type="button" className="btn btn-sm" title="Coverage" onClick={() => toggleExpand(r.id)}>
                       {expandedId === r.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      title="Generate draft Gherkin test cases from this requirement (AI)"
+                      onClick={async () => {
+                        try {
+                          const res = await api.aiGenerateTests({ product_id: r.product_id, requirement_id: r.id })
+                          notify(`AI generated ${res.scenarios} draft test case(s) via ${res.model}`)
+                          if (expandedId === r.id) await loadCoverage(r.id)
+                        } catch (err) {
+                          notify(err instanceof Error ? err.message : 'AI generation failed', 'error')
+                        }
+                      }}
+                    >
+                      <Bot size={14} />
                     </button>
                     <button type="button" className="btn btn-sm" title="Edit" onClick={() => openEdit(r)}>
                       <Pencil size={14} />

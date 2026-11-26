@@ -21,6 +21,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/kiwit/kiwit/internal/ai"
 	"github.com/kiwit/kiwit/internal/attachment"
 	"github.com/kiwit/kiwit/internal/audit"
 	"github.com/kiwit/kiwit/internal/auth"
@@ -38,6 +39,7 @@ import (
 	"github.com/kiwit/kiwit/internal/initdb"
 	"github.com/kiwit/kiwit/internal/issuetracker"
 	"github.com/kiwit/kiwit/internal/linkref"
+	"github.com/kiwit/kiwit/internal/llm"
 	"github.com/kiwit/kiwit/internal/menu"
 	"github.com/kiwit/kiwit/internal/milestone"
 	"github.com/kiwit/kiwit/internal/permissions"
@@ -285,6 +287,7 @@ func main() {
 	visual.RegisterRoutes(api, visual.NewStore(sqlDBConn, pgPoolConn), attachmentRepo, store, guard)
 	report.RegisterRoutes(api, router, report.NewStore(sqlDBConn, pgPoolConn), guard)
 	campaign.RegisterRoutes(api, campaign.NewStore(sqlDBConn, pgPoolConn), guard)
+	ai.RegisterRoutes(api, llm.LoadConfig(), testCaseRepo, requirement.NewStore(sqlDBConn, pgPoolConn), guard)
 	xmlrpc.NewHandlerWithWebhooks(authSvc, sqlDBConn, version.VERSION, cfg.UploadDir, webhookStore).Register(router)
 	initdb.Register(router, initdb.NewStore(sqlDBConn, pgPoolConn))
 	menu.Register(router)

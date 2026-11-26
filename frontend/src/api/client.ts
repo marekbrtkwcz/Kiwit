@@ -826,6 +826,8 @@ export const api = {
   deleteIteration: (id: number) => request<void>(`/api/v1/iterations/${id}`, { method: 'DELETE' }),
   assignPlanToCampaign: (campaignId: number, testPlanId: number, iterationId?: number) =>
     request<void>(`/api/v1/campaigns/${campaignId}/assign-plan`, { method: 'POST', body: JSON.stringify({ test_plan_id: testPlanId, iteration_id: iterationId }) }),
+  aiGenerateTests: (body: { product_id: number; requirement_id?: number; text?: string; max_scenarios?: number }) =>
+    request<{ created: { id: number; summary: string }[]; gherkin: string; model: string; scenarios: number }>('/api/v1/ai/generate-tests', { method: 'POST', body: JSON.stringify(body) }),
   listVisualBaselines: (caseId: number) =>
     request<{ items: VisualBaseline[] }>(`/api/v1/testcases/${caseId}/visual-baselines`),
   addVisualBaseline: (caseId: number, attachmentId: number, label?: string) =>
