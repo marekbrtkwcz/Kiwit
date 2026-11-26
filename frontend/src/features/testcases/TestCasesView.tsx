@@ -28,6 +28,7 @@ import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 import { AttachmentsPanel } from '../attachments/AttachmentsPanel'
 import { CaseDatasetsPanel } from './CaseDatasetsPanel'
+import { CustomFieldsPanel } from '../../components/CustomFieldsPanel'
 import { CommentsPanel } from '../comments/CommentsPanel'
 import { EntityTagsBar } from '../management/EntityTagsBar'
 
@@ -767,6 +768,9 @@ export function TestCasesView() {
                   <AttachmentsPanel entityType="test_case" entityId={editingId} />
                   <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
                     <CaseDatasetsPanel caseId={editingId} />
+                  </div>
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+                    <CustomFieldsPanel entityType="test_case" entityId={editingId} />
                   </div>
                 </>
               )}

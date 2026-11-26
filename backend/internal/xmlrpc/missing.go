@@ -90,6 +90,12 @@ func (h *Handler) registerMissingMethods() {
 	h.register("Dataset.create", h.simpleCreate("test_case_datasets", []string{"test_case_id", "name", "params"}))
 	h.register("Dataset.update", h.simpleUpdate("test_case_datasets", []string{"name", "params"}))
 	h.register("Dataset.remove", h.dsRemove)
+
+	// --- Custom fields ---
+	h.register("CustomField.filter", h.filterRows("custom_field_defs", []string{"id", "entity_type", "name", "field_type", "options", "required", "created_at"}))
+	h.register("CustomField.create", h.simpleCreate("custom_field_defs", []string{"entity_type", "name", "field_type", "options", "required"}))
+	h.register("CustomField.update", h.simpleUpdate("custom_field_defs", []string{"name", "field_type", "options", "required"}))
+	h.register("CustomField.remove", h.cfRemove)
 }
 
 // --- generic update helper ---
@@ -667,5 +673,13 @@ func (h *Handler) dsRemove(r *http.Request, args []any) (any, error) {
 		return nil, errNoDB
 	}
 	_, err := h.db.ExecContext(r.Context(), `DELETE FROM test_case_datasets WHERE id = ?`, argInt(args[0]))
+	return map[string]any{"ok": err == nil}, err
+}
+
+func (h *Handler) cfRemove(r *http.Request, args []any) (any, error) {
+	if h.db == nil {
+		return nil, errNoDB
+	}
+	_, err := h.db.ExecContext(r.Context(), `DELETE FROM custom_field_defs WHERE id = ?`, argInt(args[0]))
 	return map[string]any{"ok": err == nil}, err
 }

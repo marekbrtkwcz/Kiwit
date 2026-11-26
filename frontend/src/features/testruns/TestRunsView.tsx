@@ -23,6 +23,7 @@ import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 import { AttachmentsPanel } from '../attachments/AttachmentsPanel'
 import { ScreenshotsGallery } from '../attachments/ScreenshotsGallery'
+import { CustomFieldsPanel } from '../../components/CustomFieldsPanel'
 import { CommentsPanel } from '../comments/CommentsPanel'
 import { EntityTagsBar } from '../management/EntityTagsBar'
 
@@ -253,6 +254,8 @@ export function TestRunsView() {
   const [selectedRunId, setSelectedRunId] = useState<number | null>(routeRunId ? Number(routeRunId) : null)
   const [executions, setExecutions] = useState<TestExecution[]>([])
   const [activeExecId, setActiveExecId] = useState<number | null>(null)
+  const [selectedExecIds, setSelectedExecIds] = useState<number[]>([])
+  const [bulkStatus, setBulkStatus] = useState('passed')
 
   const [filterStatus, setFilterStatus] = useState<'' | 'running' | 'stopped'>('')
   const [filterQ, setFilterQ] = useState('')
@@ -651,11 +654,48 @@ export function TestRunsView() {
             {filteredExecs.length === 0 ? (
               <div className="card" style={{ color: 'var(--muted)' }}>{t.testruns.emptyExecutions}</div>
             ) : (
+              <>
+              {selectedExecIds.length > 0 && (
+                <div className="card" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', padding: '0.45rem 0.6rem', marginBottom: '0.5rem' }}>
+                  <strong style={{ fontSize: '0.82rem' }}>{selectedExecIds.length} selected</strong>
+                  <select className="select" value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)} style={{ fontSize: '0.8rem' }}>
+                    {['passed', 'failed', 'blocked', 'skipped', 'running', 'idle'].map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-primary"
+                    onClick={async () => {
+                      try {
+                        const res = await api.bulkUpdateExecutions({ ids: selectedExecIds, status: bulkStatus })
+                        notify(`Updated ${res.updated} execution(s)`)
+                        setSelectedExecIds([])
+                        await loadRuns()
+                      } catch {
+                        notify('Bulk update failed', 'error')
+                      }
+                    }}
+                  >
+                    Apply status
+                  </button>
+                  <button type="button" className="btn btn-sm" onClick={() => setSelectedExecIds([])}>Clear</button>
+                </div>
+              )}
               <div className="runner-split">
                 <div className="card" style={{ padding: '0.6rem', display: 'grid', gap: '0.35rem', maxHeight: 560, overflowY: 'auto' }}>
                   {filteredExecs.map((ex) => (
-                    <button
+                    <div
                       key={ex.id}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', borderRadius: 8, border: activeExec?.id === ex.id ? '1px solid var(--primary)' : '1px solid transparent', background: activeExec?.id === ex.id ? 'var(--primary-soft)' : 'transparent' }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedExecIds.includes(ex.id)}
+                        onChange={() => setSelectedExecIds((prev) => prev.includes(ex.id) ? prev.filter((x) => x !== ex.id) : [...prev, ex.id])}
+                        aria-label={`Select execution ${ex.id}`}
+                      />
+                    <button
                       type="button"
                       onClick={() => setActiveExecId(ex.id)}
                       style={{
@@ -682,6 +722,7 @@ export function TestRunsView() {
                         <span className={`badge pill-${ex.status}`}>{ex.status}</span>
                       </span>
                     </button>
+                    </div>
                   ))}
                 </div>
 
@@ -769,6 +810,9 @@ export function TestRunsView() {
                       <ScreenshotsGallery executionId={activeExec.id} />
                     </div>
                     <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+                      <CustomFieldsPanel entityType="test_execution" entityId={activeExec.id} />
+                    </div>
+                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
                       <AttachmentsPanel entityType="test_execution" entityId={activeExec.id} />
                     </div>
                     <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
@@ -777,6 +821,7 @@ export function TestRunsView() {
                   </div>
                 )}
               </div>
+              </>
             )}
           </div>
         ) : (

@@ -35,6 +35,7 @@ import {
   TelemetryBreakdown,
   TelemetrySummary,
   TrendPoint,
+  UXMetricRow,
 } from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
@@ -62,6 +63,7 @@ export function DashboardView() {
   const [execDash, setExecDash] = useState<ExecutionDashboard | null>(null)
   const [dash, setDash] = useState<DashboardSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [uxMetrics, setUxMetrics] = useState<UXMetricRow[]>([])
 
   useEffect(() => {
     const params = {
@@ -76,14 +78,16 @@ export function DashboardView() {
       api.getTestCaseHealth(params),
       api.getTelemetryBreakdown(params),
       api.getExecutionDashboard(params),
+      api.getUXMetrics(params),
     ])
-      .then(([s, tr, mx, hl, bd, ed]) => {
+      .then(([s, tr, mx, hl, bd, ed, ux]) => {
         setSummary(s)
         setTrends(tr.items ?? [])
         setMatrix(mx.items ?? [])
         setHealth(hl.items ?? [])
         setBreakdown(bd)
         setExecDash(ed)
+        setUxMetrics(ux ?? [])
         setError(null)
       })
       .catch((err) => {
@@ -587,6 +591,29 @@ export function DashboardView() {
           )}
         </div>
       </div>
+      {uxMetrics.length > 0 && uxMetrics.some((u) => u.sessions > 0) && (
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">UX metrics (SUS)</h3>
+          </div>
+          <table className="table">
+            <thead>
+              <tr><th>Product</th><th>Sessions</th><th>Avg SUS</th><th>Avg task time (s)</th><th>Avg errors</th></tr>
+            </thead>
+            <tbody>
+              {uxMetrics.filter((u) => u.sessions > 0).map((u) => (
+                <tr key={u.product_id}>
+                  <td>{u.product_name}</td>
+                  <td>{u.sessions}</td>
+                  <td><strong>{u.avg_sus.toFixed(1)}</strong></td>
+                  <td>{u.avg_task_time_sec.toFixed(0)}</td>
+                  <td>{u.avg_errors.toFixed(1)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   )
 }

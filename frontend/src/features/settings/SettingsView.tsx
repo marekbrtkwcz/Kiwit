@@ -14,6 +14,7 @@ import {
 } from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
+import { CustomFieldDefsSection } from './CustomFieldDefsSection'
 
 function parseProperties(raw: string): Record<string, string> {
   const out: Record<string, string> = {}
@@ -591,6 +592,7 @@ export function SettingsView() {
           )}
         </div>
       )}
+          <CustomFieldDefsSection />
     </section>
   )
 }

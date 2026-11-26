@@ -121,6 +121,9 @@ func (s *Store) handleInit(w http.ResponseWriter, r *http.Request) {
 		// non-fatal — dictionaries may already exist
 		_ = err
 	}
+	if err := s.seedTemplatesAndFields(r.Context()); err != nil {
+		_ = err
+	}
 
 	writeJSON(w, http.StatusOK, initResponse{
 		OK:      true,
@@ -198,6 +201,39 @@ func (s *Store) seedDictionaries(ctx context.Context) error {
 				return err
 			}
 		}
+	}
+	return nil
+}
+
+
+// seedTemplatesAndFields inserts built-in test templates (OWASP security audit)
+// and UX metric custom fields for test executions.
+// seedTemplatesAndFields inserts built-in test templates (OWASP security audit)
+// and UX metric custom fields for test executions.
+func (s *Store) seedTemplatesAndFields(ctx context.Context) error {
+	owaspBody := "OWASP Top 10 - one line per class:\nA01 Broken Access Control\nA02 Cryptographic Failures\nA03 Injection\nA04 Insecure Design\nA05 Security Misconfiguration\nA06 Vulnerable Components\nA07 Auth Failures\nA08 Data Integrity Failures\nA09 Logging/Monitoring Failures\nA10 SSRF"
+	if s.pg != nil {
+		if _, err := s.pg.Exec(ctx, `INSERT INTO templates (name, body) VALUES ($1, $2) ON CONFLICT DO NOTHING`, "OWASP Top 10 Audit (checklist)", owaspBody); err != nil {
+			return err
+		}
+		if _, err := s.pg.Exec(ctx, `INSERT INTO custom_field_defs (entity_type, name, field_type, options, required) VALUES
+			('test_execution', 'sus_score', 'number', '[]', FALSE),
+			('test_execution', 'task_time_sec', 'number', '[]', FALSE),
+			('test_execution', 'error_count', 'number', '[]', FALSE),
+			('test_execution', 'heuristic_findings', 'text', '[]', FALSE) ON CONFLICT DO NOTHING`); err != nil {
+			return err
+		}
+		return nil
+	}
+	if _, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO templates (name, body) VALUES (?, ?)`, "OWASP Top 10 Audit (checklist)", owaspBody); err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO custom_field_defs (entity_type, name, field_type, options, required) VALUES
+		('test_execution', 'sus_score', 'number', '[]', 0),
+		('test_execution', 'task_time_sec', 'number', '[]', 0),
+		('test_execution', 'error_count', 'number', '[]', 0),
+		('test_execution', 'heuristic_findings', 'text', '[]', 0)`); err != nil {
+		return err
 	}
 	return nil
 }

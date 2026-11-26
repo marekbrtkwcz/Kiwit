@@ -192,6 +192,51 @@ export interface TestExecution {
   dataset_name?: string
 }
 
+export interface ExploratorySession {
+  id: number
+  product_id: number
+  test_run_id?: number
+  charter: string
+  timebox_minutes: number
+  tester_id?: number
+  notes?: string
+  findings: string
+  created_at: string
+  updated_at: string
+}
+
+export interface UXMetricRow {
+  product_id: number
+  product_name: string
+  sessions: number
+  avg_sus: number
+  avg_task_time_sec: number
+  avg_errors: number
+}
+
+export interface CustomFieldDef {
+  id: number
+  entity_type: string
+  name: string
+  field_type: 'text' | 'number' | 'date' | 'list' | 'multiselect' | 'boolean'
+  options: string
+  required: boolean
+  created_at: string
+}
+
+export interface CustomFieldValue {
+  id: number
+  field_id: number
+  entity_type: string
+  entity_id: number
+  value: string
+  updated_at: string
+}
+
+export interface CustomFieldWithValue extends CustomFieldDef {
+  value?: string
+}
+
 export interface Dataset {
   id: number
   test_case_id: number
@@ -707,6 +752,15 @@ export const api = {
     request<TestCase>(`/api/v1/testcases/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   cloneTestCase: (id: number, summary?: string) =>
     request<TestCase>(`/api/v1/testcases/${id}/clone`, { method: 'POST', body: JSON.stringify({ summary: summary || '' }) }),
+  listExploratory: (productId?: number) =>
+    request<{ items: ExploratorySession[] }>(`/api/v1/exploratory${productId ? `?product_id=${productId}` : ''}`),
+  createExploratory: (body: { product_id: number; test_run_id?: number; charter: string; timebox_minutes?: number; notes?: string; findings?: string }) =>
+    request<ExploratorySession>('/api/v1/exploratory', { method: 'POST', body: JSON.stringify(body) }),
+  updateExploratory: (id: number, body: { product_id: number; test_run_id?: number; charter: string; timebox_minutes?: number; tester_id?: number; notes?: string; findings?: string }) =>
+    request<ExploratorySession>(`/api/v1/exploratory/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteExploratory: (id: number) => request<void>(`/api/v1/exploratory/${id}`, { method: 'DELETE' }),
+  getUXMetrics: (params?: TelemetryFilterParams) =>
+    request<UXMetricRow[]>(`/api/v1/telemetry/ux-metrics${buildTelemetryQuery(params)}`),
   bulkUpdateTestCases: (body: { ids: number[]; status?: string; priority?: string }) =>
     request<{ updated: number }>('/api/v1/testcases/bulk', { method: 'PATCH', body: JSON.stringify(body) }),
 
@@ -813,6 +867,17 @@ export const api = {
     downloadAuthenticated(`/api/v1/attachments/${id}/download`, filename),
   deleteAttachment: (id: number) =>
     request<void>(`/api/v1/attachments/${id}`, { method: 'DELETE' }),
+  listCustomFieldDefs: (entityType?: string) =>
+    request<{ items: CustomFieldDef[] }>(`/api/v1/custom-fields${entityType ? `?entity_type=${entityType}` : ''}`),
+  createCustomFieldDef: (body: { entity_type: string; name: string; field_type?: string; options?: string; required?: boolean }) =>
+    request<CustomFieldDef>('/api/v1/custom-fields', { method: 'POST', body: JSON.stringify(body) }),
+  updateCustomFieldDef: (id: number, body: { entity_type: string; name: string; field_type: string; options: string; required: boolean }) =>
+    request<CustomFieldDef>(`/api/v1/custom-fields/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteCustomFieldDef: (id: number) => request<void>(`/api/v1/custom-fields/${id}`, { method: 'DELETE' }),
+  getEntityCustomFields: (entityType: string, entityId: number) =>
+    request<{ items: CustomFieldWithValue[] }>(`/api/v1/${entityType}/${entityId}/custom-fields`),
+  setEntityCustomField: (entityType: string, entityId: number, fieldId: number, value: string) =>
+    request<CustomFieldValue>(`/api/v1/${entityType}/${entityId}/custom-fields/${fieldId}`, { method: 'PUT', body: JSON.stringify({ value }) }),
   listCaseDatasets: (caseId: number) =>
     request<{ items: Dataset[] }>(`/api/v1/testcases/${caseId}/datasets`),
   createDataset: (caseId: number, body: { name: string; params?: string }) =>

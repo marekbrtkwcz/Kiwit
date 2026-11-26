@@ -238,6 +238,20 @@ func RegisterRoutes(api huma.API, db *sql.DB, pgPool *pgxpool.Pool) {
 	})
 
 	huma.Register(api, huma.Operation{
+		OperationID: "telemetry-ux-metrics",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/telemetry/ux-metrics",
+		Summary:     "Average UX metrics (SUS score, task time, errors) per product from execution custom fields",
+		Tags:        []string{"Telemetry"},
+	}, func(ctx context.Context, input *filterInput) (*struct{ Body []UXMetricRow }, error) {
+		rows, err := queryUXMetrics(ctx, db, pgPool, input.toFilter(ctx))
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to query ux metrics", err)
+		}
+		return &struct{ Body []UXMetricRow }{Body: rows}, nil
+	})
+
+	huma.Register(api, huma.Operation{
 		OperationID: "telemetry-execution-dashboard",
 		Method:      http.MethodGet,
 		Path:        "/api/v1/telemetry/execution-dashboard",
@@ -854,4 +868,76 @@ func queryExecutionDashboard(ctx context.Context, db *sql.DB, pgPool *pgxpool.Po
 		}
 	}
 	return out, nil
+}
+
+// UXMetricRow aggregates UX custom fields (sus_score, task_time_sec, error_count)
+// collected on test executions, per product.
+type UXMetricRow struct {
+	ProductID     int64   `json:"product_id"`
+	ProductName   string  `json:"product_name"`
+	Sessions      int64   `json:"sessions"`
+	AvgSUS        float64 `json:"avg_sus"`
+	AvgTaskTimeSec float64 `json:"avg_task_time_sec"`
+	AvgErrors     float64 `json:"avg_errors"`
+}
+
+func queryUXMetrics(ctx context.Context, db *sql.DB, pgPool *pgxpool.Pool, f Filter) ([]UXMetricRow, error) {
+	ph := func(i int) string { return "?" }
+	args := []any{}
+	where := ""
+	if f.ProductID != 0 {
+		where = "WHERE p.id = ?"
+		args = append(args, f.ProductID)
+		ph = func(i int) string { return "?" }
+	}
+	if pgPool != nil {
+		ph = func(i int) string { return fmt.Sprintf("$%d", i) }
+		if f.ProductID != 0 {
+			where = "WHERE p.id = $1"
+		}
+	}
+	q := fmt.Sprintf(`SELECT p.id, p.name,
+		COUNT(DISTINCT v.entity_id) AS sessions,
+		COALESCE(AVG(CASE WHEN d.name = 'sus_score' THEN CAST(v.value AS REAL) END), 0) AS avg_sus,
+		COALESCE(AVG(CASE WHEN d.name = 'task_time_sec' THEN CAST(v.value AS REAL) END), 0) AS avg_task,
+		COALESCE(AVG(CASE WHEN d.name = 'error_count' THEN CAST(v.value AS REAL) END), 0) AS avg_err
+		FROM products p
+		LEFT JOIN test_plans tp ON tp.product_id = p.id
+		LEFT JOIN test_runs tr ON tr.test_plan_id = tp.id
+		LEFT JOIN test_executions te ON te.test_run_id = tr.id
+		LEFT JOIN custom_field_values v ON v.entity_type = 'test_execution' AND v.entity_id = te.id
+		LEFT JOIN custom_field_defs d ON d.id = v.field_id AND d.entity_type = 'test_execution'
+		%s
+		GROUP BY p.id, p.name ORDER BY p.id`, where)
+	_ = ph
+	if pgPool != nil {
+		rows, err := pgPool.Query(ctx, q, args...)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		out := []UXMetricRow{}
+		for rows.Next() {
+			var r UXMetricRow
+			if err := rows.Scan(&r.ProductID, &r.ProductName, &r.Sessions, &r.AvgSUS, &r.AvgTaskTimeSec, &r.AvgErrors); err != nil {
+				return nil, err
+			}
+			out = append(out, r)
+		}
+		return out, rows.Err()
+	}
+	rows, err := db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []UXMetricRow{}
+	for rows.Next() {
+		var r UXMetricRow
+		if err := rows.Scan(&r.ProductID, &r.ProductName, &r.Sessions, &r.AvgSUS, &r.AvgTaskTimeSec, &r.AvgErrors); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }

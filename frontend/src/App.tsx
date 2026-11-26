@@ -4,6 +4,7 @@ import {
   Bug,
   CheckCircle2,
   ClipboardList,
+  Compass,
   FileCheck2,
   Flag,
   FolderKanban,
@@ -31,6 +32,7 @@ import { RequirementsView } from './features/requirements/RequirementsView'
 import { NotificationBell } from './features/notifications/NotificationBell'
 import { SettingsView } from './features/settings/SettingsView'
 import { DashboardView } from './features/telemetry/DashboardView'
+import { ExploratoryView } from './features/exploratory/ExploratoryView'
 import { TestCasesView } from './features/testcases/TestCasesView'
 import { TestPlansView } from './features/testplans/TestPlansView'
 import { TestRunsView } from './features/testruns/TestRunsView'
@@ -39,6 +41,7 @@ import { I18nProvider, Lang, useI18n } from './i18n'
 // iconMap maps backend icon names (lucide kebab-case) to components.
 const iconMap: Record<string, typeof LayoutDashboard> = {
   'clipboard-list': ClipboardList,
+  compass: Compass,
   flag: Flag,
   'layout-dashboard': LayoutDashboard,
   'file-check': FileCheck2,
@@ -254,6 +257,7 @@ function AppShell() {
             <Route path="/cases" element={<TestCasesView />} />
             <Route path="/requirements" element={<RequirementsView />} />
             <Route path="/milestones" element={<MilestonesView />} />
+            <Route path="/exploratory" element={<ExploratoryView />} />
             <Route path="/cases/:id" element={<TestCasesView />} />
             <Route path="/plans" element={<TestPlansView />} />
             <Route path="/plans/:id" element={<TestPlansView />} />
