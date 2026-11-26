@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -91,6 +92,48 @@ type Breakdown struct {
 	ByPriority []NamedCount `json:"by_priority"`
 	ByStatus   []NamedCount `json:"by_status"`
 	ByCategory []NamedCount `json:"by_category"`
+}
+
+type RunProgress struct {
+	TestRunID  int64   `json:"test_run_id"`
+	TestPlanID int64   `json:"test_plan_id"`
+	PlanName   string  `json:"plan_name"`
+	Summary    string  `json:"summary"`
+	StartedAt  string  `json:"started_at"`
+	Stopped    bool    `json:"stopped"`
+	Total      int64   `json:"total"`
+	Passed     int64   `json:"passed"`
+	Failed     int64   `json:"failed"`
+	Blocked    int64   `json:"blocked"`
+	Skipped    int64   `json:"skipped"`
+	Idle       int64   `json:"idle"`
+	Progress   float64 `json:"progress"` // executed (non-idle) / total, 0..1
+}
+
+type RecentExecution struct {
+	ExecutionID int64  `json:"execution_id"`
+	TestCaseID  int64  `json:"test_case_id"`
+	TestRunID   int64  `json:"test_run_id"`
+	CaseSummary string `json:"case_summary"`
+	RunSummary  string `json:"run_summary"`
+	Status      string `json:"status"`
+	Tester      string `json:"tester"`
+	UpdatedAt   string `json:"updated_at"`
+}
+
+type TesterLoad struct {
+	UserID   int64   `json:"user_id"`
+	Username string  `json:"username"`
+	Total    int64   `json:"total"`
+	Passed   int64   `json:"passed"`
+	Failed   int64   `json:"failed"`
+	PassRate float64 `json:"pass_rate"` // passed / evaluated (passed+failed), 0..1
+}
+
+type ExecutionDashboard struct {
+	Runs    []RunProgress     `json:"runs"`
+	Recent  []RecentExecution `json:"recent_executions"`
+	Testers []TesterLoad      `json:"testers"`
 }
 
 func RegisterRoutes(api huma.API, db *sql.DB, pgPool *pgxpool.Pool) {
@@ -192,6 +235,20 @@ func RegisterRoutes(api huma.API, db *sql.DB, pgPool *pgxpool.Pool) {
 			return nil, huma.Error500InternalServerError("failed to query telemetry breakdown", err)
 		}
 		return &struct{ Body Breakdown }{Body: b}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "telemetry-execution-dashboard",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/telemetry/execution-dashboard",
+		Summary:     "Get run execution progress, recent executions and tester workload",
+		Tags:        []string{"Telemetry"},
+	}, func(ctx context.Context, input *filterInput) (*struct{ Body ExecutionDashboard }, error) {
+		d, err := queryExecutionDashboard(ctx, db, pgPool, input.toFilter(ctx))
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to query execution dashboard", err)
+		}
+		return &struct{ Body ExecutionDashboard }{Body: d}, nil
 	})
 }
 
@@ -600,4 +657,201 @@ func accumulateStatus(s *Summary, status string, cnt int64) {
 	default:
 		s.Executions.Idle += cnt
 	}
+}
+
+// dest is satisfied by both pgx.Rows and *sql.Rows.
+type dest interface {
+	Next() bool
+	Scan(...any) error
+	Err() error
+}
+
+// runFilterBuilder is execFilterBuilder's counterpart scoped to test_runs
+// (date filters apply to tr.started_at).
+func runFilterBuilder(pg bool, f Filter) *sqlBuilder {
+	b := &sqlBuilder{pg: pg}
+	if f.ProductID > 0 {
+		b.add("tp.product_id = %s", f.ProductID)
+	}
+	if f.VersionID > 0 {
+		b.add("tp.version_id = %s", f.VersionID)
+	}
+	if f.BuildID > 0 {
+		b.add("tr.build_id = %s", f.BuildID)
+	}
+	if f.TestPlanID > 0 {
+		b.add("tr.test_plan_id = %s", f.TestPlanID)
+	}
+	if f.From != "" {
+		if pg {
+			b.add("TO_CHAR(tr.started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') >= %s", f.From)
+		} else {
+			b.add("SUBSTR(CAST(tr.started_at AS TEXT), 1, 10) >= %s", f.From)
+		}
+	}
+	if f.To != "" {
+		if pg {
+			b.add("TO_CHAR(tr.started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') <= %s", f.To)
+		} else {
+			b.add("SUBSTR(CAST(tr.started_at AS TEXT), 1, 10) <= %s", f.To)
+		}
+	}
+	b.addProductScope("tp.product_id", f.UserID)
+	return b
+}
+
+func queryExecutionDashboard(ctx context.Context, db *sql.DB, pgPool *pgxpool.Pool, f Filter) (ExecutionDashboard, error) {
+	out := ExecutionDashboard{
+		Runs:    make([]RunProgress, 0),
+		Recent:  make([]RecentExecution, 0),
+		Testers: make([]TesterLoad, 0),
+	}
+	pg := pgPool != nil
+
+	// Recent runs with per-status execution counts.
+	// Timestamps are scanned as time.Time (portable across both drivers) and formatted in Go.
+	rb := runFilterBuilder(pg, f)
+	runsQ := `SELECT tr.id, tr.test_plan_id, tp.name, tr.summary, tr.started_at,
+		CASE WHEN tr.stopped_at IS NULL THEN 0 ELSE 1 END,
+		COUNT(e.id),
+		COALESCE(SUM(CASE WHEN e.status = 'passed' THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN e.status = 'failed' THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN e.status = 'blocked' THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN e.status = 'skipped' THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN e.status = 'idle' THEN 1 ELSE 0 END), 0)
+		FROM test_runs tr
+		JOIN test_plans tp ON tp.id = tr.test_plan_id
+		LEFT JOIN test_executions e ON e.test_run_id = tr.id` + rb.where() + `
+		GROUP BY tr.id, tr.test_plan_id, tp.name, tr.summary, tr.started_at, tr.stopped_at
+		ORDER BY tr.started_at DESC
+		LIMIT 10`
+	scanRun := func(rows dest) error {
+		for rows.Next() {
+			var rp RunProgress
+			var started time.Time
+			var stopped int64
+			if err := rows.Scan(&rp.TestRunID, &rp.TestPlanID, &rp.PlanName, &rp.Summary, &started, &stopped,
+				&rp.Total, &rp.Passed, &rp.Failed, &rp.Blocked, &rp.Skipped, &rp.Idle); err != nil {
+				return err
+			}
+			rp.StartedAt = started.UTC().Format(time.RFC3339)
+			rp.Stopped = stopped != 0
+			if rp.Total > 0 {
+				rp.Progress = float64(rp.Total-rp.Idle) / float64(rp.Total)
+			}
+			out.Runs = append(out.Runs, rp)
+		}
+		return rows.Err()
+	}
+	if pg {
+		rows, err := pgPool.Query(ctx, runsQ, rb.args...)
+		if err != nil {
+			return out, err
+		}
+		defer rows.Close()
+		if err := scanRun(rows); err != nil {
+			return out, err
+		}
+	} else {
+		rows, err := db.QueryContext(ctx, runsQ, rb.args...)
+		if err != nil {
+			return out, err
+		}
+		defer func() { _ = rows.Close() }()
+		if err := scanRun(rows); err != nil {
+			return out, err
+		}
+	}
+
+	// Recently updated executions (excluding idle).
+	eb := execFilterBuilder(pg, f)
+	eb.cond = append(eb.cond, "e.status <> 'idle'")
+	recentQ := `SELECT e.id, e.test_case_id, e.test_run_id, tc.summary, tr.summary, e.status,
+		COALESCE(u.username, ''), e.updated_at
+		FROM test_executions e
+		JOIN test_cases tc ON tc.id = e.test_case_id
+		JOIN test_runs tr ON tr.id = e.test_run_id
+		JOIN test_plans tp ON tp.id = tr.test_plan_id
+		LEFT JOIN users u ON u.id = e.tested_by_id` + eb.where() + `
+		ORDER BY e.updated_at DESC
+		LIMIT 20`
+	scanRecent := func(rows dest) error {
+		for rows.Next() {
+			var re RecentExecution
+			var updated time.Time
+			if err := rows.Scan(&re.ExecutionID, &re.TestCaseID, &re.TestRunID, &re.CaseSummary, &re.RunSummary,
+				&re.Status, &re.Tester, &updated); err != nil {
+				return err
+			}
+			re.UpdatedAt = updated.UTC().Format(time.RFC3339)
+			out.Recent = append(out.Recent, re)
+		}
+		return rows.Err()
+	}
+	if pg {
+		rows, err := pgPool.Query(ctx, recentQ, eb.args...)
+		if err != nil {
+			return out, err
+		}
+		defer rows.Close()
+		if err := scanRecent(rows); err != nil {
+			return out, err
+		}
+	} else {
+		rows, err := db.QueryContext(ctx, recentQ, eb.args...)
+		if err != nil {
+			return out, err
+		}
+		defer func() { _ = rows.Close() }()
+		if err := scanRecent(rows); err != nil {
+			return out, err
+		}
+	}
+
+	// Tester workload over executions they evaluated.
+	tb := execFilterBuilder(pg, f)
+	tb.cond = append(tb.cond, "e.tested_by_id IS NOT NULL")
+	testersQ := `SELECT u.id, u.username, COUNT(*),
+		COALESCE(SUM(CASE WHEN e.status = 'passed' THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN e.status = 'failed' THEN 1 ELSE 0 END), 0)
+		FROM test_executions e
+		JOIN users u ON u.id = e.tested_by_id
+		JOIN test_runs tr ON tr.id = e.test_run_id
+		JOIN test_plans tp ON tp.id = tr.test_plan_id` + tb.where() + `
+		GROUP BY u.id, u.username
+		ORDER BY COUNT(*) DESC
+		LIMIT 10`
+	scanTester := func(rows dest) error {
+		for rows.Next() {
+			var tl TesterLoad
+			if err := rows.Scan(&tl.UserID, &tl.Username, &tl.Total, &tl.Passed, &tl.Failed); err != nil {
+				return err
+			}
+			if tl.Passed+tl.Failed > 0 {
+				tl.PassRate = float64(tl.Passed) / float64(tl.Passed+tl.Failed)
+			}
+			out.Testers = append(out.Testers, tl)
+		}
+		return rows.Err()
+	}
+	if pg {
+		rows, err := pgPool.Query(ctx, testersQ, tb.args...)
+		if err != nil {
+			return out, err
+		}
+		defer rows.Close()
+		if err := scanTester(rows); err != nil {
+			return out, err
+		}
+	} else {
+		rows, err := db.QueryContext(ctx, testersQ, tb.args...)
+		if err != nil {
+			return out, err
+		}
+		defer func() { _ = rows.Close() }()
+		if err := scanTester(rows); err != nil {
+			return out, err
+		}
+	}
+	return out, nil
 }

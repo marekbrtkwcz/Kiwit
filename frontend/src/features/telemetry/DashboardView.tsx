@@ -5,10 +5,13 @@ import {
   AlertTriangle,
   FileCheck2,
   FolderKanban,
+  GanttChartSquare,
+  ListChecks,
   Package,
   PieChart as PieIcon,
   PlayCircle,
   RotateCcw,
+  Users,
 } from 'lucide-react'
 import {
   Bar,
@@ -26,6 +29,7 @@ import {
 import {
   api,
   CaseHealth,
+  ExecutionDashboard,
   MatrixRow,
   TelemetryBreakdown,
   TelemetrySummary,
@@ -35,6 +39,12 @@ import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 
 const PIE_COLORS = ['#6366f1', '#94a3b8']
+
+const monoStyle: React.CSSProperties = {
+  fontFamily: 'var(--font-mono)',
+  color: 'var(--muted)',
+  marginRight: 6,
+}
 
 export function DashboardView() {
   const { t } = useI18n()
@@ -48,6 +58,7 @@ export function DashboardView() {
   const [matrix, setMatrix] = useState<MatrixRow[]>([])
   const [health, setHealth] = useState<CaseHealth[]>([])
   const [breakdown, setBreakdown] = useState<TelemetryBreakdown | null>(null)
+  const [execDash, setExecDash] = useState<ExecutionDashboard | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -62,13 +73,15 @@ export function DashboardView() {
       api.getStatusMatrix(params),
       api.getTestCaseHealth(params),
       api.getTelemetryBreakdown(params),
+      api.getExecutionDashboard(params),
     ])
-      .then(([s, tr, mx, hl, bd]) => {
+      .then(([s, tr, mx, hl, bd, ed]) => {
         setSummary(s)
         setTrends(tr.items)
         setMatrix(mx.items)
         setHealth(hl.items)
         setBreakdown(bd)
+        setExecDash(ed)
         setError(null)
       })
       .catch((err) => {
@@ -177,7 +190,157 @@ export function DashboardView() {
           <span className="badge pill-failed">{t.dashboard.failed}: {summary.executions.failed}</span>
           <span className="badge pill-blocked">{t.dashboard.blocked}: {summary.executions.blocked}</span>
           <span className="badge pill-skipped">{t.dashboard.skipped}: {summary.executions.skipped}</span>
-          <span className="badge pill-idle">Idle: {summary.executions.idle}</span>
+          <span className="badge pill-idle">{t.dashboard.idle}: {summary.executions.idle}</span>
+        </div>
+      </div>
+
+      {/* Execution board */}
+      <div className="card">
+        <div className="card-header">
+          <h3 className="card-title">
+            <GanttChartSquare size={16} />
+            {t.dashboard.execBoard}
+          </h3>
+        </div>
+        {!execDash || execDash.runs.length === 0 ? (
+          <p style={{ color: 'var(--muted)', margin: 0 }}>{t.dashboard.noData}</p>
+        ) : (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>{t.dashboard.recentRuns}</th>
+                  <th>{t.nav.testplans}</th>
+                  <th>{t.dashboard.progress}</th>
+                  <th>{t.dashboard.totalExecs}</th>
+                  <th>{t.dashboard.started}</th>
+                  <th>{t.common.status}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {execDash.runs.map((r) => (
+                  <tr key={r.test_run_id} className="clickable" onClick={() => navigate(`/runs/${r.test_run_id}`)}>
+                    <td>
+                      <span style={monoStyle}>#{r.test_run_id}</span>
+                      {r.summary}
+                    </td>
+                    <td>{r.plan_name}</td>
+                    <td style={{ minWidth: 150 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <div className="progress-bar" style={{ flex: 1, height: 8, minWidth: 80 }}>
+                          <div style={{ width: `${Math.round(r.progress * 100)}%`, background: '#6366f1' }} />
+                        </div>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+                          {Math.round(r.progress * 100)}%
+                        </span>
+                      </div>
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <span className="badge pill-passed" title={`${t.dashboard.passed}: ${r.passed}`}>{r.passed}</span>{' '}
+                      <span className="badge pill-failed" title={`${t.dashboard.failed}: ${r.failed}`}>{r.failed}</span>{' '}
+                      <span className="badge pill-blocked" title={`${t.dashboard.blocked}: ${r.blocked}`}>{r.blocked}</span>{' '}
+                      <span className="badge pill-skipped" title={`${t.dashboard.skipped}: ${r.skipped}`}>{r.skipped}</span>{' '}
+                      <span className="badge pill-idle" title={`${t.dashboard.idle}: ${r.idle}`}>{r.idle}</span>
+                    </td>
+                    <td>{new Date(r.started_at).toLocaleDateString()}</td>
+                    <td>
+                      <span className={`badge ${r.stopped ? 'pill-skipped' : 'pill-blocked'}`}>
+                        {r.stopped ? t.dashboard.stateStopped : t.dashboard.stateRunning}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1rem' }}>
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">
+              <ListChecks size={16} />
+              {t.dashboard.recentExecs}
+            </h3>
+          </div>
+          {!execDash || execDash.recent_executions.length === 0 ? (
+            <p style={{ color: 'var(--muted)', margin: 0 }}>{t.dashboard.noData}</p>
+          ) : (
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>{t.dashboard.testCases}</th>
+                    <th>{t.dashboard.recentRuns}</th>
+                    <th>{t.common.status}</th>
+                    <th>{t.dashboard.tester}</th>
+                    <th>{t.dashboard.when}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {execDash.recent_executions.map((e) => (
+                    <tr key={e.execution_id} className="clickable" onClick={() => navigate(`/cases/${e.test_case_id}`)}>
+                      <td>
+                        <span style={monoStyle}>#{e.test_case_id}</span>
+                        {e.case_summary}
+                      </td>
+                      <td>
+                        <span style={monoStyle}>#{e.test_run_id}</span>
+                        {e.run_summary}
+                      </td>
+                      <td>
+                        <span className={`badge pill-${e.status}`}>{e.status}</span>
+                      </td>
+                      <td>{e.tester || '—'}</td>
+                      <td>{new Date(e.updated_at).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">
+              <Users size={16} />
+              {t.dashboard.testerLoad}
+            </h3>
+          </div>
+          {!execDash || execDash.testers.length === 0 ? (
+            <p style={{ color: 'var(--muted)', margin: 0 }}>{t.dashboard.noData}</p>
+          ) : (
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>{t.dashboard.tester}</th>
+                    <th>{t.dashboard.totalExecs}</th>
+                    <th>{t.dashboard.passed}</th>
+                    <th>{t.dashboard.failed}</th>
+                    <th>{t.dashboard.passRate}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {execDash.testers.map((w) => (
+                    <tr key={w.user_id}>
+                      <td>{w.username}</td>
+                      <td>{w.total}</td>
+                      <td>{w.passed}</td>
+                      <td>{w.failed}</td>
+                      <td>
+                        <span className={`badge ${w.pass_rate >= 0.8 ? 'pill-passed' : w.pass_rate >= 0.5 ? 'pill-blocked' : 'pill-failed'}`}>
+                          {Math.round(w.pass_rate * 100)}%
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 

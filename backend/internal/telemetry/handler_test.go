@@ -3,6 +3,7 @@ package telemetry_test
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -49,7 +50,18 @@ func TestTelemetryEndpoints(t *testing.T) {
 	require.NoError(t, err)
 	execs, err := trRepo.ListExecutions(ctx, run.ID)
 	require.NoError(t, err)
-	_, err = trRepo.UpdateExecution(ctx, execs[0].ID, "failed", "timeout")
+
+	// A tester user who evaluates the sole execution.
+	res, err := sqlDB.ExecContext(ctx,
+		`INSERT INTO users (email, username, password_hash) VALUES ('tester@kiwit.local', 'tester', 'x')`)
+	require.NoError(t, err)
+	testerID, err := res.LastInsertId()
+	require.NoError(t, err)
+	_, err = trRepo.UpdateExecutionFull(ctx, execs[0].ID, testrun.ExecutionUpdateParams{
+		Status:     "failed",
+		Comment:    "timeout",
+		TestedByID: &testerID,
+	})
 	require.NoError(t, err)
 
 	r := chi.NewMux()
@@ -76,12 +88,50 @@ func TestTelemetryEndpoints(t *testing.T) {
 	}
 
 	// Verify breakdown endpoint
-	res, err := http.Get(srv.URL + "/api/v1/telemetry/breakdown")
+	res2, err := http.Get(srv.URL + "/api/v1/telemetry/breakdown")
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, res.StatusCode)
+	require.Equal(t, http.StatusOK, res2.StatusCode)
 	var bd telemetry.Breakdown
-	require.NoError(t, json.NewDecoder(res.Body).Decode(&bd))
-	_ = res.Body.Close()
+	require.NoError(t, json.NewDecoder(res2.Body).Decode(&bd))
+	_ = res2.Body.Close()
 	require.Equal(t, int64(1), bd.Manual)
 	require.NotEmpty(t, bd.ByPriority)
+
+	// Verify execution dashboard
+	res3, err := http.Get(srv.URL + "/api/v1/telemetry/execution-dashboard")
+	require.NoError(t, err)
+	if res3.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res3.Body)
+		_ = res3.Body.Close()
+		t.Fatalf("execution-dashboard status %d: %s", res3.StatusCode, body)
+	}
+	var dash telemetry.ExecutionDashboard
+	require.NoError(t, json.NewDecoder(res3.Body).Decode(&dash))
+	_ = res3.Body.Close()
+
+	require.Len(t, dash.Runs, 1)
+	rp := dash.Runs[0]
+	require.Equal(t, run.ID, rp.TestRunID)
+	require.Equal(t, "Plan", rp.PlanName)
+	require.False(t, rp.Stopped)
+	require.Equal(t, int64(1), rp.Total)
+	require.Equal(t, int64(1), rp.Failed)
+	require.Equal(t, int64(0), rp.Idle)
+	require.InDelta(t, 1.0, rp.Progress, 0.0001)
+	require.NotEmpty(t, rp.StartedAt)
+
+	require.Len(t, dash.Recent, 1)
+	re := dash.Recent[0]
+	require.Equal(t, execs[0].ID, re.ExecutionID)
+	require.Equal(t, tc.ID, re.TestCaseID)
+	require.Equal(t, run.ID, re.TestRunID)
+	require.Equal(t, "failed", re.Status)
+	require.Equal(t, "tester", re.Tester)
+
+	require.Len(t, dash.Testers, 1)
+	tl := dash.Testers[0]
+	require.Equal(t, "tester", tl.Username)
+	require.Equal(t, int64(1), tl.Total)
+	require.Equal(t, int64(1), tl.Failed)
+	require.Equal(t, float64(0), tl.PassRate)
 }
