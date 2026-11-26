@@ -51,19 +51,33 @@ type Service struct {
 	pgPool            *pgxpool.Pool
 	jwtSecret         []byte
 	allowRegistration bool
+	emailSender       EmailSender
+	baseURL           string
 }
 
+const defaultBaseURL = "http://localhost:8080"
+
 func NewService(db *sql.DB, jwtSecret string) *Service {
-	return &Service{db: db, jwtSecret: []byte(jwtSecret), allowRegistration: true}
+	return &Service{db: db, jwtSecret: []byte(jwtSecret), allowRegistration: true, baseURL: defaultBaseURL}
 }
 
 func NewPostgresService(pool *pgxpool.Pool, jwtSecret string) *Service {
-	return &Service{pgPool: pool, jwtSecret: []byte(jwtSecret), allowRegistration: true}
+	return &Service{pgPool: pool, jwtSecret: []byte(jwtSecret), allowRegistration: true, baseURL: defaultBaseURL}
 }
 
 // SetAllowRegistration controls whether self-registration is enabled after the initial admin user exists.
 func (s *Service) SetAllowRegistration(allow bool) {
 	s.allowRegistration = allow
+}
+
+// SetEmailSender wires the password reset e-mail channel (usually *notify.EmailClient).
+func (s *Service) SetEmailSender(sender EmailSender) {
+	s.emailSender = sender
+}
+
+// SetBaseURL sets the public base URL used to build password reset links.
+func (s *Service) SetBaseURL(u string) {
+	s.baseURL = strings.TrimSpace(u)
 }
 
 func (s *Service) Register(ctx context.Context, email, username, password string) (User, error) {

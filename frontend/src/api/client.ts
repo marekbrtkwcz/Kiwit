@@ -484,6 +484,10 @@ export const api = {
   revokeApiToken: (id: number) => request<void>(`/api/v1/auth/tokens/${id}`, { method: 'DELETE' }),
   changePassword: (body: { current_password: string; new_password: string }) =>
     request<{ ok: boolean }>('/api/v1/auth/change-password', { method: 'POST', body: JSON.stringify(body) }),
+  requestPasswordReset: (body: { email: string }) =>
+    request<{ ok: boolean }>('/api/v1/auth/password-reset', { method: 'POST', body: JSON.stringify(body) }),
+  confirmPasswordReset: (body: { token: string; new_password: string }) =>
+    request<{ ok: boolean }>('/api/v1/auth/password-reset/confirm', { method: 'POST', body: JSON.stringify(body) }),
   listUsers: () => request<{ items: User[] }>('/api/v1/admin/users'),
   updateUser: (id: number, body: { role: 'viewer' | 'tester' | 'admin'; is_active: boolean }) =>
     request<User>(`/api/v1/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),

@@ -1,16 +1,25 @@
 import { useEffect, useState } from 'react'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, ApiTokenInfo, getAuthToken, setAuthToken, setUserRole, User } from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 
+type AuthMode = 'login' | 'register' | 'reset-request' | 'reset-confirm'
+
 export function AuthView() {
   const { t } = useI18n()
   const { refreshProducts, notify } = useWorkspace()
-  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [searchParams] = useSearchParams()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [mode, setMode] = useState<AuthMode>(() => (searchParams.get('token') ? 'reset-confirm' : 'login'))
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [resetPassword, setResetPassword] = useState('')
+  const [resetPasswordRepeat, setResetPasswordRepeat] = useState('')
   const [tokenName, setTokenName] = useState('ci-runner')
   const [generatedToken, setGeneratedToken] = useState<string | null>(null)
   const [tokens, setTokens] = useState<ApiTokenInfo[]>([])
@@ -21,6 +30,11 @@ export function AuthView() {
   const [jwt, setJwt] = useState<string | null>(getAuthToken())
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+
+  // Reset views ignore any stored JWT: the main reset scenario is a user
+  // whose session expired clicking the e-mail link, so a stored (possibly
+  // stale) token must never hide the reset form behind the account panel.
+  const inResetContext = location.pathname === '/reset-password' || !!searchParams.get('token')
 
   const loadAccountData = async () => {
     try {
@@ -59,9 +73,68 @@ export function AuthView() {
       setJwt(res.access_token)
       setPassword('')
       notify(t.auth.loggedIn)
+      // Leave any reset context (e.g. the user remembered their password
+      // mid-reset and logged in from it) so the account panel renders.
+      navigate('/auth', { replace: true })
       await refreshProducts()
     } catch (err) {
       setError(err instanceof Error ? err.message : t.errors.authFailed)
+    }
+  }
+
+  // Extracts the huma error "detail" (invalid token, weak password, …) from
+  // the raw error body thrown by request(); falls back to the raw message.
+  const errorDetail = (err: unknown, fallback: string): string => {
+    if (err instanceof Error) {
+      try {
+        const parsed = JSON.parse(err.message) as { detail?: string }
+        if (parsed && typeof parsed.detail === 'string' && parsed.detail.trim() !== '') {
+          return parsed.detail
+        }
+      } catch {
+        // not a huma error body — fall through to the raw message
+      }
+      if (err.message) return err.message
+    }
+    return fallback
+  }
+
+  const handleResetRequest = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setNotice(null)
+    try {
+      // The API always responds 200 (also for unknown emails), so the UI
+      // shows the same optimistic message and never confirms which
+      // addresses exist (no account enumeration).
+      await api.requestPasswordReset({ email })
+      setNotice(t.auth.resetRequestSent)
+      setMode('login')
+    } catch (err) {
+      setError(errorDetail(err, t.errors.authFailed))
+    }
+  }
+
+  const handleResetConfirm = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setNotice(null)
+    if (resetPassword !== resetPasswordRepeat) {
+      setError(t.auth.resetPasswordsDontMatch)
+      return
+    }
+    const token = searchParams.get('token')
+    if (!token) {
+      setError(t.auth.resetTokenInvalid)
+      return
+    }
+    try {
+      await api.confirmPasswordReset({ token, new_password: resetPassword })
+      setNotice(t.auth.resetDone)
+      setMode('login')
+      navigate('/auth', { replace: true })
+    } catch (err) {
+      setError(errorDetail(err, t.auth.resetFailed))
     }
   }
 
@@ -132,8 +205,122 @@ export function AuthView() {
       {error && <p className="alert-error">{error}</p>}
       {notice && <p className="alert-ok">{notice}</p>}
 
-      {!jwt ? (
-        <form onSubmit={handleAuth} className="card" style={{ maxWidth: 460, display: 'grid', gap: '0.65rem' }}>
+      {!jwt || inResetContext ? (
+        mode === 'reset-request' ? (
+          <form onSubmit={handleResetRequest} className="card" style={{ maxWidth: 460, display: 'grid', gap: '0.65rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <h3 style={{ margin: 0 }}>{t.auth.resetRequestTitle}</h3>
+            </div>
+            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', margin: 0 }}>{t.auth.resetRequestDescription}</p>
+            <label htmlFor="reset-email" style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
+              <span>{t.auth.resetEmailPlaceholder}</span>
+              <input
+                id="reset-email"
+                name="email"
+                className="input"
+                type="email"
+                autoComplete="username"
+                spellCheck={false}
+                enterKeyHint="next"
+                placeholder={t.auth.resetEmailPlaceholder}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </label>
+            <button type="submit" className="btn btn-primary">{t.auth.resetRequestSubmit}</button>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => {
+                setMode('login')
+                setError(null)
+                setNotice(null)
+              }}
+            >
+              {t.auth.resetBackToLogin}
+            </button>
+          </form>
+        ) : mode === 'reset-confirm' ? (
+          searchParams.get('token') ? (
+            <form onSubmit={handleResetConfirm} className="card" style={{ maxWidth: 460, display: 'grid', gap: '0.65rem' }}>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <h3 style={{ margin: 0 }}>{t.auth.resetConfirmTitle}</h3>
+              </div>
+              <p style={{ color: 'var(--muted)', fontSize: '0.85rem', margin: 0 }}>{t.auth.resetConfirmDescription}</p>
+              <label htmlFor="reset-new-password" style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
+                <span>{t.auth.resetNewPassword}</span>
+                <input
+                  id="reset-new-password"
+                  name="new-password"
+                  className="input"
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  enterKeyHint="next"
+                  placeholder={t.auth.passwordPlaceholder}
+                  value={resetPassword}
+                  onChange={(e) => setResetPassword(e.target.value)}
+                  required
+                  minLength={8}
+                />
+              </label>
+              <label htmlFor="reset-new-password-repeat" style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
+                <span>{t.auth.resetNewPasswordRepeat}</span>
+                <input
+                  id="reset-new-password-repeat"
+                  name="new-password-repeat"
+                  className="input"
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  enterKeyHint="done"
+                  placeholder={t.auth.passwordPlaceholder}
+                  value={resetPasswordRepeat}
+                  onChange={(e) => setResetPasswordRepeat(e.target.value)}
+                  required
+                  minLength={8}
+                />
+              </label>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => setShowConfirmPassword((v) => !v)}
+                aria-pressed={showConfirmPassword}
+              >
+                {showConfirmPassword ? 'Hide' : 'Show'}
+              </button>
+              <button type="submit" className="btn btn-primary">{t.auth.resetConfirmSubmit}</button>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => {
+                  setMode('login')
+                  setError(null)
+                  setNotice(null)
+                  navigate('/auth', { replace: true })
+                }}
+              >
+                {t.auth.resetBackToLogin}
+              </button>
+            </form>
+          ) : (
+            <div className="card" style={{ maxWidth: 460, display: 'grid', gap: '0.65rem' }}>
+              <p className="alert-error" style={{ margin: 0 }}>{t.auth.resetTokenInvalid}</p>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => {
+                  setMode('login')
+                  setError(null)
+                  setNotice(null)
+                  navigate('/auth', { replace: true })
+                }}
+              >
+                {t.auth.resetBackToLogin}
+              </button>
+            </div>
+          )
+        ) : (
+          <form onSubmit={handleAuth} className="card" style={{ maxWidth: 460, display: 'grid', gap: '0.65rem' }}>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button type="button" onClick={() => setMode('login')} className={mode === 'login' ? 'btn btn-primary btn-sm' : 'btn btn-sm'}>
               {t.auth.login}
@@ -207,7 +394,19 @@ export function AuthView() {
           <button type="submit" className="btn btn-primary">
             {mode === 'login' ? t.auth.submitLogin : t.auth.submitRegister}
           </button>
-        </form>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => {
+              setMode('reset-request')
+              setError(null)
+              setNotice(null)
+            }}
+          >
+            {t.auth.forgotPassword}
+          </button>
+          </form>
+        )
       ) : (
         <div style={{ display: 'grid', gap: '1rem' }}>
           <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

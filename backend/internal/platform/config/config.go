@@ -16,6 +16,7 @@ type Config struct {
 	JWTSecret         string
 	UploadDir         string
 	AllowRegistration bool
+	BaseURL           string
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -27,6 +28,7 @@ func Load() Config {
 		JWTSecret:         getEnv("KIWIT_JWT_SECRET", DefaultInsecureJWTSecret),
 		UploadDir:         getEnv("KIWIT_UPLOAD_DIR", "./uploads"),
 		AllowRegistration: getEnvBool("KIWIT_ALLOW_REGISTRATION", true),
+		BaseURL:           getEnv("KIWIT_BASE_URL", "http://localhost:8080"),
 	}
 }
 

@@ -127,6 +127,10 @@ func main() {
 	guard := auth.NewAccessGuard(sqlDBConn, pgPoolConn)
 	emailSettings := notify.NewSettingsStore(sqlDBConn, pgPoolConn)
 	emailClient := notify.NewEmailClient(notify.LoadSMTPConfigFromEnv())
+	// Password reset needs the e-mail channel (or logs the link without SMTP)
+	// and the public base URL for the reset link.
+	authSvc.SetEmailSender(emailClient)
+	authSvc.SetBaseURL(cfg.BaseURL)
 
 	api := humachi.New(router, huma.DefaultConfig("Kiwit TCMS API", "0.1.0"))
 	auth.RegisterRoutes(api, authSvc)

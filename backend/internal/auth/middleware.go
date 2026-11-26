@@ -45,17 +45,22 @@ func CheckRole(ctx context.Context, allowed ...string) error {
 	return huma.Error403Forbidden("insufficient role")
 }
 
-// RequireAuth protects /api/v1/* routes (except login and register) using JWT or kiwit_* API tokens.
+// RequireAuth protects /api/v1/* routes using JWT or kiwit_* API tokens.
+// Public (bypass) paths: login, register and the password-reset pair — the
+// reset paths still authenticate when a valid bearer is provided, so API
+// tokens can be detected and rejected by the handlers.
 func (s *Service) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		header := r.Header.Get("Authorization")
 		if !strings.HasPrefix(r.URL.Path, "/api/v1/") ||
 			r.URL.Path == "/api/v1/auth/login" ||
-			r.URL.Path == "/api/v1/auth/register" {
+			r.URL.Path == "/api/v1/auth/register" ||
+			((r.URL.Path == "/api/v1/auth/password-reset" ||
+				r.URL.Path == "/api/v1/auth/password-reset/confirm") && header == "") {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		header := r.Header.Get("Authorization")
 		if !strings.HasPrefix(header, "Bearer ") {
 			w.Header().Set("Content-Type", "application/json")
 			http.Error(w, `{"title":"Unauthorized","status":401,"detail":"missing bearer token"}`, http.StatusUnauthorized)

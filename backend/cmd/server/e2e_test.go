@@ -70,7 +70,7 @@ func TestHTTPE2E_Postgres(t *testing.T) {
 			test_case_revisions, test_case_steps, test_case_components,
 			test_case_tags, test_plan_tags, test_run_tags, test_cases,
 			product_members, components, builds, versions, products,
-			categories, tags, api_tokens, users
+			password_reset_tokens, categories, tags, api_tokens, users
 		RESTART IDENTITY CASCADE`)
 	require.NoError(t, err)
 
@@ -1211,6 +1211,110 @@ func runE2ESuite(t *testing.T, sqlDB *sql.DB, pgPool *pgxpool.Pool) {
 	clearedDelivery := deliveries[len(deliveries)-1]
 	require.Empty(t, clearedDelivery.Sig, "delivery after secret_clear must not carry an X-Kiwit-Signature header")
 	require.Equal(t, "webhook.test", clearedDelivery.Event)
+
+	// 9. Password reset: public request without enumeration, one-time token confirm, admin reset
+	// Requesting a reset for a non-existent e-mail still returns 200 (no enumeration).
+	res = doJSON(http.MethodPost, "/api/v1/auth/password-reset", "", map[string]string{
+		"email": "ghost@kiwit.local",
+	})
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	var ghostReset struct {
+		OK       bool   `json:"ok"`
+		ResetURL string `json:"reset_url"`
+	}
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&ghostReset))
+	_ = res.Body.Close()
+	require.True(t, ghostReset.OK)
+	require.Empty(t, ghostReset.ResetURL, "public request must never return a reset link")
+
+	// Requesting a reset for testerB also returns a generic 200 (no SMTP: link is logged, not returned).
+	res = doJSON(http.MethodPost, "/api/v1/auth/password-reset", "", map[string]string{
+		"email": "testerb@kiwit.local",
+	})
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	_ = res.Body.Close()
+
+	// Confirming with a made-up token is rejected.
+	res = doJSON(http.MethodPost, "/api/v1/auth/password-reset/confirm", "", map[string]string{
+		"token": "not-a-real-token", "new_password": "anotherpass123",
+	})
+	require.Equal(t, http.StatusBadRequest, res.StatusCode)
+	_ = res.Body.Close()
+
+	// Only admins may force a reset for another user.
+	res = doJSON(http.MethodPost, fmt.Sprintf("/api/v1/users/%d/password-reset", testerBID), testerAJWT, nil)
+	require.Equal(t, http.StatusForbidden, res.StatusCode)
+	_ = res.Body.Close()
+
+	res = doJSON(http.MethodPost, fmt.Sprintf("/api/v1/users/%d/password-reset", testerBID), adminJWT, nil)
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	var adminReset struct {
+		Emailed  bool   `json:"emailed"`
+		ResetURL string `json:"reset_url"`
+	}
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&adminReset))
+	_ = res.Body.Close()
+	require.False(t, adminReset.Emailed)
+	require.Contains(t, adminReset.ResetURL, "/reset-password?token=")
+	resetToken := strings.SplitN(adminReset.ResetURL, "token=", 2)[1]
+	require.Len(t, resetToken, 64)
+
+	// A second admin reset supersedes the first link: the older token dies.
+	res = doJSON(http.MethodPost, fmt.Sprintf("/api/v1/users/%d/password-reset", testerBID), adminJWT, nil)
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	var adminReset2 struct {
+		Emailed  bool   `json:"emailed"`
+		ResetURL string `json:"reset_url"`
+	}
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&adminReset2))
+	_ = res.Body.Close()
+	resetToken2 := strings.SplitN(adminReset2.ResetURL, "token=", 2)[1]
+	require.NotEqual(t, resetToken, resetToken2)
+
+	// Confirming with the superseded (first) token is rejected ...
+	res = doJSON(http.MethodPost, "/api/v1/auth/password-reset/confirm", "", map[string]string{
+		"token": resetToken, "new_password": "brandnewpass789",
+	})
+	require.Equal(t, http.StatusBadRequest, res.StatusCode)
+	_ = res.Body.Close()
+
+	// ... and the freshly issued token changes the password; the old one stops working.
+	res = doJSON(http.MethodPost, "/api/v1/auth/password-reset/confirm", "", map[string]string{
+		"token": resetToken2, "new_password": "brandnewpass123",
+	})
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	_ = res.Body.Close()
+
+	testerBJWT2 := login("testerb@kiwit.local", "brandnewpass123")
+	require.NotEmpty(t, testerBJWT2)
+
+	res = doJSON(http.MethodPost, "/api/v1/auth/login", "", map[string]string{
+		"email": "testerb@kiwit.local", "password": "password123",
+	})
+	require.Equal(t, http.StatusUnauthorized, res.StatusCode)
+	_ = res.Body.Close()
+
+	// The token is one-time: reuse is rejected.
+	res = doJSON(http.MethodPost, "/api/v1/auth/password-reset/confirm", "", map[string]string{
+		"token": resetToken2, "new_password": "brandnewpass456",
+	})
+	require.Equal(t, http.StatusBadRequest, res.StatusCode)
+	_ = res.Body.Close()
+
+	// An API token may not reset passwords (same rule as change-password).
+	res = doJSON(http.MethodPost, "/api/v1/auth/tokens", testerBJWT2, map[string]string{"name": "reset-ci"})
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	var abToken struct {
+		Token string `json:"token"`
+	}
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&abToken))
+	_ = res.Body.Close()
+
+	res = doJSON(http.MethodPost, "/api/v1/auth/password-reset/confirm", abToken.Token, map[string]string{
+		"token": "whatever-token", "new_password": "whateverpass1",
+	})
+	require.Equal(t, http.StatusForbidden, res.StatusCode)
+	_ = res.Body.Close()
 }
 
 // verifyHookSignature independently recomputes the GitHub-style HMAC over
@@ -1247,4 +1351,32 @@ func TestAuthRateLimiter(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusTooManyRequests, rec.Code)
 	require.NotEmpty(t, rec.Header().Get("Retry-After"))
+
+	// Password reset routes are rate limited as well; each path counts
+	// against the same per-IP budget, so use one IP per path here.
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password-reset", nil)
+		req.RemoteAddr = "203.0.113.11:12345"
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+	}
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/auth/password-reset", nil)
+	req.RemoteAddr = "203.0.113.11:12345"
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusTooManyRequests, rec.Code)
+
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/password-reset/confirm", nil)
+		req.RemoteAddr = "203.0.113.12:12345"
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusOK, rec.Code)
+	}
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/auth/password-reset/confirm", nil)
+	req.RemoteAddr = "203.0.113.12:12345"
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusTooManyRequests, rec.Code)
 }

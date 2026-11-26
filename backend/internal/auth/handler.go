@@ -208,6 +208,103 @@ func RegisterRoutes(api huma.API, svc *Service) {
 	})
 
 	huma.Register(api, huma.Operation{
+		OperationID: "auth-request-password-reset",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/auth/password-reset",
+		Summary:     "Request a password reset link (always succeeds; prevents account enumeration)",
+		Tags:        []string{"Auth"},
+	}, func(ctx context.Context, input *struct {
+		Body struct {
+			Email string `json:"email" format:"email"`
+		}
+	}) (*struct {
+		Body struct {
+			OK bool `json:"ok"`
+		}
+	}, error) {
+		if err := svc.RequestPasswordReset(ctx, input.Body.Email); err != nil {
+			return nil, huma.Error500InternalServerError("failed to request password reset", err)
+		}
+		out := &struct {
+			Body struct {
+				OK bool `json:"ok"`
+			}
+		}{}
+		out.Body.OK = true
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "auth-confirm-password-reset",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/auth/password-reset/confirm",
+		Summary:     "Set a new password with a one-time reset token (HTTP 400 for unknown, expired or used tokens)",
+		Tags:        []string{"Auth"},
+	}, func(ctx context.Context, input *struct {
+		Body struct {
+			Token       string `json:"token" minLength:"1"`
+			NewPassword string `json:"new_password" minLength:"8"`
+		}
+	}) (*struct {
+		Body struct {
+			OK bool `json:"ok"`
+		}
+	}, error) {
+		if IsAPIToken(ctx) {
+			return nil, huma.Error403Forbidden("API tokens cannot reset account passwords")
+		}
+		if err := svc.ConfirmPasswordReset(ctx, input.Body.Token, input.Body.NewPassword); err != nil {
+			if errors.Is(err, ErrResetTokenInvalid) {
+				return nil, huma.Error400BadRequest("invalid, expired or used password reset token")
+			}
+			return nil, huma.Error500InternalServerError("failed to confirm password reset", err)
+		}
+		out := &struct {
+			Body struct {
+				OK bool `json:"ok"`
+			}
+		}{}
+		out.Body.OK = true
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "admin-request-password-reset",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/users/{id}/password-reset",
+		Summary:     "Force a password reset for a user (admin only)",
+		Description: "Always creates a fresh one-time reset token. With SMTP configured the link is emailed to the user; without SMTP the reset_url is returned in the response (self-hosted fallback).",
+		Tags:        []string{"Admin"},
+	}, func(ctx context.Context, input *struct {
+		ID int64 `path:"id"`
+	}) (*struct {
+		Body struct {
+			Emailed  bool   `json:"emailed"`
+			ResetURL string `json:"reset_url,omitempty"`
+		}
+	}, error) {
+		if err := CheckRole(ctx, "admin"); err != nil {
+			return nil, err
+		}
+		resetURL, emailed, err := svc.AdminRequestPasswordReset(ctx, input.ID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, huma.Error404NotFound("user not found")
+			}
+			return nil, huma.Error500InternalServerError("failed to request password reset", err)
+		}
+		return &struct {
+			Body struct {
+				Emailed  bool   `json:"emailed"`
+				ResetURL string `json:"reset_url,omitempty"`
+			}
+		}{Body: struct {
+			Emailed  bool   `json:"emailed"`
+			ResetURL string `json:"reset_url,omitempty"`
+		}{Emailed: emailed, ResetURL: resetURL}}, nil
+	})
+
+	huma.Register(api, huma.Operation{
 		OperationID: "admin-list-users",
 		Method:      http.MethodGet,
 		Path:        "/api/v1/admin/users",

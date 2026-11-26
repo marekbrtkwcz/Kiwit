@@ -208,6 +208,7 @@ function AppShell() {
             <Route path="/bugs" element={<BugsView />} />
             <Route path="/settings" element={<SettingsView />} />
             <Route path="/auth" element={<AuthView />} />
+            <Route path="/reset-password" element={<AuthView />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </main>

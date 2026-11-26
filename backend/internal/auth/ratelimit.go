@@ -51,11 +51,13 @@ func (rl *RateLimiter) allow(ip string, now time.Time) bool {
 	return true
 }
 
-// LimitAuthRoutes applies rate limiting to /api/v1/auth/login and /api/v1/auth/register.
+// LimitAuthRoutes applies rate limiting to sensitive unauthenticated routes:
+// /api/v1/auth/login, /api/v1/auth/register and the password-reset pair.
 func (rl *RateLimiter) LimitAuthRoutes(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost &&
-			(r.URL.Path == "/api/v1/auth/login" || r.URL.Path == "/api/v1/auth/register") {
+			(r.URL.Path == "/api/v1/auth/login" || r.URL.Path == "/api/v1/auth/register" ||
+				r.URL.Path == "/api/v1/auth/password-reset" || r.URL.Path == "/api/v1/auth/password-reset/confirm") {
 			ip := clientIP(r)
 			if !rl.allow(ip, time.Now()) {
 				w.Header().Set("Content-Type", "application/json")
