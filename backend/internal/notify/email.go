@@ -5,6 +5,7 @@ import (
 	"net/smtp"
 	"os"
 	"strings"
+	"sync"
 )
 
 type SMTPConfig struct {
@@ -34,6 +35,7 @@ func LoadSMTPConfigFromEnv() SMTPConfig {
 }
 
 type EmailClient struct {
+	mu  sync.RWMutex
 	cfg SMTPConfig
 }
 
@@ -41,8 +43,33 @@ func NewEmailClient(cfg SMTPConfig) *EmailClient {
 	return &EmailClient{cfg: cfg}
 }
 
+// SetConfig atomically replaces the SMTP configuration (runtime update via admin API).
+func (c *EmailClient) SetConfig(cfg SMTPConfig) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	c.cfg = cfg
+	c.mu.Unlock()
+}
+
+// Config returns a copy of the current SMTP configuration.
+func (c *EmailClient) Config() SMTPConfig {
+	if c == nil {
+		return SMTPConfig{}
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.cfg
+}
+
 func (c *EmailClient) Enabled() bool {
-	return c != nil && c.cfg.Host != ""
+	if c == nil {
+		return false
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.cfg.Host != ""
 }
 
 func sanitizeHeader(s string) string {
@@ -62,12 +89,15 @@ func (c *EmailClient) Send(to []string, subject, body string) error {
 	if len(cleanTo) == 0 {
 		return nil
 	}
-	cleanFrom := sanitizeHeader(c.cfg.From)
+	c.mu.RLock()
+	cfg := c.cfg
+	c.mu.RUnlock()
+	cleanFrom := sanitizeHeader(cfg.From)
 	cleanSubject := sanitizeHeader(subject)
-	addr := c.cfg.Host + ":" + c.cfg.Port
+	addr := cfg.Host + ":" + cfg.Port
 	var auth smtp.Auth
-	if c.cfg.Username != "" {
-		auth = smtp.PlainAuth("", c.cfg.Username, c.cfg.Password, c.cfg.Host)
+	if cfg.Username != "" {
+		auth = smtp.PlainAuth("", cfg.Username, cfg.Password, cfg.Host)
 	}
 	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s\r\n",
 		cleanFrom, strings.Join(cleanTo, ", "), cleanSubject, body)

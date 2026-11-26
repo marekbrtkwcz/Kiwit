@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Boxes, GitBranch, Package, Plus, Shield, Tag } from 'lucide-react'
-import { api, Build, ComponentItem, Product, User, Version } from '../../api/client'
+import { api, Build, Classification, ComponentItem, Product, User, Version } from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 
@@ -16,6 +16,8 @@ export function ProductsView() {
   const [users, setUsers] = useState<User[]>([])
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [classifications, setClassifications] = useState<Classification[]>([])
+  const [classificationId, setClassificationId] = useState<number>(0)
   const [newVersion, setNewVersion] = useState('')
   const [newBuild, setNewBuild] = useState<Record<number, string>>({})
   const [newCompName, setNewCompName] = useState('')
@@ -28,14 +30,16 @@ export function ProductsView() {
 
   const load = async () => {
     try {
-      const [res, tRes, uRes] = await Promise.all([
+      const [res, tRes, uRes, cRes] = await Promise.all([
         api.listProducts(),
         api.listTags(),
         api.listUsers().catch(() => ({ items: [] as User[] })),
+        api.listClassifications().catch(() => ({ items: [] as Classification[] })),
       ])
       setProducts(res.items)
       setTags(tRes.items)
       setUsers(uRes.items)
+      setClassifications(cRes.items)
       if (!memberUserId && uRes.items.length > 0) setMemberUserId(uRes.items[0].id)
       if (res.items.length > 0 && selectedId === null) setSelectedId(res.items[0].id)
       setError(null)
@@ -94,6 +98,12 @@ export function ProductsView() {
       <form onSubmit={handleSubmit} className="filter-bar" style={{ marginBottom: 0 }}>
         <input className="input" placeholder={t.products.namePlaceholder} value={name} onChange={(e) => setName(e.target.value)} required />
         <input className="input" placeholder={t.products.descPlaceholder} value={description} onChange={(e) => setDescription(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
+        <select className="select" value={classificationId} onChange={(e) => setClassificationId(Number(e.target.value))}>
+          <option value={0}>{t.products.noClassification}</option>
+          {classifications.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
         <button type="submit" className="btn btn-primary">
           <Plus size={15} /> {t.products.add}
         </button>
@@ -197,7 +207,7 @@ export function ProductsView() {
                       {(builds[v.id] ?? []).map((b) => (
                         <span key={b.id} className="badge">{b.name} (#{b.id})</span>
                       ))}
-                      {(builds[v.id] ?? []).length === 0 && <span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>No builds yet</span>}
+                      {(builds[v.id] ?? []).length === 0 && <span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>{t.products.noBuilds}</span>}
                     </div>
                   </div>
                 ))}

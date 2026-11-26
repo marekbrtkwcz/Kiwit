@@ -474,14 +474,14 @@ export function TestRunsView() {
             ))}
           </select>
           <select className="select" value={buildId} onChange={(e) => setBuildId(Number(e.target.value))}>
-            {builds.length === 0 && <option value={0}>No builds</option>}
+            {builds.length === 0 && <option value={0}>{t.testruns.noBuilds}</option>}
             {builds.map((b) => (
               <option key={b.id} value={b.id}>{b.name} (#{b.id})</option>
             ))}
           </select>
           {environments.length > 0 && (
             <select className="select" value={environmentId} onChange={(e) => setEnvironmentId(Number(e.target.value))}>
-              <option value={0}>No environment</option>
+              <option value={0}>{t.testruns.noEnv}</option>
               {environments.map((env) => (
                 <option key={env.id} value={env.id}>{env.name}</option>
               ))}
@@ -503,7 +503,7 @@ export function TestRunsView() {
               ))}
             </select>
             <select className="select" value={buildId} onChange={(e) => setBuildId(Number(e.target.value))}>
-              {builds.length === 0 && <option value={0}>No builds</option>}
+              {builds.length === 0 && <option value={0}>{t.testruns.noBuilds}</option>}
               {builds.map((b) => (
                 <option key={b.id} value={b.id}>{b.name} (#{b.id})</option>
               ))}

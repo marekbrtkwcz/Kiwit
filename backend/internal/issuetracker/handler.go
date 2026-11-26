@@ -45,7 +45,7 @@ func RegisterRoutes(api huma.API, repo Repository, guard *auth.AccessGuard) {
 	}, func(ctx context.Context, input *struct {
 		Body struct {
 			Name        string `json:"name" minLength:"1"`
-			Provider    string `json:"provider" enum:"github,gitlab,jira"`
+			Provider    string `json:"provider" enum:"github,gitlab,jira,bugzilla,azure"`
 			BaseURL     string `json:"base_url" minLength:"1"`
 			APIUsername string `json:"api_username,omitempty" doc:"Optional username/email for Jira Cloud Basic Auth"`
 		}

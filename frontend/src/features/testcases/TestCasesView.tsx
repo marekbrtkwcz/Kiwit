@@ -23,6 +23,7 @@ import {
   TestCase,
   TestStep,
 } from '../../api/client'
+import { ConfirmDialog, EmptyState, LoadingSkeleton } from '../../components/UiPrimitives'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 import { AttachmentsPanel } from '../attachments/AttachmentsPanel'
@@ -84,7 +85,9 @@ const PAGE_SIZE = 20
 
 export function TestCasesView() {
   const { t } = useI18n()
-  const { products, activeProductId, notify } = useWorkspace()
+  const { products, activeProductId, notify, notifyAction } = useWorkspace()
+  const [loading, setLoading] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; summary: string } | null>(null)
   const { id: routeCaseId } = useParams<{ id: string }>()
   const navigate = useNavigate()
 
@@ -308,6 +311,7 @@ export function TestCasesView() {
   const categoryMap = new Map(categories.map((c) => [c.id, c.name]))
 
   return (
+    <>
     <section>
       {error && <p className="alert-error">{error}</p>}
 
@@ -467,17 +471,7 @@ export function TestCasesView() {
                       className="btn btn-ghost btn-sm"
                       style={{ color: 'var(--danger)' }}
                       title="Delete"
-                      onClick={async () => {
-                        if (!window.confirm(`Delete TestCase #${tc.id}?`)) return
-                        try {
-                          await api.deleteTestCase(tc.id)
-                          notify(`Deleted #${tc.id}`)
-                          if (editingId === tc.id) closeDrawer()
-                          await load()
-                        } catch (err) {
-                          setError(err instanceof Error ? err.message : t.errors.saveTestCase)
-                        }
-                      }}
+                      onClick={() => setDeleteTarget({ id: tc.id, summary: tc.summary })}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -485,10 +479,22 @@ export function TestCasesView() {
                 </td>
               </tr>
             ))}
-            {cases.length === 0 && (
+            {cases.length === 0 && !loading && (
               <tr>
-                <td colSpan={8} style={{ textAlign: 'center', color: 'var(--muted)', padding: '2rem' }}>
-                  {t.testcases.empty}
+                <td colSpan={8} style={{ padding: 0, border: 'none' }}>
+                  <EmptyState
+                    title={t.testcases.empty}
+                    description="Create your first test case to start testing."
+                    actionLabel="+ New Test Case"
+                    onAction={openNewDrawer}
+                  />
+                </td>
+              </tr>
+            )}
+            {loading && cases.length === 0 && (
+              <tr>
+                <td colSpan={8}>
+                  <LoadingSkeleton rows={5} />
                 </td>
               </tr>
             )}
@@ -751,5 +757,27 @@ export function TestCasesView() {
         </div>
       )}
     </section>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Delete test case?"
+        message={deleteTarget ? `TestCase #${deleteTarget.id} "${deleteTarget.summary}" will be permanently deleted.` : ''}
+        confirmLabel="Delete"
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={async () => {
+          if (!deleteTarget) return
+          const target = deleteTarget
+          setDeleteTarget(null)
+          try {
+            await api.deleteTestCase(target.id)
+            notifyAction(`Deleted #${target.id}`, 'Undo', () => notify('Undo not available for deletes yet', 'error'))
+            if (editingId === target.id) closeDrawer()
+            await load()
+          } catch (err) {
+            setError(err instanceof Error ? err.message : t.errors.saveTestCase)
+          }
+        }}
+      />
+    </>
   )
 }

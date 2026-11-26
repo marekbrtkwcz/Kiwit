@@ -190,6 +190,14 @@ export interface TestExecution {
   stopped_at?: string
 }
 
+export interface LinkRefItem {
+  id: number
+  entity_type: string
+  entity_id: number
+  name: string
+  url: string
+}
+
 export interface ExecutionLinkItem {
   id: number
   test_execution_id: number
@@ -205,6 +213,23 @@ export interface User {
   role: string
   is_active?: boolean
   created_at?: string
+}
+
+export interface Classification {
+  id: number
+  name: string
+}
+
+export interface PlanType {
+  id: number
+  name: string
+}
+
+export interface UserGroup {
+  id: number
+  name: string
+  created_at?: string
+  members?: number[]
 }
 
 export interface ApiTokenInfo {
@@ -314,6 +339,28 @@ export interface ExecutionDashboard {
   testers: TesterLoad[]
 }
 
+export interface DashboardMyRun {
+  id: number
+  summary: string
+  plan_id: number
+  stopped_at?: string
+  started_at: string
+}
+
+export interface DashboardActivity {
+  id: number
+  entity_type: string
+  entity_id: number
+  action: string
+  actor_name: string
+  created_at: string
+}
+
+export interface DashboardSnapshot {
+  my_runs: DashboardMyRun[]
+  recent_activity: DashboardActivity[]
+}
+
 export interface WebhookItem {
   id: number
   name: string
@@ -409,7 +456,7 @@ export interface TagItem {
 export interface IssueTrackerItem {
   id: number
   name: string
-  provider: 'github' | 'gitlab' | 'jira'
+  provider: 'github' | 'gitlab' | 'jira' | 'bugzilla' | 'azure'
   base_url: string
   api_username?: string
   created_at: string
@@ -491,6 +538,25 @@ export const api = {
   listUsers: () => request<{ items: User[] }>('/api/v1/admin/users'),
   updateUser: (id: number, body: { role: 'viewer' | 'tester' | 'admin'; is_active: boolean }) =>
     request<User>(`/api/v1/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  listGroups: () => request<{ items: UserGroup[] }>('/api/v1/admin/groups'),
+  createGroup: (name: string) =>
+    request<UserGroup>('/api/v1/admin/groups', { method: 'POST', body: JSON.stringify({ name }) }),
+  deleteGroup: (id: number) => request<void>(`/api/v1/admin/groups/${id}`, { method: 'DELETE' }),
+  addGroupMember: (groupId: number, userId: number) =>
+    request<{ ok: boolean }>(`/api/v1/admin/groups/${groupId}/members`, { method: 'POST', body: JSON.stringify({ user_id: userId }) }),
+  removeGroupMember: (groupId: number, userId: number) =>
+    request<{ ok: boolean }>(`/api/v1/admin/groups/${groupId}/members/${userId}`, { method: 'DELETE' }),
+  authMethods: () => request<{ sso: boolean; ldap: boolean }>('/api/v1/auth/methods'),
+  ldapLogin: (body: { username: string; password: string }) =>
+    request<{ access_token: string; token_type: string; user: User }>('/api/v1/auth/ldap-login', { method: 'POST', body: JSON.stringify(body) }),
+  listClassifications: () => request<{ items: Classification[] }>('/api/v1/classifications'),
+  createClassification: (name: string) =>
+    request<Classification>('/api/v1/classifications', { method: 'POST', body: JSON.stringify({ name }) }),
+  deleteClassification: (id: number) => request<void>(`/api/v1/classifications/${id}`, { method: 'DELETE' }),
+  listPlanTypes: () => request<{ items: PlanType[] }>('/api/v1/plantypes'),
+  createPlanType: (name: string) =>
+    request<PlanType>('/api/v1/plantypes', { method: 'POST', body: JSON.stringify({ name }) }),
+  deletePlanType: (id: number) => request<void>(`/api/v1/plantypes/${id}`, { method: 'DELETE' }),
   listProducts: () => request<{ items: Product[] }>('/api/v1/products'),
   createProduct: (body: { name: string; description?: string }) =>
     request<Product>('/api/v1/products', { method: 'POST', body: JSON.stringify(body) }),
@@ -627,6 +693,11 @@ export const api = {
     request<{ updated: number }>('/api/v1/executions/bulk', { method: 'PATCH', body: JSON.stringify(body) }),
   syncExecutionCase: (id: number) =>
     request<TestExecution>(`/api/v1/executions/${id}/sync-case`, { method: 'POST' }),
+  listLinks: (entityType: 'test_run' | 'test_execution', entityId: number) =>
+    request<{ items: LinkRefItem[] }>(`/api/v1/links?entity_type=${entityType}&entity_id=${entityId}`),
+  addLink: (entityType: 'test_run' | 'test_execution', entityId: number, body: { name: string; url: string }) =>
+    request<LinkRefItem>(`/api/v1/links`, { method: 'POST', body: JSON.stringify({ entity_type: entityType, entity_id: entityId, ...body }) }),
+  deleteLink: (id: number) => request<void>(`/api/v1/links/${id}`, { method: 'DELETE' }),
   listExecutionLinks: (id: number) =>
     request<{ items: ExecutionLinkItem[] }>(`/api/v1/executions/${id}/links`),
   addExecutionLink: (id: number, body: { name: string; url: string }) =>
@@ -652,6 +723,7 @@ export const api = {
     request<TelemetryBreakdown>(`/api/v1/telemetry/breakdown${buildTelemetryQuery(params)}`),
   getExecutionDashboard: (params?: TelemetryFilterParams) =>
     request<ExecutionDashboard>(`/api/v1/telemetry/execution-dashboard${buildTelemetryQuery(params)}`),
+  getDashboard: () => request<DashboardSnapshot>('/api/v1/dashboard'),
   uploadAttachment: async (entityType: 'test_case' | 'test_execution', entityId: number, file: File) => {
     const form = new FormData()
     form.append('entity_type', entityType)
@@ -719,7 +791,7 @@ export const api = {
     }),
 
   listIssueTrackers: () => request<{ items: IssueTrackerItem[] }>('/api/v1/issue-trackers'),
-  createIssueTracker: (body: { name: string; provider: 'github' | 'gitlab' | 'jira'; base_url: string; api_username?: string }) =>
+  createIssueTracker: (body: { name: string; provider: 'github' | 'gitlab' | 'jira' | 'bugzilla' | 'azure'; base_url: string; api_username?: string }) =>
     request<IssueTrackerItem>('/api/v1/issue-trackers', { method: 'POST', body: JSON.stringify(body) }),
   listWebhooks: () => request<{ items: WebhookItem[] }>('/api/v1/webhooks'),
   createWebhook: (body: { name: string; url: string; secret?: string; events: string[]; is_active?: boolean }) =>
@@ -815,4 +887,26 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ events }),
     }),
+}
+
+// --- Configurable menu (MENU_ITEMS / HELP_MENU_ITEMS) ---
+
+export interface MenuItem {
+  label: string
+  url?: string
+  icon?: string
+}
+
+export interface MenuGroup {
+  label: string
+  items: (MenuItem | MenuGroup)[]
+}
+
+export interface MenuResponse {
+  main: MenuGroup[]
+  help: MenuItem[]
+}
+
+export const menuApi = {
+  get: () => request<MenuResponse>('/api/v1/menu'),
 }

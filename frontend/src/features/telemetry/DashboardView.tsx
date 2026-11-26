@@ -29,6 +29,7 @@ import {
 import {
   api,
   CaseHealth,
+  DashboardSnapshot,
   ExecutionDashboard,
   MatrixRow,
   TelemetryBreakdown,
@@ -59,6 +60,7 @@ export function DashboardView() {
   const [health, setHealth] = useState<CaseHealth[]>([])
   const [breakdown, setBreakdown] = useState<TelemetryBreakdown | null>(null)
   const [execDash, setExecDash] = useState<ExecutionDashboard | null>(null)
+  const [dash, setDash] = useState<DashboardSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -88,6 +90,10 @@ export function DashboardView() {
         setError(err instanceof Error ? err.message : t.errors.authFailed)
       })
   }, [activeProductId, from, to, t.errors.authFailed])
+
+  useEffect(() => {
+    void api.getDashboard().then(setDash).catch(() => setDash(null))
+  }, [])
 
   const trendSeries = useMemo(() => {
     const map = new Map<string, { date: string; passed: number; failed: number; blocked: number; skipped: number }>()
@@ -124,6 +130,67 @@ export function DashboardView() {
 
   return (
     <section style={{ display: 'grid', gap: '1.15rem' }}>
+      {/* Personal widgets: my runs + recent activity */}
+      {dash && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.15rem' }}>
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title">
+                <PlayCircle size={16} />
+                {t.dashboard.myRuns}
+              </h3>
+            </div>
+            {dash.my_runs.length === 0 ? (
+              <p style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>{t.dashboard.noRuns}</p>
+            ) : (
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '0.4rem' }}>
+                {dash.my_runs.map((r) => (
+                  <li key={r.id}>
+                    <a
+                      href={`/runs/${r.id}`}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        navigate(`/runs/${r.id}`)
+                      }}
+                      style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', fontSize: '0.87rem' }}
+                    >
+                      <span>
+                        #{r.id} {r.summary}
+                      </span>
+                      <span className={`badge ${r.stopped_at ? 'pill-idle' : 'pill-running'}`}>
+                        {r.stopped_at ? t.dashboard.stateStopped : t.dashboard.stateRunning}
+                      </span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title">
+                <Activity size={16} />
+                {t.dashboard.recentActivity}
+              </h3>
+            </div>
+            {dash.recent_activity.length === 0 ? (
+              <p style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>{t.dashboard.noActivity}</p>
+            ) : (
+              <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '0.4rem', fontSize: '0.85rem' }}>
+                {dash.recent_activity.map((a) => (
+                  <li key={a.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
+                    <span>
+                      <strong>{a.actor_name}</strong> {a.action} {a.entity_type} #{a.entity_id}
+                    </span>
+                    <span style={monoStyle}>{new Date(a.created_at).toLocaleString()}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Filter bar */}
       <div className="filter-bar" style={{ marginBottom: 0 }}>
         <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--muted)' }}>{t.dashboard.from}:</span>

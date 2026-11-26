@@ -24,6 +24,22 @@ func (r *PostgresRepository) List(ctx context.Context) ([]TestPlan, error) {
 	return r.ListFiltered(ctx, ListFilter{})
 }
 
+func (r *PostgresRepository) GetByID(ctx context.Context, id int64) (TestPlan, error) {
+	var tp TestPlan
+	var parentID sql.NullInt64
+	err := r.pool.QueryRow(ctx, `
+		SELECT id, product_id, version_id, parent_id, name, description, plan_type, extra_link, is_active, created_at
+		FROM test_plans WHERE id = $1`, id,
+	).Scan(&tp.ID, &tp.ProductID, &tp.VersionID, &parentID, &tp.Name, &tp.Description, &tp.PlanType, &tp.ExtraLink, &tp.IsActive, &tp.CreatedAt)
+	if err != nil {
+		return TestPlan{}, err
+	}
+	if parentID.Valid {
+		tp.ParentID = &parentID.Int64
+	}
+	return tp, nil
+}
+
 func (r *PostgresRepository) ListFiltered(ctx context.Context, f ListFilter) ([]TestPlan, error) {
 	where := make([]string, 0, 6)
 	args := make([]any, 0, 6)

@@ -17,6 +17,35 @@ type Config struct {
 	UploadDir         string
 	AllowRegistration bool
 	BaseURL           string
+	StorageType       string // "local" (default) or "s3"
+	S3Endpoint        string
+	S3Region          string
+	S3Bucket          string
+	S3AccessKey       string
+	S3SecretKey       string
+	S3UsePathStyle    bool
+	OIDCIssuer        string // empty = SSO disabled
+	OIDCClientID      string
+	OIDCClientSecret  string
+	OIDCRedirectURL   string
+	OIDCProviderName  string
+	LDAPServer        string // empty = LDAP disabled
+	LDAPBindDN        string
+	LDAPBindPassword  string
+	LDAPBaseDN        string
+	LDAPUserFilter    string // e.g. (uid=%s)
+	LDAPUsernameAttr  string
+	LDAPEmailAttr     string
+}
+
+// LDAPEnabled reports whether LDAP auth is configured.
+func (c Config) LDAPEnabled() bool {
+	return c.LDAPServer != "" && c.LDAPBaseDN != "" && c.LDAPUserFilter != ""
+}
+
+// OIDCEnabled reports whether SSO via OIDC is configured.
+func (c Config) OIDCEnabled() bool {
+	return c.OIDCIssuer != "" && c.OIDCClientID != "" && c.OIDCClientSecret != ""
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -29,6 +58,25 @@ func Load() Config {
 		UploadDir:         getEnv("KIWIT_UPLOAD_DIR", "./uploads"),
 		AllowRegistration: getEnvBool("KIWIT_ALLOW_REGISTRATION", true),
 		BaseURL:           getEnv("KIWIT_BASE_URL", "http://localhost:8080"),
+		StorageType:       getEnv("KIWIT_STORAGE_TYPE", "local"),
+		S3Endpoint:        getEnv("KIWIT_S3_ENDPOINT", ""),
+		S3Region:          getEnv("KIWIT_S3_REGION", "us-east-1"),
+		S3Bucket:          getEnv("KIWIT_S3_BUCKET", ""),
+		S3AccessKey:       getEnv("KIWIT_S3_ACCESS_KEY", ""),
+		S3SecretKey:       getEnv("KIWIT_S3_SECRET_KEY", ""),
+		S3UsePathStyle:    getEnvBool("KIWIT_S3_USE_PATH_STYLE", true),
+		OIDCIssuer:        getEnv("KIWIT_OIDC_ISSUER", ""),
+		OIDCClientID:      getEnv("KIWIT_OIDC_CLIENT_ID", ""),
+		OIDCClientSecret:  getEnv("KIWIT_OIDC_CLIENT_SECRET", ""),
+		OIDCRedirectURL:   getEnv("KIWIT_OIDC_REDIRECT_URL", ""),
+		OIDCProviderName:  getEnv("KIWIT_OIDC_PROVIDER_NAME", "SSO"),
+		LDAPServer:        getEnv("KIWIT_LDAP_SERVER", ""),
+		LDAPBindDN:        getEnv("KIWIT_LDAP_BIND_DN", ""),
+		LDAPBindPassword:  getEnv("KIWIT_LDAP_BIND_PASSWORD", ""),
+		LDAPBaseDN:        getEnv("KIWIT_LDAP_BASE_DN", ""),
+		LDAPUserFilter:    getEnv("KIWIT_LDAP_USER_FILTER", "(uid=%s)"),
+		LDAPUsernameAttr:  getEnv("KIWIT_LDAP_USERNAME_ATTR", "uid"),
+		LDAPEmailAttr:     getEnv("KIWIT_LDAP_EMAIL_ATTR", "mail"),
 	}
 }
 

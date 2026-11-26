@@ -16,12 +16,13 @@ import (
 
 // Payload is the JSON body delivered to every webhook target.
 type Payload struct {
-	Event      string `json:"event"`
-	EntityType string `json:"entity_type,omitempty"`
-	EntityID   int64  `json:"entity_id,omitempty"`
-	Title      string `json:"title"`
-	Body       string `json:"body,omitempty"`
-	Timestamp  string `json:"timestamp"`
+	Event      string         `json:"event"`
+	EntityType string         `json:"entity_type,omitempty"`
+	EntityID   int64          `json:"entity_id,omitempty"`
+	Title      string         `json:"title"`
+	Body       string         `json:"body,omitempty"`
+	Data       map[string]any `json:"data,omitempty"` // event-specific extra fields (e.g. bug.created: tracker, url, reporter)
+	Timestamp  string         `json:"timestamp"`
 }
 
 // Sign returns the X-Kiwit-Signature header value: "t=<unix>,v1=<hex>" where
@@ -137,6 +138,49 @@ func (s *Store) EmitEvent(eventType, entityType string, entityID int64, title, b
 		EntityID:   entityID,
 		Title:      title,
 		Body:       body,
+		Timestamp:  time.Now().UTC().Format(time.RFC3339),
+	}
+	for _, w := range targets {
+		if !containsEvent(w.Events, eventType) {
+			continue
+		}
+		go func(target Webhook) {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Default().Error("webhook emit panic", "event", eventType, "err", r)
+				}
+			}()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if _, err := Deliver(ctx, target, p); err != nil {
+				slog.Default().Warn("webhook delivery failed", "event", eventType, "err", err)
+			}
+		}(w)
+	}
+}
+
+// EmitEventWithData is like EmitEvent but includes extra event-specific data
+// in the payload's "data" field (e.g. for bug.created: tracker name, external
+// issue URL, reporter username — the equivalent of Kiwi TCMS's
+// EXTERNAL_ISSUE_POST_PROCESSORS receiving the new issue object).
+func (s *Store) EmitEventWithData(eventType, entityType string, entityID int64, title, body string, data map[string]any) {
+	if s == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	targets, err := s.listActive(ctx)
+	cancel()
+	if err != nil {
+		return
+	}
+
+	p := Payload{
+		Event:      eventType,
+		EntityType: entityType,
+		EntityID:   entityID,
+		Title:      title,
+		Body:       body,
+		Data:       data,
 		Timestamp:  time.Now().UTC().Format(time.RFC3339),
 	}
 	for _, w := range targets {

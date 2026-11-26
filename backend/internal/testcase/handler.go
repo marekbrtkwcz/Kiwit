@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/kiwit/kiwit/internal/audit"
 	"github.com/kiwit/kiwit/internal/auth"
 	"github.com/kiwit/kiwit/internal/notify"
 )
@@ -84,7 +85,7 @@ type ListTestCasesOutput struct {
 }
 
 // RegisterRoutes registers TestCase OpenAPI endpoints.
-func RegisterRoutes(api huma.API, repo Repository, emailSettings *notify.SettingsStore, emailClient *notify.EmailClient, guard *auth.AccessGuard) {
+func RegisterRoutes(api huma.API, repo Repository, emailSettings *notify.SettingsStore, emailClient *notify.EmailClient, guard *auth.AccessGuard, auditStore *audit.Store) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-testcases",
 		Method:      http.MethodGet,
@@ -198,6 +199,9 @@ func RegisterRoutes(api huma.API, repo Repository, emailSettings *notify.Setting
 		if err != nil {
 			return nil, huma.Error400BadRequest("failed to create test case", err)
 		}
+		audit.RecordChange(ctx, auditStore, "test_case", tc.ID, "create", nil, map[string]any{
+			"summary": tc.Summary, "status": tc.Status, "priority": tc.Priority, "product_id": tc.ProductID,
+		})
 		return &TestCaseOutput{Body: tc}, nil
 	})
 
@@ -217,6 +221,7 @@ func RegisterRoutes(api huma.API, repo Repository, emailSettings *notify.Setting
 		if err := guard.EnforceProduct(ctx, input.Body.ProductID, true); err != nil {
 			return nil, err
 		}
+		old, oldErr := repo.GetByID(ctx, input.ID)
 		tc, err := repo.Update(ctx, input.ID, UpsertParams{
 			ProductID:       input.Body.ProductID,
 			CategoryID:      input.Body.CategoryID,
@@ -242,9 +247,19 @@ func RegisterRoutes(api huma.API, repo Repository, emailSettings *notify.Setting
 			}
 			return nil, huma.Error400BadRequest("failed to update test case", err)
 		}
+		oldMap := map[string]any{"summary": old.Summary, "status": old.Status, "priority": old.Priority, "notes": old.Notes, "preconditions": old.Preconditions, "is_automated": old.IsAutomated}
+		newMap := map[string]any{"summary": tc.Summary, "status": tc.Status, "priority": tc.Priority, "notes": tc.Notes, "preconditions": tc.Preconditions, "is_automated": tc.IsAutomated}
+		_, _, diffText := audit.DiffFields(oldMap, newMap)
+		if oldErr == nil {
+			audit.RecordChange(ctx, auditStore, "test_case", tc.ID, "update", oldMap, newMap)
+		}
+		body := fmt.Sprintf("TestCase #%d (%s) was updated.", tc.ID, tc.Summary)
+		if diffText != "" {
+			body += "\n\nChanges:\n" + diffText
+		}
 		emailSettings.NotifyIfEnabled(emailClient, "test_case", tc.ID,
 			fmt.Sprintf("[Kiwit] TestCase #%d updated", tc.ID),
-			fmt.Sprintf("TestCase #%d (%s) was updated.", tc.ID, tc.Summary),
+			body,
 		)
 		return &TestCaseOutput{Body: tc}, nil
 	})
@@ -331,12 +346,14 @@ func RegisterRoutes(api huma.API, repo Repository, emailSettings *notify.Setting
 		if err := guard.EnforceTestCase(ctx, input.ID, true); err != nil {
 			return nil, err
 		}
+		old, _ := repo.GetByID(ctx, input.ID)
 		if err := repo.Delete(ctx, input.ID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, huma.Error404NotFound("test case not found")
 			}
 			return nil, huma.Error500InternalServerError("failed to delete test case", err)
 		}
+		audit.RecordChange(ctx, auditStore, "test_case", input.ID, "delete", map[string]any{"summary": old.Summary, "status": old.Status}, nil)
 		return nil, nil
 	})
 

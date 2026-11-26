@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/kiwit/kiwit/internal/audit"
 	"github.com/kiwit/kiwit/internal/auth"
 	"github.com/kiwit/kiwit/internal/notification"
 	"github.com/kiwit/kiwit/internal/notify"
@@ -87,7 +88,7 @@ type ExecutionLink struct {
 }
 
 // RegisterRoutes registers TestRun and TestExecution OpenAPI endpoints.
-func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClient, notifications *notification.Store, emailClient *notify.EmailClient, webhooks *webhook.Store, guard *auth.AccessGuard) {
+func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClient, notifications *notification.Store, emailClient *notify.EmailClient, webhooks *webhook.Store, guard *auth.AccessGuard, auditStore *audit.Store) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-testruns",
 		Method:      http.MethodGet,
@@ -145,6 +146,7 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 		if err := guard.EnforceTestRun(ctx, input.ID, true); err != nil {
 			return nil, err
 		}
+		old, oldErr := repo.GetByID(ctx, input.ID)
 		tr, err := repo.Update(ctx, input.ID, UpdateParams{
 			BuildID:         input.Body.BuildID,
 			EnvironmentID:   input.Body.EnvironmentID,
@@ -160,6 +162,11 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 				return nil, huma.Error404NotFound("test run not found")
 			}
 			return nil, huma.Error400BadRequest("failed to update test run", err)
+		}
+		if oldErr == nil {
+			oldMap := map[string]any{"summary": old.Summary, "notes": old.Notes}
+			newMap := map[string]any{"summary": tr.Summary, "notes": tr.Notes}
+			audit.RecordChange(ctx, auditStore, "test_run", tr.ID, "update", oldMap, newMap)
 		}
 		return &TestRunOutput{Body: tr}, nil
 	})
@@ -193,6 +200,7 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 			return nil, huma.Error500InternalServerError("failed to stop test run", err)
 		}
 		if stoppedNow {
+			audit.RecordChange(ctx, auditStore, "test_run", input.ID, "stop", map[string]any{"stopped": false}, map[string]any{"stopped": true})
 			if notifier != nil && notifier.Enabled() {
 				go func(id int64) {
 					_ = notifier.Send(context.Background(), fmt.Sprintf("TestRun #%d stopped", id))
@@ -224,12 +232,14 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 		if err := guard.EnforceTestRun(ctx, input.ID, true); err != nil {
 			return nil, err
 		}
+		old, _ := repo.GetByID(ctx, input.ID)
 		if err := repo.Delete(ctx, input.ID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, huma.Error404NotFound("test run not found")
 			}
 			return nil, huma.Error500InternalServerError("failed to delete test run", err)
 		}
+		audit.RecordChange(ctx, auditStore, "test_run", input.ID, "delete", map[string]any{"summary": old.Summary}, nil)
 		return nil, nil
 	})
 
@@ -408,6 +418,9 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 		if err != nil {
 			return nil, huma.Error400BadRequest("failed to create test run", err)
 		}
+		audit.RecordChange(ctx, auditStore, "test_run", tr.ID, "create", nil, map[string]any{
+			"summary": tr.Summary, "plan_id": tr.TestPlanID, "build_id": tr.BuildID,
+		})
 		return &TestRunOutput{Body: tr}, nil
 	})
 

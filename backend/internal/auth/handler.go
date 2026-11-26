@@ -7,13 +7,17 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/kiwit/kiwit/internal/captcha"
 )
 
 type RegisterInput struct {
 	Body struct {
-		Email    string `json:"email" format:"email"`
-		Username string `json:"username" minLength:"2" maxLength:"64"`
-		Password string `json:"password" minLength:"8"`
+		Email         string `json:"email" format:"email"`
+		Username      string `json:"username" minLength:"2" maxLength:"64"`
+		Password      string `json:"password" minLength:"8"`
+		CaptchaID     string `json:"captcha_id,omitempty"`     // required when captcha is enabled
+		CaptchaAnswer string `json:"captcha_answer,omitempty"` // required when captcha is enabled
+		Website       string `json:"website,omitempty"`        // honeypot — must be empty
 	}
 }
 
@@ -52,16 +56,51 @@ type CreateTokenOutput struct {
 // RegisterRoutes registers authentication OpenAPI endpoints.
 func RegisterRoutes(api huma.API, svc *Service) {
 	huma.Register(api, huma.Operation{
+		OperationID: "auth-methods",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/auth/methods",
+		Summary:     "Which external auth methods are enabled (sso, ldap)",
+		Tags:        []string{"Auth"},
+	}, func(ctx context.Context, input *struct{}) (*struct {
+		Body struct {
+			SSO  bool `json:"sso"`
+			LDAP bool `json:"ldap"`
+		}
+	}, error) {
+		out := &struct {
+			Body struct {
+				SSO  bool `json:"sso"`
+				LDAP bool `json:"ldap"`
+			}
+		}{}
+		out.Body.LDAP = svc.ldapCfg != nil
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
 		OperationID: "auth-register",
 		Method:      http.MethodPost,
 		Path:        "/api/v1/auth/register",
 		Summary:     "Register a new user",
 		Tags:        []string{"Auth"},
 	}, func(ctx context.Context, input *RegisterInput) (*UserOutput, error) {
+		// Honeypot: hidden "website" field must be empty
+		if captcha.IsHoneypotTripped(input.Body.Website) {
+			return nil, huma.Error400BadRequest("invalid request")
+		}
+		// Self-hosted captcha (if enabled)
+		if svc.CaptchaEnabled() {
+			if err := svc.VerifyCaptcha(input.Body.CaptchaID, input.Body.CaptchaAnswer); err != nil {
+				return nil, huma.Error400BadRequest("captcha verification failed: " + err.Error())
+			}
+		}
 		u, err := svc.Register(ctx, input.Body.Email, input.Body.Username, input.Body.Password)
 		if err != nil {
 			if errors.Is(err, ErrRegistrationClosed) {
 				return nil, huma.Error403Forbidden("registration is disabled")
+			}
+			if errors.Is(err, ErrWeakPassword) {
+				return nil, huma.Error400BadRequest("password is too weak (min 8 chars, not a common password, must not contain email/username)")
 			}
 			return nil, huma.Error409Conflict("failed to register user", err)
 		}
@@ -81,6 +120,32 @@ func RegisterRoutes(api huma.API, svc *Service) {
 				return nil, huma.Error401Unauthorized("invalid email or password")
 			}
 			return nil, huma.Error500InternalServerError("login failed", err)
+		}
+		out := &LoginOutput{}
+		out.Body.TokenType = "Bearer"
+		out.Body.AccessToken = token
+		out.Body.User = u
+		return out, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "auth-ldap-login",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/auth/ldap-login",
+		Summary:     "Authenticate against LDAP and issue JWT (disabled when KIWIT_LDAP_SERVER is unset)",
+		Tags:        []string{"Auth"},
+	}, func(ctx context.Context, input *struct {
+		Body struct {
+			Username string `json:"username" minLength:"1"`
+			Password string `json:"password" minLength:"1"`
+		}
+	}) (*LoginOutput, error) {
+		token, u, err := svc.LDAPLogin(ctx, input.Body.Username, input.Body.Password)
+		if err != nil {
+			if errors.Is(err, ErrInvalidCredentials) {
+				return nil, huma.Error401Unauthorized("invalid LDAP credentials")
+			}
+			return nil, huma.Error500InternalServerError("LDAP login failed", err)
 		}
 		out := &LoginOutput{}
 		out.Body.TokenType = "Bearer"
@@ -139,6 +204,9 @@ func RegisterRoutes(api huma.API, svc *Service) {
 		if err := svc.ChangePassword(ctx, u.ID, input.Body.CurrentPassword, input.Body.NewPassword); err != nil {
 			if errors.Is(err, ErrInvalidCredentials) {
 				return nil, huma.Error401Unauthorized("current password is incorrect")
+			}
+			if errors.Is(err, ErrWeakPassword) {
+				return nil, huma.Error400BadRequest("password is too weak (min 8 chars, not a common password)")
 			}
 			return nil, huma.Error500InternalServerError("failed to change password", err)
 		}
@@ -256,6 +324,9 @@ func RegisterRoutes(api huma.API, svc *Service) {
 		if err := svc.ConfirmPasswordReset(ctx, input.Body.Token, input.Body.NewPassword); err != nil {
 			if errors.Is(err, ErrResetTokenInvalid) {
 				return nil, huma.Error400BadRequest("invalid, expired or used password reset token")
+			}
+			if errors.Is(err, ErrWeakPassword) {
+				return nil, huma.Error400BadRequest("password is too weak (min 8 chars, not a common password)")
 			}
 			return nil, huma.Error500InternalServerError("failed to confirm password reset", err)
 		}

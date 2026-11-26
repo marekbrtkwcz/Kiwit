@@ -21,6 +21,11 @@ func UserFromContext(ctx context.Context) (User, bool) {
 	return u, ok
 }
 
+// WithUser returns a context carrying the given user (used by XML-RPC session auth).
+func WithUser(ctx context.Context, u User) context.Context {
+	return context.WithValue(ctx, userContextKey, u)
+}
+
 // IsAPIToken reports whether the current request was authenticated with a kiwit_* API token.
 func IsAPIToken(ctx context.Context) bool {
 	m, _ := ctx.Value(authMethodContextKey).(string)
@@ -28,6 +33,7 @@ func IsAPIToken(ctx context.Context) bool {
 }
 
 // CheckRole validates that the authenticated user in ctx has one of the allowed roles (admin always passes).
+// The "anonymous" role is allowed only when explicitly listed — it grants read-only access.
 // Returns nil when no auth context is present only if RequireAuth is not active? No: fails closed when missing.
 func CheckRole(ctx context.Context, allowed ...string) error {
 	u, ok := UserFromContext(ctx)
@@ -45,10 +51,40 @@ func CheckRole(ctx context.Context, allowed ...string) error {
 	return huma.Error403Forbidden("insufficient role")
 }
 
+// CheckWriteRole validates that the user can perform write operations.
+// Anonymous users are always rejected for writes (read-only access).
+func CheckWriteRole(ctx context.Context, allowed ...string) error {
+	u, ok := UserFromContext(ctx)
+	if !ok {
+		return huma.Error401Unauthorized("unauthorized")
+	}
+	if u.Role == "anonymous" {
+		return huma.Error403Forbidden("anonymous users have read-only access")
+	}
+	return CheckRole(ctx, allowed...)
+}
+
+// IsAnonymous reports whether the context user is the anonymous read-only user.
+func IsAnonymous(ctx context.Context) bool {
+	u, ok := UserFromContext(ctx)
+	return ok && u.Role == "anonymous"
+}
+
+// AnonymousUser is the synthetic read-only user injected when anonymous access is enabled.
+var AnonymousUser = User{
+	ID:       0,
+	Email:    "",
+	Username: "AnonymousUser",
+	Role:     "anonymous",
+}
+
 // RequireAuth protects /api/v1/* routes using JWT or kiwit_* API tokens.
 // Public (bypass) paths: login, register and the password-reset pair — the
 // reset paths still authenticate when a valid bearer is provided, so API
 // tokens can be detected and rejected by the handlers.
+// When anonymous access is enabled (SetAnonymousAccess(true)), requests
+// without a bearer token are allowed through with the AnonymousUser in
+// context — handlers must still enforce read-only via CheckRole.
 func (s *Service) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := r.Header.Get("Authorization")
@@ -62,6 +98,13 @@ func (s *Service) RequireAuth(next http.Handler) http.Handler {
 		}
 
 		if !strings.HasPrefix(header, "Bearer ") {
+			if s.anonymousAccess && r.Method == http.MethodGet {
+				// Anonymous read-only access: inject AnonymousUser into context
+				ctx := context.WithValue(r.Context(), userContextKey, AnonymousUser)
+				ctx = context.WithValue(ctx, contextKey("user_role"), "anonymous")
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
 			w.Header().Set("Content-Type", "application/json")
 			http.Error(w, `{"title":"Unauthorized","status":401,"detail":"missing bearer token"}`, http.StatusUnauthorized)
 			return
@@ -70,6 +113,12 @@ func (s *Service) RequireAuth(next http.Handler) http.Handler {
 		token := strings.TrimPrefix(header, "Bearer ")
 		u, err := s.AuthenticateBearer(r.Context(), token)
 		if err != nil {
+			if s.anonymousAccess && r.Method == http.MethodGet {
+				ctx := context.WithValue(r.Context(), userContextKey, AnonymousUser)
+				ctx = context.WithValue(ctx, contextKey("user_role"), "anonymous")
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
 			w.Header().Set("Content-Type", "application/json")
 			http.Error(w, `{"title":"Unauthorized","status":401,"detail":"invalid or expired token"}`, http.StatusUnauthorized)
 			return
@@ -81,6 +130,7 @@ func (s *Service) RequireAuth(next http.Handler) http.Handler {
 		}
 		ctx := context.WithValue(r.Context(), userContextKey, u)
 		ctx = context.WithValue(ctx, authMethodContextKey, method)
+		ctx = context.WithValue(ctx, contextKey("user_role"), u.Role)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

@@ -196,6 +196,9 @@ func (s *Service) invalidateActiveResetTokens(ctx context.Context, userID int64)
 // ConfirmPasswordReset completes the flow atomically: validates the one-time
 // token, stores the new bcrypt hash on the user and marks the token used.
 func (s *Service) ConfirmPasswordReset(ctx context.Context, plainToken, newPassword string) error {
+	if err := ValidatePassword(newPassword, "", ""); err != nil {
+		return err
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)

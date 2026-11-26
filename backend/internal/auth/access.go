@@ -39,6 +39,24 @@ func (g *AccessGuard) CheckProductAccess(ctx context.Context, productID, userID 
 	if g == nil {
 		return true, nil
 	}
+	// Anonymous users: read-only access to products that have no members (public products)
+	if IsAnonymous(ctx) {
+		var count int
+		var err error
+		if g.pgPool != nil {
+			err = g.pgPool.QueryRow(ctx, `SELECT COUNT(*) FROM product_members WHERE product_id = $1`, productID).Scan(&count)
+		} else {
+			err = g.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM product_members WHERE product_id = ?`, productID).Scan(&count)
+		}
+		if err != nil {
+			return false, err
+		}
+		// Public product (no members) → read allowed, write denied
+		if count == 0 {
+			return !requireWrite, nil
+		}
+		return false, nil
+	}
 	var count int
 	if g.pgPool != nil {
 		if err := g.pgPool.QueryRow(ctx, `SELECT COUNT(*) FROM product_members WHERE product_id = $1`, productID).Scan(&count); err != nil {
@@ -52,16 +70,30 @@ func (g *AccessGuard) CheckProductAccess(ctx context.Context, productID, userID 
 			`SELECT role FROM product_members WHERE product_id = $1 AND user_id = $2`,
 			productID, userID,
 		).Scan(&role)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return false, nil
-			}
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return false, err
 		}
-		if requireWrite && role == "viewer" {
+		if err == nil && !(requireWrite && role == "viewer") {
+			return true, nil
+		}
+		// Fall back to group-based permissions (best role across the user's groups).
+		var groupRole string
+		gerr := g.pgPool.QueryRow(ctx, `
+			SELECT gpp.role FROM group_product_permissions gpp
+			JOIN user_group_members ugm ON ugm.group_id = gpp.group_id
+			WHERE gpp.product_id = $1 AND ugm.user_id = $2
+			ORDER BY CASE gpp.role WHEN 'maintainer' THEN 3 WHEN 'tester' THEN 2 ELSE 1 END DESC
+			LIMIT 1`, productID, userID).Scan(&groupRole)
+		if gerr == nil {
+			if requireWrite && groupRole == "viewer" {
+				return false, nil
+			}
+			return true, nil
+		}
+		if errors.Is(gerr, pgx.ErrNoRows) {
 			return false, nil
 		}
-		return true, nil
+		return false, gerr
 	}
 
 	if err := g.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM product_members WHERE product_id = ?`, productID).Scan(&count); err != nil {
@@ -75,16 +107,29 @@ func (g *AccessGuard) CheckProductAccess(ctx context.Context, productID, userID 
 		`SELECT role FROM product_members WHERE product_id = ? AND user_id = ?`,
 		productID, userID,
 	).Scan(&role)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return false, nil
-		}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return false, err
 	}
-	if requireWrite && role == "viewer" {
+	if err == nil && !(requireWrite && role == "viewer") {
+		return true, nil
+	}
+	var groupRole string
+	gerr := g.db.QueryRowContext(ctx, `
+		SELECT gpp.role FROM group_product_permissions gpp
+		JOIN user_group_members ugm ON ugm.group_id = gpp.group_id
+		WHERE gpp.product_id = ? AND ugm.user_id = ?
+		ORDER BY CASE gpp.role WHEN 'maintainer' THEN 3 WHEN 'tester' THEN 2 ELSE 1 END DESC
+		LIMIT 1`, productID, userID).Scan(&groupRole)
+	if gerr == nil {
+		if requireWrite && groupRole == "viewer" {
+			return false, nil
+		}
+		return true, nil
+	}
+	if errors.Is(gerr, sql.ErrNoRows) {
 		return false, nil
 	}
-	return true, nil
+	return false, gerr
 }
 
 // EnforceProduct verifies that the authenticated user in ctx can access productID.

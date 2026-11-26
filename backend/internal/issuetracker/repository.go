@@ -10,7 +10,7 @@ import (
 type Tracker struct {
 	ID          int64     `json:"id"`
 	Name        string    `json:"name"`
-	Provider    string    `json:"provider" enum:"github,gitlab,jira"`
+	Provider    string    `json:"provider" enum:"github,gitlab,jira,bugzilla,azure"`
 	BaseURL     string    `json:"base_url"`
 	APIUsername string    `json:"api_username,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`

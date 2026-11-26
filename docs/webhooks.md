@@ -112,11 +112,12 @@ Example payload:
 | `run.stopped`        | A test run is stopped for the first time                     | `test_run`                                   |
 | `execution.failed`   | An execution transitions into `failed` status                | `test_execution` (single), `test_run` (bulk) |
 | `execution.assigned` | An execution is assigned to a tester without a status change  | `test_execution` (single), `test_run` (bulk) |
+| `bug.created`        | A bug is reported via REST API or XML-RPC `Bug.report`       | `bug`                                        |
 | `webhook.test`       | `POST /api/v1/webhooks/{id}/test` is called                  | `webhook`                                    |
 
 `webhook.test` cannot be subscribed to; the catalog accepted in `events`
-is `run.stopped`, `execution.failed`, `execution.assigned` (unknown values
-are rejected with `400`).
+is `run.stopped`, `execution.failed`, `execution.assigned`, `bug.created`
+(unknown values are rejected with `400`).
 
 ### Event shapes
 
@@ -125,6 +126,7 @@ are rejected with `400`).
 - `execution.failed` (bulk, one per run): title `N executions failed (run #X)`; `body` = run summary.
 - `execution.assigned` (single): title `Execution #X assigned to you`; no `body`.
 - `execution.assigned` (bulk, one per run): title `N executions assigned to you (run #X)`; `body` = run summary.
+- `bug.created`: title = bug summary; `entity_id` = bug ID; `body` = description. The `data` field carries the equivalent of Kiwi TCMS `EXTERNAL_ISSUE_POST_PROCESSORS` arguments: `bug_id`, `execution_id`, `tracker` (name), `tracker_id`, `url` (external issue URL), `external_key`, `summary`, `reporter` (username), `reporter_id`, `product_id`, `severity`, `status`.
 - `webhook.test`: title `Test delivery from Kiwit TCMS`; `entity_id` = webhook ID; no `body`.
 
 ### Emission rules

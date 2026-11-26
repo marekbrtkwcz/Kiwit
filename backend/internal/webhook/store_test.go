@@ -271,3 +271,54 @@ func TestWebhookSSRFBlock(t *testing.T) {
 
 	webhook.AllowPrivateTargets = false
 }
+
+func TestWebhookEmitEventWithData(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+
+	prevPrivate := webhook.AllowPrivateTargets
+	webhook.AllowPrivateTargets = true
+	t.Cleanup(func() { webhook.AllowPrivateTargets = prevPrivate })
+
+	var gotPayload webhook.Payload
+	var gotSig string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &gotPayload)
+		gotSig = r.Header.Get("X-Kiwit-Signature")
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	_, err := store.Create(ctx, webhook.Webhook{
+		Name: "bug-hook", URL: srv.URL, Secret: "test-secret", Events: []string{"bug.created"}, Active: true,
+	})
+	require.NoError(t, err)
+
+	data := map[string]any{
+		"bug_id":       int64(7),
+		"execution_id": int64(3),
+		"tracker":      "JIRA",
+		"url":          "https://jira.example.com/browse/PROJ-42",
+		"summary":      "Login fails",
+		"reporter":     "admin",
+	}
+	store.EmitEventWithData("bug.created", "bug", 7, "Login fails", "desc", data)
+
+	deadline := time.Now().Add(3 * time.Second)
+	for gotPayload.Event == "" && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	require.Equal(t, "bug.created", gotPayload.Event)
+	require.Equal(t, "bug", gotPayload.EntityType)
+	require.EqualValues(t, 7, gotPayload.EntityID)
+	require.Equal(t, "Login fails", gotPayload.Title)
+	require.Equal(t, "JIRA", gotPayload.Data["tracker"])
+	require.Equal(t, "https://jira.example.com/browse/PROJ-42", gotPayload.Data["url"])
+	require.Equal(t, "admin", gotPayload.Data["reporter"])
+	require.NotEmpty(t, gotSig, "expected HMAC signature header")
+
+	// Nil store no-op
+	var nilStore *webhook.Store
+	require.NotPanics(t, func() { nilStore.EmitEventWithData("bug.created", "bug", 1, "t", "", nil) })
+}

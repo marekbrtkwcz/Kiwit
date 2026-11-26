@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { api, ApiTokenInfo, getAuthToken, setAuthToken, setUserRole, User } from '../../api/client'
+import { api, ApiTokenInfo, getAuthToken, setAuthToken, setUserRole, User, UserGroup } from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
+import { generatePassword } from '../../utils/password'
 
 type AuthMode = 'login' | 'register' | 'reset-request' | 'reset-confirm'
 
@@ -27,9 +28,57 @@ export function AuthView() {
   const [newPassword, setNewPassword] = useState('')
   const [users, setUsers] = useState<User[]>([])
   const [isAdmin, setIsAdmin] = useState(false)
+  const [groups, setGroups] = useState<UserGroup[]>([])
+  const [newGroupName, setNewGroupName] = useState('')
   const [jwt, setJwt] = useState<string | null>(getAuthToken())
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [ssoEnabled, setSsoEnabled] = useState(false)
+  const [ssoProvider, setSsoProvider] = useState('SSO')
+  const [ldapEnabled, setLdapEnabled] = useState(false)
+  const [ldapUsername, setLdapUsername] = useState('')
+  const [ldapPassword, setLdapPassword] = useState('')
+
+  // Handle SSO callback: backend redirects to /#/auth/callback?token=...
+  useEffect(() => {
+    if (location.pathname === '/auth/callback' || searchParams.get('token')) {
+      const tok = new URLSearchParams(location.hash.replace(/^#\/?/, '?')).get('token') || searchParams.get('token')
+      if (tok) {
+        setAuthToken(tok)
+        setJwt(tok)
+        navigate('/auth', { replace: true })
+      }
+    }
+  }, [location, searchParams, navigate])
+
+  useEffect(() => {
+    fetch('/api/v1/auth/sso/config')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (d?.enabled) {
+          setSsoEnabled(true)
+          setSsoProvider(d.provider || 'SSO')
+        }
+      })
+      .catch(() => {})
+    api.authMethods()
+      .then(d => setLdapEnabled(!!d.ldap))
+      .catch(() => {})
+  }, [])
+
+  const handleLdapLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    try {
+      const res = await api.ldapLogin({ username: ldapUsername, password: ldapPassword })
+      setAuthToken(res.access_token)
+      setUserRole(res.user.role)
+      setJwt(res.access_token)
+      notify(`Signed in as ${res.user.username}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.errors.authFailed)
+    }
+  }
 
   // Reset views ignore any stored JWT: the main reset scenario is a user
   // whose session expired clicking the e-mail link, so a stored (possibly
@@ -51,6 +100,42 @@ export function AuthView() {
       setUsers([])
       setIsAdmin(false)
     }
+    try {
+      const gRes = await api.listGroups()
+      setGroups(gRes.items)
+    } catch {
+      setGroups([])
+    }
+  }
+
+  const reloadGroups = async () => {
+    try {
+      const gRes = await api.listGroups()
+      setGroups(gRes.items)
+    } catch { /* ignore */ }
+  }
+
+  const handleCreateGroup = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const name = newGroupName.trim()
+    if (!name) return
+    try {
+      await api.createGroup(name)
+      setNewGroupName('')
+      await reloadGroups()
+    } catch { setError(t.settings.opFailed) }
+  }
+
+  const handleDeleteGroup = async (id: number) => {
+    try { await api.deleteGroup(id); await reloadGroups() } catch { setError(t.settings.opFailed) }
+  }
+
+  const handleAddMember = async (groupId: number, userId: number) => {
+    try { await api.addGroupMember(groupId, userId); await reloadGroups() } catch { setError(t.settings.opFailed) }
+  }
+
+  const handleRemoveMember = async (groupId: number, userId: number) => {
+    try { await api.removeGroupMember(groupId, userId); await reloadGroups() } catch { setError(t.settings.opFailed) }
   }
 
   useEffect(() => {
@@ -263,6 +348,14 @@ export function AuthView() {
                   required
                   minLength={8}
                 />
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  style={{ marginTop: '0.25rem' }}
+                  onClick={() => { const p = generatePassword(); setResetPassword(p); setResetPasswordRepeat(p); setShowConfirmPassword(true) }}
+                >
+                  {t.auth.generatePassword}
+                </button>
               </label>
               <label htmlFor="reset-new-password-repeat" style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
                 <span>{t.auth.resetNewPasswordRepeat}</span>
@@ -381,6 +474,16 @@ export function AuthView() {
                 minLength={8}
                 style={{ flex: 1 }}
               />
+              {mode !== 'login' && (
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  title={t.auth.generatePassword}
+                  onClick={() => { const p = generatePassword(); setPassword(p); setShowPassword(true) }}
+                >
+                  {t.auth.generatePassword}
+                </button>
+              )}
               <button
                 type="button"
                 className="btn btn-sm"
@@ -405,6 +508,19 @@ export function AuthView() {
           >
             {t.auth.forgotPassword}
           </button>
+          {ssoEnabled && mode === 'login' && (
+            <a href="/api/v1/auth/sso/login" className="btn btn-sm" style={{ textAlign: 'center' }}>
+              {t.auth.ssoLogin} {ssoProvider}
+            </a>
+          )}
+          {ldapEnabled && mode === 'login' && (
+            <form onSubmit={handleLdapLogin} style={{ display: 'grid', gap: '0.5rem', borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+              <strong>{t.auth.ldapLogin}</strong>
+              <input className="input" placeholder={t.auth.usernamePlaceholder} value={ldapUsername} onChange={(e) => setLdapUsername(e.target.value)} required />
+              <input className="input" type="password" placeholder={t.auth.passwordPlaceholder} value={ldapPassword} onChange={(e) => setLdapPassword(e.target.value)} required />
+              <button type="submit" className="btn btn-primary btn-sm">{t.auth.submitLogin}</button>
+            </form>
+          )}
           </form>
         )
       ) : (
@@ -485,6 +601,14 @@ export function AuthView() {
                   required
                   minLength={8}
                 />
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  style={{ marginTop: '0.25rem' }}
+                  onClick={() => setNewPassword(generatePassword())}
+                >
+                  {t.auth.generatePassword}
+                </button>
               </label>
               <button type="submit" className="btn btn-primary btn-sm">{t.auth.updatePassword}</button>
             </form>
@@ -533,6 +657,44 @@ export function AuthView() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+          {isAdmin && (
+            <div className="card" style={{ display: 'grid', gap: '0.6rem' }}>
+              <strong>{t.auth.adminGroups} ({groups.length})</strong>
+              <form onSubmit={handleCreateGroup} style={{ display: 'flex', gap: '0.5rem' }}>
+                <input className="input" placeholder={t.auth.groupNamePlaceholder} value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} style={{ flex: 1 }} />
+                <button type="submit" className="btn btn-primary btn-sm">{t.auth.addGroup}</button>
+              </form>
+              {groups.map((g) => (
+                <div key={g.id} style={{ display: 'grid', gap: '0.4rem', borderTop: '1px solid var(--border)', paddingTop: '0.5rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong>{g.name}</strong>
+                    <button type="button" className="btn btn-danger btn-sm" onClick={() => void handleDeleteGroup(g.id)}>{t.common.delete}</button>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                    {(g.members ?? []).map((uid) => {
+                      const u = users.find((x) => x.id === uid)
+                      return (
+                        <span key={uid} className="badge" style={{ display: 'inline-flex', gap: '0.3rem', alignItems: 'center' }}>
+                          {u?.username ?? `#${uid}`}
+                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => void handleRemoveMember(g.id, uid)}>×</button>
+                        </span>
+                      )
+                    })}
+                  </div>
+                  <select
+                    className="select"
+                    value=""
+                    onChange={(e) => { const uid = Number(e.target.value); if (uid) void handleAddMember(g.id, uid) }}
+                  >
+                    <option value="">{t.products.assignMember}</option>
+                    {users.filter((u) => !(g.members ?? []).includes(u.id)).map((u) => (
+                      <option key={u.id} value={u.id}>{u.username}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
             </div>
           )}
         </div>

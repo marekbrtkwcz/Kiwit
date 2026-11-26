@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kiwit/kiwit/internal/auth"
+	"github.com/kiwit/kiwit/internal/webhook"
 )
 
 // InternalBug represents a bug tracked natively inside Kiwit TCMS (similar to Kiwi TCMS tcms.bugs).
@@ -264,7 +265,7 @@ func (s *Store) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-func RegisterRoutes(api huma.API, store *Store, guard *auth.AccessGuard) {
+func RegisterRoutes(api huma.API, store *Store, guard *auth.AccessGuard, webhooks ...*webhook.Store) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-internal-bugs",
 		Method:      http.MethodGet,
@@ -343,6 +344,27 @@ func RegisterRoutes(api huma.API, store *Store, guard *auth.AccessGuard) {
 		})
 		if err != nil {
 			return nil, huma.Error400BadRequest("failed to create bug", err)
+		}
+		// Emit bug.created webhook (EXTERNAL_ISSUE_POST_PROCESSORS equivalent)
+		if len(webhooks) > 0 && webhooks[0] != nil {
+			data := map[string]any{
+				"bug_id":   b.ID,
+				"url":      fmt.Sprintf("/bugs/%d", b.ID),
+				"summary":  b.Summary,
+				"status":   b.Status,
+				"severity": b.Severity,
+				"product_id": b.ProductID,
+			}
+			if b.TestExecutionID != nil {
+				data["execution_id"] = *b.TestExecutionID
+			}
+			if reporterID != nil {
+				data["reporter_id"] = *reporterID
+			}
+			if u, ok := auth.UserFromContext(ctx); ok {
+				data["reporter"] = u.Username
+			}
+			webhooks[0].EmitEventWithData("bug.created", "bug", b.ID, b.Summary, b.Description, data)
 		}
 		return &struct{ Body InternalBug }{Body: b}, nil
 	})

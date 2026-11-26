@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ChevronDown, ChevronUp, Copy, ExternalLink, FolderKanban, Plus, Search, Trash2, Unlink } from 'lucide-react'
-import { api, PlanCaseItem, TestCase, TestPlan, Version } from '../../api/client'
+import { api, PlanCaseItem, PlanType, TestCase, TestPlan, Version } from '../../api/client'
+import { ConfirmDialog } from '../../components/UiPrimitives'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 import { EntityTagsBar } from '../management/EntityTagsBar'
 
 export function TestPlansView() {
   const { t } = useI18n()
-  const { products, activeProductId, notify } = useWorkspace()
+  const { products, activeProductId, notify, notifyAction } = useWorkspace()
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null)
   const { id: routePlanId } = useParams<{ id: string }>()
   const navigate = useNavigate()
 
@@ -22,6 +24,8 @@ export function TestPlansView() {
   const [parentId, setParentId] = useState<number | undefined>(undefined)
   const [selectedCaseIds, setSelectedCaseIds] = useState<number[]>([])
   const [name, setName] = useState('')
+  const [planType, setPlanType] = useState('')
+  const [planTypes, setPlanTypes] = useState<PlanType[]>([])
   const [filterQ, setFilterQ] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -50,6 +54,10 @@ export function TestPlansView() {
           setVersionId(vRes.items[0].id)
         }
       }
+      try {
+        const ptRes = await api.listPlanTypes()
+        setPlanTypes(ptRes.items)
+      } catch { setPlanTypes([]) }
       setError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : t.errors.loadTestPlans)
@@ -78,8 +86,9 @@ export function TestPlansView() {
     e.preventDefault()
     if (!name.trim() || !versionId) return
     try {
-      const created = await api.createTestPlan({ product_id: productId, version_id: versionId, parent_id: parentId, name: name.trim() })
+      const created = await api.createTestPlan({ product_id: productId, version_id: versionId, parent_id: parentId, name: name.trim(), plan_type: planType || undefined })
       setName('')
+      setPlanType('')
       setParentId(undefined)
       setSelectedPlanId(created.id)
       navigate(`/plans/${created.id}`, { replace: true })
@@ -110,6 +119,7 @@ export function TestPlansView() {
   const selectedPlan = plans.find((p) => p.id === selectedPlanId) ?? null
 
   return (
+    <>
     <section style={{ display: 'grid', gap: '1rem' }}>
       {error && <p className="alert-error">{error}</p>}
 
@@ -129,6 +139,12 @@ export function TestPlansView() {
           <option value="">{t.testplans.rootPlan}</option>
           {plans.map((p) => (
             <option key={p.id} value={p.id}>Parent: {p.name}</option>
+          ))}
+        </select>
+        <select className="select" value={planType} onChange={(e) => setPlanType(e.target.value)}>
+          <option value="">{t.testplans.noPlanType}</option>
+          {planTypes.map((pt) => (
+            <option key={pt.id} value={pt.name}>{pt.name}</option>
           ))}
         </select>
         <input className="input" placeholder={t.testplans.namePlaceholder} value={name} onChange={(e) => setName(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
@@ -189,13 +205,7 @@ export function TestPlansView() {
                   className="btn btn-ghost btn-sm"
                   style={{ color: 'var(--danger)' }}
                   title="Delete"
-                  onClick={async () => {
-                    if (!window.confirm(`Delete TestPlan #${tp.id}?`)) return
-                    await api.deleteTestPlan(tp.id)
-                    if (selectedPlanId === tp.id) setSelectedPlanId(0)
-                    notify(`Deleted plan #${tp.id}`)
-                    await load()
-                  }}
+                  onClick={() => setDeleteTarget({ id: tp.id, name: tp.name })}
                 >
                   <Trash2 size={13} />
                 </button>
@@ -312,5 +322,23 @@ export function TestPlansView() {
         )}
       </div>
     </section>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Delete test plan?"
+        message={deleteTarget ? `TestPlan #${deleteTarget.id} "${deleteTarget.name}" will be permanently deleted.` : ''}
+        confirmLabel="Delete"
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={async () => {
+          if (!deleteTarget) return
+          const target = deleteTarget
+          setDeleteTarget(null)
+          await api.deleteTestPlan(target.id)
+          if (selectedPlanId === target.id) setSelectedPlanId(0)
+          notifyAction(`Deleted plan #${target.id}`, 'Undo', () => notify('Undo not available for deletes yet', 'error'))
+          await load()
+        }}
+      />
+    </>
   )
 }

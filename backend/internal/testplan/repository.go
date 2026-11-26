@@ -53,6 +53,7 @@ type PlanCase struct {
 type Repository interface {
 	List(ctx context.Context) ([]TestPlan, error)
 	ListFiltered(ctx context.Context, f ListFilter) ([]TestPlan, error)
+	GetByID(ctx context.Context, id int64) (TestPlan, error)
 	Create(ctx context.Context, productID, versionID int64, parentID *int64, name, description string) (TestPlan, error)
 	CreateWithMeta(ctx context.Context, p CreateParams) (TestPlan, error)
 	Update(ctx context.Context, id int64, p UpdateParams) (TestPlan, error)
@@ -76,6 +77,24 @@ func NewSQLiteRepository(db *sql.DB) *SQLiteRepository {
 
 func (r *SQLiteRepository) List(ctx context.Context) ([]TestPlan, error) {
 	return r.ListFiltered(ctx, ListFilter{})
+}
+
+func (r *SQLiteRepository) GetByID(ctx context.Context, id int64) (TestPlan, error) {
+	var tp TestPlan
+	var parentID sql.NullInt64
+	var active int
+	err := r.db.QueryRowContext(ctx, `
+		SELECT id, product_id, version_id, parent_id, name, description, plan_type, extra_link, is_active, created_at
+		FROM test_plans WHERE id = ?`, id,
+	).Scan(&tp.ID, &tp.ProductID, &tp.VersionID, &parentID, &tp.Name, &tp.Description, &tp.PlanType, &tp.ExtraLink, &active, &tp.CreatedAt)
+	if err != nil {
+		return TestPlan{}, err
+	}
+	if parentID.Valid {
+		tp.ParentID = &parentID.Int64
+	}
+	tp.IsActive = active == 1
+	return tp, nil
 }
 
 func (r *SQLiteRepository) ListFiltered(ctx context.Context, f ListFilter) ([]TestPlan, error) {

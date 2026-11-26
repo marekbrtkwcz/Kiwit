@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kiwit/kiwit/internal/attachment"
+	"github.com/kiwit/kiwit/internal/audit"
 	"github.com/kiwit/kiwit/internal/auth"
 	"github.com/kiwit/kiwit/internal/bug"
 	"github.com/kiwit/kiwit/internal/comment"
@@ -35,6 +36,7 @@ import (
 	"github.com/kiwit/kiwit/internal/notification"
 	"github.com/kiwit/kiwit/internal/notify"
 	"github.com/kiwit/kiwit/internal/platform/db"
+	"github.com/kiwit/kiwit/internal/storage"
 	"github.com/kiwit/kiwit/internal/telemetry"
 	"github.com/kiwit/kiwit/internal/testcase"
 	"github.com/kiwit/kiwit/internal/testplan"
@@ -128,9 +130,11 @@ func runE2ESuite(t *testing.T, sqlDB *sql.DB, pgPool *pgxpool.Pool) {
 	auth.RegisterRoutes(api, authSvc)
 	management.RegisterRoutes(api, prodRepo, guard)
 	management.RegisterRelationRoutes(api, management.NewRelationStore(sqlDB, pgPool), guard)
-	testcase.RegisterRoutes(api, tcRepo, emailSettings, nil, guard)
-	testplan.RegisterRoutes(api, tpRepo, emailSettings, nil, guard)
-	testrun.RegisterRoutes(api, trRepo, nil, notification.NewStore(sqlDB, pgPool), nil, webhook.NewStore(sqlDB, pgPool), guard)
+	auditStore := audit.NewStore(sqlDB, pgPool)
+	audit.RegisterRoutes(api, auditStore, guard)
+	testcase.RegisterRoutes(api, tcRepo, emailSettings, nil, guard, auditStore)
+	testplan.RegisterRoutes(api, tpRepo, emailSettings, nil, guard, auditStore)
+	testrun.RegisterRoutes(api, trRepo, nil, notification.NewStore(sqlDB, pgPool), nil, webhook.NewStore(sqlDB, pgPool), guard, auditStore)
 	testrun.RegisterExportRoutes(r, trRepo, guard)
 	issuetracker.RegisterRoutes(api, issueRepo, guard)
 	bug.RegisterRoutes(api, bug.NewStore(sqlDB, pgPool), guard)
@@ -139,7 +143,7 @@ func runE2ESuite(t *testing.T, sqlDB *sql.DB, pgPool *pgxpool.Pool) {
 	notify.RegisterEmailRoutes(api, emailSettings, nil, guard)
 	notification.RegisterRoutes(api, notification.NewStore(sqlDB, pgPool))
 	webhook.RegisterRoutes(api, webhook.NewStore(sqlDB, pgPool))
-	attachment.RegisterRoutes(r, attRepo, t.TempDir(), guard)
+	attachment.RegisterRoutes(r, attRepo, storage.NewLocal(t.TempDir()), guard)
 
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
@@ -172,7 +176,7 @@ func runE2ESuite(t *testing.T, sqlDB *sql.DB, pgPool *pgxpool.Pool) {
 	// 2. Register admin, testerA, testerB
 	register := func(email, user string) int64 {
 		r := doJSON(http.MethodPost, "/api/v1/auth/register", "", map[string]string{
-			"email": email, "username": user, "password": "password123",
+			"email": email, "username": user, "password": "Xk9#mQ2$vL8p",
 		})
 		require.Equal(t, http.StatusOK, r.StatusCode)
 		var out struct {
@@ -189,7 +193,7 @@ func runE2ESuite(t *testing.T, sqlDB *sql.DB, pgPool *pgxpool.Pool) {
 	// Closing registration blocks further signups
 	authSvc.SetAllowRegistration(false)
 	res = doJSON(http.MethodPost, "/api/v1/auth/register", "", map[string]string{
-		"email": "blocked@kiwit.local", "username": "blocked", "password": "password123",
+		"email": "blocked@kiwit.local", "username": "blocked", "password": "Xk9#mQ2$vL8p",
 	})
 	require.Equal(t, http.StatusForbidden, res.StatusCode)
 	_ = res.Body.Close()
@@ -205,9 +209,9 @@ func runE2ESuite(t *testing.T, sqlDB *sql.DB, pgPool *pgxpool.Pool) {
 		return out.AccessToken
 	}
 
-	adminJWT := login("admin@kiwit.local", "password123")
-	testerAJWT := login("testera@kiwit.local", "password123")
-	testerBJWT := login("testerb@kiwit.local", "password123")
+	adminJWT := login("admin@kiwit.local", "Xk9#mQ2$vL8p")
+	testerAJWT := login("testera@kiwit.local", "Xk9#mQ2$vL8p")
+	testerBJWT := login("testerb@kiwit.local", "Xk9#mQ2$vL8p")
 
 	// 3. RBAC & Product isolation
 	res = doJSON(http.MethodPost, "/api/v1/products", testerAJWT, map[string]string{"name": "Forbidden Prod"})
@@ -275,7 +279,7 @@ func runE2ESuite(t *testing.T, sqlDB *sql.DB, pgPool *pgxpool.Pool) {
 	require.Len(t, tokList.Items, 1)
 
 	res = doJSON(http.MethodPost, "/api/v1/auth/change-password", tokOut.Token, map[string]string{
-		"current_password": "password123", "new_password": "newpassword123",
+		"current_password": "Xk9#mQ2$vL8p", "new_password": "Zx8!vB4@nR7q",
 	})
 	require.Equal(t, http.StatusForbidden, res.StatusCode)
 	_ = res.Body.Close()
@@ -289,13 +293,13 @@ func runE2ESuite(t *testing.T, sqlDB *sql.DB, pgPool *pgxpool.Pool) {
 	_ = res.Body.Close()
 
 	res = doJSON(http.MethodPost, "/api/v1/auth/change-password", testerAJWT, map[string]string{
-		"current_password": "wrongpassword", "new_password": "newpassword123",
+		"current_password": "wrongpassword", "new_password": "Zx8!vB4@nR7q",
 	})
 	require.Equal(t, http.StatusUnauthorized, res.StatusCode)
 	_ = res.Body.Close()
 
 	res = doJSON(http.MethodPost, "/api/v1/auth/change-password", testerAJWT, map[string]string{
-		"current_password": "password123", "new_password": "newpassword123",
+		"current_password": "Xk9#mQ2$vL8p", "new_password": "Zx8!vB4@nR7q",
 	})
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	_ = res.Body.Close()
@@ -1289,7 +1293,7 @@ func runE2ESuite(t *testing.T, sqlDB *sql.DB, pgPool *pgxpool.Pool) {
 	require.NotEmpty(t, testerBJWT2)
 
 	res = doJSON(http.MethodPost, "/api/v1/auth/login", "", map[string]string{
-		"email": "testerb@kiwit.local", "password": "password123",
+		"email": "testerb@kiwit.local", "password": "Xk9#mQ2$vL8p",
 	})
 	require.Equal(t, http.StatusUnauthorized, res.StatusCode)
 	_ = res.Body.Close()

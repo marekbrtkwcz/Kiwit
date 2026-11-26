@@ -7,6 +7,9 @@ export interface ToastMessage {
   id: number
   kind: 'ok' | 'error'
   text: string
+  actionLabel?: string
+  onAction?: () => void
+  duration?: number
 }
 
 interface WorkspaceContextValue {
@@ -18,6 +21,7 @@ interface WorkspaceContextValue {
   refreshProducts: () => Promise<void>
   toasts: ToastMessage[]
   notify: (text: string, kind?: 'ok' | 'error') => void
+  notifyAction: (text: string, actionLabel: string, onAction: () => void, duration?: number) => void
   cmdkOpen: boolean
   setCmdkOpen: (open: boolean) => void
 }
@@ -97,6 +101,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }, 3600)
   }, [])
 
+  // notifyAction — toast with an action button (e.g. Undo), longer duration by default
+  const notifyAction = useCallback(
+    (text: string, actionLabel: string, onAction: () => void, duration = 6000) => {
+      const id = Date.now() + Math.floor(Math.random() * 1000)
+      setToasts((prev) => [...prev.slice(-3), { id, kind: 'ok', text, actionLabel, onAction }])
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id))
+      }, duration)
+    },
+    []
+  )
+
   return (
     <WorkspaceContext.Provider
       value={{
@@ -108,6 +124,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         refreshProducts,
         toasts,
         notify,
+        notifyAction,
         cmdkOpen,
         setCmdkOpen,
       }}

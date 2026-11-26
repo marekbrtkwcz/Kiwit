@@ -22,23 +22,39 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/kiwit/kiwit/internal/attachment"
+	"github.com/kiwit/kiwit/internal/audit"
 	"github.com/kiwit/kiwit/internal/auth"
+	"github.com/kiwit/kiwit/internal/captcha"
 	"github.com/kiwit/kiwit/internal/bug"
+	"github.com/kiwit/kiwit/internal/classification"
 	"github.com/kiwit/kiwit/internal/comment"
+	"github.com/kiwit/kiwit/internal/dashboard"
 	"github.com/kiwit/kiwit/internal/environment"
+	"github.com/kiwit/kiwit/internal/group"
+	"github.com/kiwit/kiwit/internal/initdb"
 	"github.com/kiwit/kiwit/internal/issuetracker"
+	"github.com/kiwit/kiwit/internal/linkref"
+	"github.com/kiwit/kiwit/internal/menu"
+	"github.com/kiwit/kiwit/internal/permissions"
+	"github.com/kiwit/kiwit/internal/markdown"
 	"github.com/kiwit/kiwit/internal/management"
 	"github.com/kiwit/kiwit/internal/notification"
 	"github.com/kiwit/kiwit/internal/notify"
+	"github.com/kiwit/kiwit/internal/plantype"
 	"github.com/kiwit/kiwit/internal/platform/config"
 	"github.com/kiwit/kiwit/internal/platform/db"
 	"github.com/kiwit/kiwit/internal/plugin"
+	"github.com/kiwit/kiwit/internal/property"
+	"github.com/kiwit/kiwit/internal/search"
+	"github.com/kiwit/kiwit/internal/settings"
+	"github.com/kiwit/kiwit/internal/storage"
 	"github.com/kiwit/kiwit/internal/telemetry"
 	"github.com/kiwit/kiwit/internal/testcase"
 	"github.com/kiwit/kiwit/internal/testplan"
 	"github.com/kiwit/kiwit/internal/testrun"
 	"github.com/kiwit/kiwit/internal/web"
 	"github.com/kiwit/kiwit/internal/webhook"
+	"github.com/kiwit/kiwit/internal/xmlrpc"
 )
 
 func main() {
@@ -105,6 +121,23 @@ func main() {
 
 	authSvc.SetAllowRegistration(cfg.AllowRegistration)
 
+	// Anonymous read-only access (KIWIT_ANONYMOUS_ACCESS=true) — equivalent of
+	// kiwitcms AnonymousViewBackend: unauthenticated GET requests get AnonymousUser.
+	anonymousAccess := strings.EqualFold(os.Getenv("KIWIT_ANONYMOUS_ACCESS"), "true")
+	authSvc.SetAnonymousAccess(anonymousAccess)
+	if anonymousAccess {
+		logger.Info("anonymous read-only access enabled (KIWIT_ANONYMOUS_ACCESS=true)")
+	}
+
+	// Self-hosted captcha store (routes mounted after api is created below)
+	captchaEnabled := strings.EqualFold(os.Getenv("KIWIT_CAPTCHA_ENABLED"), "true") ||
+		(os.Getenv("KIWIT_CAPTCHA_ENABLED") == "" && cfg.AllowRegistration)
+	var captchaStore *captcha.Store
+	if captchaEnabled && cfg.AllowRegistration {
+		captchaStore = captcha.NewStore(10*time.Minute, 2*time.Second)
+		authSvc.SetCaptcha(captchaStore)
+	}
+
 	router := chi.NewMux()
 	router.Use(middleware.RequestID)
 	router.Use(middleware.RealIP)
@@ -132,13 +165,67 @@ func main() {
 	authSvc.SetEmailSender(emailClient)
 	authSvc.SetBaseURL(cfg.BaseURL)
 
+	// Instance settings store — load domain from DB if set (overrides env)
+	settingsStore := settings.NewStore(sqlDBConn, pgPoolConn)
+	if dbDomain, err := settingsStore.Get(context.Background(), settings.KeyDomain); err == nil && dbDomain != "" {
+		authSvc.SetBaseURL(dbDomain)
+		logger.Info("using domain from database", "domain", dbDomain)
+	}
+	if cfg.LDAPEnabled() {
+		authSvc.SetLDAPConfig(&auth.LDAPConfig{
+			Server:       cfg.LDAPServer,
+			BindDN:       cfg.LDAPBindDN,
+			BindPassword: cfg.LDAPBindPassword,
+			BaseDN:       cfg.LDAPBaseDN,
+			UserFilter:   cfg.LDAPUserFilter,
+			UsernameAttr: cfg.LDAPUsernameAttr,
+			EmailAttr:    cfg.LDAPEmailAttr,
+		})
+		logger.Info("LDAP authentication enabled", "server", cfg.LDAPServer, "base_dn", cfg.LDAPBaseDN)
+	}
+
+	// SSO (OIDC/OAuth2) — optional, enabled when KIWIT_OIDC_ISSUER is set.
+	if cfg.OIDCEnabled() {
+		redirectURL := cfg.OIDCRedirectURL
+		if redirectURL == "" {
+			redirectURL = cfg.BaseURL + "/api/v1/auth/sso/callback"
+		}
+		ssoHandler, err := auth.NewSSOHandler(ctx, auth.SSOConfig{
+			Issuer:       cfg.OIDCIssuer,
+			ClientID:     cfg.OIDCClientID,
+			ClientSecret: cfg.OIDCClientSecret,
+			RedirectURL:  redirectURL,
+			ProviderName: cfg.OIDCProviderName,
+			FrontendURL:  cfg.BaseURL,
+		}, authSvc)
+		if err != nil {
+			logger.Error("failed to initialize SSO provider", "err", err)
+			os.Exit(1)
+		}
+		ssoHandler.Register(router)
+		logger.Info("SSO (OIDC) enabled", "issuer", cfg.OIDCIssuer, "provider", cfg.OIDCProviderName)
+	}
+
 	api := humachi.New(router, huma.DefaultConfig("Kiwit TCMS API", "0.1.0"))
 	auth.RegisterRoutes(api, authSvc)
+	if captchaStore != nil {
+		captcha.RegisterRoutes(api, captchaStore)
+	}
+	group.RegisterRoutes(api, group.NewStore(sqlDBConn, pgPoolConn))
+	property.RegisterRoutes(api, property.NewStore(sqlDBConn, pgPoolConn), guard)
+	plantype.RegisterRoutes(api, plantype.NewStore(sqlDBConn, pgPoolConn))
+	classification.RegisterRoutes(api, classification.NewStore(sqlDBConn, pgPoolConn))
+	linkref.RegisterRoutes(api, linkref.NewStore(sqlDBConn, pgPoolConn), guard)
+	search.RegisterRoutes(api, search.NewStore(sqlDBConn, pgPoolConn))
+	markdown.RegisterRoutes(api)
 	management.RegisterRoutes(api, productRepo, guard)
 	management.RegisterRelationRoutes(api, management.NewRelationStore(sqlDBConn, pgPoolConn), guard)
-	testcase.RegisterRoutes(api, testCaseRepo, emailSettings, emailClient, guard)
+	auditStore := audit.NewStore(sqlDBConn, pgPoolConn)
+	audit.RegisterRoutes(api, auditStore, guard)
+	dashboard.RegisterRoutes(api, dashboard.NewStore(sqlDBConn, pgPoolConn))
+	testcase.RegisterRoutes(api, testCaseRepo, emailSettings, emailClient, guard, auditStore)
 	testcase.RegisterTemplateRoutes(api, sqlDBConn, pgPoolConn)
-	testplan.RegisterRoutes(api, testPlanRepo, emailSettings, emailClient, guard)
+	testplan.RegisterRoutes(api, testPlanRepo, emailSettings, emailClient, guard, auditStore)
 	notifier := notify.NewWebhookClient(os.Getenv("KIWIT_WEBHOOK_URL"))
 	notificationStore := notification.NewStore(sqlDBConn, pgPoolConn)
 	webhookStore := webhook.NewStore(sqlDBConn, pgPoolConn)
@@ -148,10 +235,10 @@ func main() {
 	case "1", "true", "yes":
 		webhook.AllowPrivateTargets = true
 	}
-	testrun.RegisterRoutes(api, testRunRepo, notifier, notificationStore, emailClient, webhookStore, guard)
+	testrun.RegisterRoutes(api, testRunRepo, notifier, notificationStore, emailClient, webhookStore, guard, auditStore)
 	testrun.RegisterExportRoutes(router, testRunRepo, guard)
 	issuetracker.RegisterRoutes(api, issueRepo, guard)
-	bug.RegisterRoutes(api, bug.NewStore(sqlDBConn, pgPoolConn), guard)
+	bug.RegisterRoutes(api, bug.NewStore(sqlDBConn, pgPoolConn), guard, webhookStore)
 	telemetry.RegisterRoutes(api, sqlDBConn, pgPoolConn)
 	comment.RegisterRoutes(api, commentRepo, guard)
 	notify.RegisterRoutes(api, notifier)
@@ -162,7 +249,98 @@ func main() {
 	pluginReg := plugin.NewRegistry()
 	pluginReg.InitAll(api)
 	plugin.RegisterRoutes(api, pluginReg)
-	attachment.RegisterRoutes(router, attachmentRepo, cfg.UploadDir, guard)
+	var store storage.Storage
+	if cfg.StorageType == "s3" {
+		if cfg.S3Bucket == "" || cfg.S3AccessKey == "" || cfg.S3SecretKey == "" {
+			logger.Error("KIWIT_STORAGE_TYPE=s3 requires KIWIT_S3_BUCKET, KIWIT_S3_ACCESS_KEY and KIWIT_S3_SECRET_KEY")
+			os.Exit(1)
+		}
+		store = storage.NewS3(storage.S3Config{
+			Endpoint:     cfg.S3Endpoint,
+			Region:       cfg.S3Region,
+			Bucket:       cfg.S3Bucket,
+			AccessKey:    cfg.S3AccessKey,
+			SecretKey:    cfg.S3SecretKey,
+			UsePathStyle: cfg.S3UsePathStyle,
+		})
+		logger.Info("using S3 object storage", "endpoint", cfg.S3Endpoint, "bucket", cfg.S3Bucket)
+	} else {
+		store = storage.NewLocal(cfg.UploadDir)
+	}
+	attachment.RegisterRoutes(router, attachmentRepo, store, guard)
+	xmlrpc.NewHandlerWithWebhooks(authSvc, sqlDBConn, "0.1.0", cfg.UploadDir, webhookStore).Register(router)
+	initdb.Register(router, initdb.NewStore(sqlDBConn, pgPoolConn))
+	menu.Register(router)
+	permissions.Register(router, permissions.NewStore(sqlDBConn, pgPoolConn))
+	settings.Register(router, settingsStore)
+
+	// Runtime-changeable settings: wire DB changes to live service state
+	settings.OnChange(settings.KeyDomain, func(domain string) {
+		authSvc.SetBaseURL(domain)
+		logger.Info("domain updated at runtime", "domain", domain)
+	})
+	// SMTP: rebuild config from all smtp_* keys on any change
+	applySMTP := func() {
+		ctx := context.Background()
+		host, _ := settingsStore.Get(ctx, settings.KeySMTPHost)
+		port, _ := settingsStore.Get(ctx, settings.KeySMTPPort)
+		user, _ := settingsStore.Get(ctx, settings.KeySMTPUser)
+		pass, _ := settingsStore.Get(ctx, settings.KeySMTPPass)
+		from, _ := settingsStore.Get(ctx, settings.KeySMTPFrom)
+		if port == "" {
+			port = "587"
+		}
+		if from == "" {
+			from = "kiwit@localhost"
+		}
+		emailClient.SetConfig(notify.SMTPConfig{Host: host, Port: port, Username: user, Password: pass, From: from})
+	}
+	for _, k := range []string{settings.KeySMTPHost, settings.KeySMTPPort, settings.KeySMTPUser, settings.KeySMTPPass, settings.KeySMTPFrom} {
+		settings.OnChange(k, func(string) { applySMTP() })
+	}
+	settings.OnChange(settings.KeyAllowRegistration, func(v string) {
+		authSvc.SetAllowRegistration(settings.BoolVal(v))
+		logger.Info("allow_registration updated at runtime", "value", v)
+	})
+	settings.OnChange(settings.KeyCaptchaEnabled, func(v string) {
+		if settings.BoolVal(v) && captchaStore != nil {
+			authSvc.SetCaptcha(captchaStore)
+		} else {
+			authSvc.SetCaptcha(nil)
+		}
+		logger.Info("captcha_enabled updated at runtime", "value", v)
+	})
+	settings.OnChange(settings.KeyAnonymousAccess, func(v string) {
+		authSvc.SetAnonymousAccess(settings.BoolVal(v))
+		logger.Info("anonymous_access updated at runtime", "value", v)
+	})
+
+	// Load initial values from DB (override env defaults)
+	loadSettingsFromDB := func() {
+		ctx := context.Background()
+		if v, err := settingsStore.Get(ctx, settings.KeyDomain); err == nil && v != "" {
+			authSvc.SetBaseURL(v)
+		}
+		if v, err := settingsStore.Get(ctx, settings.KeyAllowRegistration); err == nil && v != "" {
+			authSvc.SetAllowRegistration(settings.BoolVal(v))
+		}
+		if v, err := settingsStore.Get(ctx, settings.KeyCaptchaEnabled); err == nil && v != "" {
+			if settings.BoolVal(v) && captchaStore != nil {
+				authSvc.SetCaptcha(captchaStore)
+			} else {
+				authSvc.SetCaptcha(nil)
+			}
+		}
+		if v, err := settingsStore.Get(ctx, settings.KeyAnonymousAccess); err == nil && v != "" {
+			authSvc.SetAnonymousAccess(settings.BoolVal(v))
+		}
+		// SMTP from DB overrides env
+		host, _ := settingsStore.Get(ctx, settings.KeySMTPHost)
+		if host != "" {
+			applySMTP()
+		}
+	}
+	loadSettingsFromDB()
 
 	router.Handle("/*", web.SPAHandler())
 

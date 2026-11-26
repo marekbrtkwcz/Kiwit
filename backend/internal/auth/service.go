@@ -14,6 +14,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/kiwit/kiwit/internal/captcha"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -51,8 +52,45 @@ type Service struct {
 	pgPool            *pgxpool.Pool
 	jwtSecret         []byte
 	allowRegistration bool
+	anonymousAccess   bool // when true, GET requests without token get AnonymousUser (read-only)
 	emailSender       EmailSender
 	baseURL           string
+	ldapCfg           *LDAPConfig
+	captcha           *captcha.Store // nil = captcha disabled
+}
+
+// SetAnonymousAccess enables public read-only access (AnonymousUser) for
+// unauthenticated GET requests. Equivalent of kiwitcms AnonymousViewBackend.
+func (s *Service) SetAnonymousAccess(enabled bool) {
+	s.anonymousAccess = enabled
+}
+
+// AnonymousAccessEnabled reports whether anonymous read-only access is on.
+func (s *Service) AnonymousAccessEnabled() bool {
+	return s.anonymousAccess
+}
+
+// SetCaptcha enables the self-hosted captcha on registration.
+func (s *Service) SetCaptcha(c *captcha.Store) {
+	s.captcha = c
+}
+
+// CaptchaEnabled reports whether captcha verification is required on registration.
+func (s *Service) CaptchaEnabled() bool {
+	return s.captcha != nil
+}
+
+// VerifyCaptcha validates a captcha answer against the store.
+func (s *Service) VerifyCaptcha(id, answer string) error {
+	if s.captcha == nil {
+		return nil
+	}
+	return s.captcha.Verify(id, answer)
+}
+
+// CaptchaStore returns the captcha store (for mounting the challenge endpoint).
+func (s *Service) CaptchaStore() *captcha.Store {
+	return s.captcha
 }
 
 const defaultBaseURL = "http://localhost:8080"
@@ -80,7 +118,35 @@ func (s *Service) SetBaseURL(u string) {
 	s.baseURL = strings.TrimSpace(u)
 }
 
+// SetLDAPConfig enables LDAP authentication when cfg is non-nil.
+func (s *Service) SetLDAPConfig(cfg *LDAPConfig) {
+	s.ldapCfg = cfg
+}
+
+// LDAPLogin authenticates against LDAP and issues a JWT for the matching local user.
+func (s *Service) LDAPLogin(ctx context.Context, username, password string) (string, User, error) {
+	if s.ldapCfg == nil {
+		return "", User{}, fmt.Errorf("ldap not configured")
+	}
+	email, displayName, err := LDAPAuthenticate(ctx, *s.ldapCfg, username, password)
+	if err != nil {
+		return "", User{}, err
+	}
+	u, err := s.FindOrCreateSSOUser(ctx, email, displayName)
+	if err != nil {
+		return "", User{}, err
+	}
+	token, err := s.IssueJWT(u)
+	if err != nil {
+		return "", User{}, err
+	}
+	return token, u, nil
+}
+
 func (s *Service) Register(ctx context.Context, email, username, password string) (User, error) {
+	if err := ValidatePassword(password, email, username); err != nil {
+		return User{}, err
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return User{}, fmt.Errorf("hash password: %w", err)
@@ -207,6 +273,84 @@ func (s *Service) Login(ctx context.Context, email, password string) (string, Us
 	return signed, u, nil
 }
 
+// FindOrCreateSSOUser finds or creates a user by email from an OIDC identity.
+// First user ever created gets the admin role.
+func (s *Service) FindOrCreateSSOUser(ctx context.Context, email, username string) (User, error) {
+	if username == "" {
+		username = email
+	}
+	now := time.Now().UTC()
+	if s.pgPool != nil {
+		var u User
+		err := s.pgPool.QueryRow(ctx, `
+			SELECT id, email, username, role FROM users WHERE email = $1`, email,
+		).Scan(&u.ID, &u.Email, &u.Username, &u.Role)
+		if err == nil {
+			return u, nil
+		}
+		var count int
+		if err := s.pgPool.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
+			return User{}, fmt.Errorf("count users: %w", err)
+		}
+		role := "tester"
+		if count == 0 {
+			role = "admin"
+		}
+		var id int64
+		err = s.pgPool.QueryRow(ctx, `
+			INSERT INTO users (email, username, password_hash, role, is_active, created_at, updated_at)
+			VALUES ($1, $2, '', $3, TRUE, $4, $5) RETURNING id`,
+			email, username, role, now, now,
+		).Scan(&id)
+		if err != nil {
+			return User{}, fmt.Errorf("insert sso user: %w", err)
+		}
+		return User{ID: id, Email: email, Username: username, Role: role}, nil
+	}
+
+	var u User
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id, email, username, role FROM users WHERE email = ?`, email,
+	).Scan(&u.ID, &u.Email, &u.Username, &u.Role)
+	if err == nil {
+		return u, nil
+	}
+	var count int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
+		return User{}, fmt.Errorf("count users: %w", err)
+	}
+	role := "tester"
+	if count == 0 {
+		role = "admin"
+	}
+	res, err := s.db.ExecContext(ctx, `
+		INSERT INTO users (email, username, password_hash, role, is_active, created_at, updated_at)
+		VALUES (?, ?, '', ?, 1, ?, ?)`,
+		email, username, role, now, now,
+	)
+	if err != nil {
+		return User{}, fmt.Errorf("insert sso user: %w", err)
+	}
+	id, _ := res.LastInsertId()
+	return User{ID: id, Email: email, Username: username, Role: role}, nil
+}
+
+// IssueJWT issues a signed JWT for the given user.
+func (s *Service) IssueJWT(u User) (string, error) {
+	claims := jwt.MapClaims{
+		"sub":   u.ID,
+		"email": u.Email,
+		"role":  u.Role,
+		"exp":   time.Now().UTC().Add(24 * time.Hour).Unix(),
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := token.SignedString(s.jwtSecret)
+	if err != nil {
+		return "", fmt.Errorf("sign jwt: %w", err)
+	}
+	return signed, nil
+}
+
 // CreateAPIToken generates a random CI/CD token (returned once) and stores its SHA-256 hash.
 func (s *Service) CreateAPIToken(ctx context.Context, userID int64, name string) (string, error) {
 	raw := make([]byte, 24)
@@ -330,6 +474,9 @@ func (s *Service) ChangePassword(ctx context.Context, userID int64, currentPassw
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(currentPassword)); err != nil {
 		return ErrInvalidCredentials
+	}
+	if err := ValidatePassword(newPassword, "", ""); err != nil {
+		return err
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)

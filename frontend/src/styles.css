@@ -967,3 +967,81 @@ a {
   font-size: 0.82rem;
   color: var(--text-secondary);
 }
+
+/* UX flow primitives */
+@keyframes kiwit-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.toast-action {
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0.15rem 0.4rem;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.toast-action:hover {
+  background: var(--primary-soft);
+}
+
+/* --- Accessibility (WCAG 2.2) --- */
+
+/* Skip to content link — visible only on keyboard focus */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 0.75rem;
+  z-index: 9999;
+  padding: 0.6rem 1rem;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.875rem;
+  border-radius: 0 0 var(--radius) var(--radius);
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+.skip-link:focus {
+  top: 0;
+  outline: 3px solid var(--primary-hover);
+  outline-offset: 2px;
+}
+
+/* Visible focus ring for all interactive elements */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Ensure minimum touch target size (44px) for icon buttons on touch devices */
+@media (pointer: coarse) {
+  .btn-icon {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

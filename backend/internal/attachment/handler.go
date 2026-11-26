@@ -9,18 +9,18 @@ import (
 	"io"
 	"mime"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/kiwit/kiwit/internal/auth"
+	"github.com/kiwit/kiwit/internal/storage"
 )
 
 const maxUploadBytes = 25 << 20 // 25 MiB
 
 // RegisterRoutes mounts multipart upload, list, download, and delete endpoints on the chi router.
-func RegisterRoutes(r chi.Router, repo Repository, uploadDir string, guard *auth.AccessGuard) {
+func RegisterRoutes(r chi.Router, repo Repository, store storage.Storage, guard *auth.AccessGuard) {
 	r.With(auth.RequireRole("tester")).Post("/api/v1/attachments", func(w http.ResponseWriter, req *http.Request) {
 		req.Body = http.MaxBytesReader(w, req.Body, maxUploadBytes)
 		if err := req.ParseMultipartForm(maxUploadBytes); err != nil {
@@ -58,40 +58,30 @@ func RegisterRoutes(r chi.Router, repo Repository, uploadDir string, guard *auth
 		}
 		defer func() { _ = file.Close() }()
 
-		if err := os.MkdirAll(uploadDir, 0o755); err != nil {
-			http.Error(w, `{"detail":"failed to prepare upload dir"}`, http.StatusInternalServerError)
-			return
-		}
-
 		rnd := make([]byte, 8)
 		_, _ = rand.Read(rnd)
 		safeName := filepath.Base(header.Filename)
 		if safeName == "." || safeName == "/" || safeName == "" {
 			safeName = "attachment"
 		}
-		storagePath := filepath.Join(uploadDir, hex.EncodeToString(rnd)+"_"+safeName)
+		key := hex.EncodeToString(rnd) + "_" + safeName
 
-		dst, err := os.Create(storagePath)
+		// Peek at first bytes to detect content type before storing.
+		peek := make([]byte, 512)
+		n, _ := file.Read(peek)
+		ct := "application/octet-stream"
+		if n > 0 {
+			ct = http.DetectContentType(peek[:n])
+		}
+		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			http.Error(w, `{"detail":"failed to read file"}`, http.StatusInternalServerError)
+			return
+		}
+
+		storagePath, err := store.Put(req.Context(), key, file, header.Size)
 		if err != nil {
 			http.Error(w, `{"detail":"failed to store file"}`, http.StatusInternalServerError)
 			return
-		}
-		written, err := io.Copy(dst, file)
-		_ = dst.Close()
-		if err != nil {
-			_ = os.Remove(storagePath)
-			http.Error(w, `{"detail":"failed to write file"}`, http.StatusInternalServerError)
-			return
-		}
-
-		ct := "application/octet-stream"
-		if fcheck, err := os.Open(storagePath); err == nil {
-			peek := make([]byte, 512)
-			n, _ := fcheck.Read(peek)
-			_ = fcheck.Close()
-			if n > 0 {
-				ct = http.DetectContentType(peek[:n])
-			}
 		}
 
 		saved, err := repo.Create(req.Context(), Attachment{
@@ -99,11 +89,11 @@ func RegisterRoutes(r chi.Router, repo Repository, uploadDir string, guard *auth
 			EntityID:    entityID,
 			Filename:    safeName,
 			ContentType: ct,
-			SizeBytes:   written,
+			SizeBytes:   header.Size,
 			StoragePath: storagePath,
 		})
 		if err != nil {
-			_ = os.Remove(storagePath)
+			_ = store.Delete(req.Context(), storagePath)
 			http.Error(w, `{"detail":"failed to save attachment metadata"}`, http.StatusInternalServerError)
 			return
 		}
@@ -147,6 +137,12 @@ func RegisterRoutes(r chi.Router, repo Repository, uploadDir string, guard *auth
 		if auth.WriteAccessError(w, guard.EnforceEntity(req.Context(), a.EntityType, a.EntityID, false)) {
 			return
 		}
+		rc, err := store.Open(req.Context(), a.StoragePath)
+		if err != nil {
+			http.Error(w, `{"detail":"failed to open attachment"}`, http.StatusInternalServerError)
+			return
+		}
+		defer func() { _ = rc.Close() }()
 		w.Header().Set("Content-Type", a.ContentType)
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Content-Security-Policy", "sandbox")
@@ -155,7 +151,7 @@ func RegisterRoutes(r chi.Router, repo Repository, uploadDir string, guard *auth
 			disp = "attachment"
 		}
 		w.Header().Set("Content-Disposition", disp)
-		http.ServeFile(w, req, a.StoragePath)
+		_, _ = io.Copy(w, rc)
 	})
 
 	r.With(auth.RequireRole("tester")).Delete("/api/v1/attachments/{id}", func(w http.ResponseWriter, req *http.Request) {
@@ -180,7 +176,7 @@ func RegisterRoutes(r chi.Router, repo Repository, uploadDir string, guard *auth
 			http.Error(w, `{"detail":"failed to delete attachment"}`, http.StatusInternalServerError)
 			return
 		}
-		_ = os.Remove(a.StoragePath)
+		_ = store.Delete(req.Context(), a.StoragePath)
 		w.WriteHeader(http.StatusNoContent)
 	})
 }

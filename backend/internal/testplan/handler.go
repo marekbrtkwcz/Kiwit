@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/kiwit/kiwit/internal/audit"
 	"github.com/kiwit/kiwit/internal/auth"
 	"github.com/kiwit/kiwit/internal/notify"
 )
@@ -76,7 +77,7 @@ type AddCasesOutput struct {
 }
 
 // RegisterRoutes registers TestPlan OpenAPI endpoints.
-func RegisterRoutes(api huma.API, repo Repository, emailSettings *notify.SettingsStore, emailClient *notify.EmailClient, guard *auth.AccessGuard) {
+func RegisterRoutes(api huma.API, repo Repository, emailSettings *notify.SettingsStore, emailClient *notify.EmailClient, guard *auth.AccessGuard, auditStore *audit.Store) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-testplans",
 		Method:      http.MethodGet,
@@ -139,6 +140,9 @@ func RegisterRoutes(api huma.API, repo Repository, emailSettings *notify.Setting
 		if err != nil {
 			return nil, huma.Error400BadRequest("failed to create test plan", err)
 		}
+		audit.RecordChange(ctx, auditStore, "test_plan", tp.ID, "create", nil, map[string]any{
+			"name": tp.Name, "plan_type": tp.PlanType, "product_id": tp.ProductID, "is_active": tp.IsActive,
+		})
 		return &TestPlanOutput{Body: tp}, nil
 	})
 
@@ -155,6 +159,7 @@ func RegisterRoutes(api huma.API, repo Repository, emailSettings *notify.Setting
 		if err := guard.EnforceTestPlan(ctx, input.ID, true); err != nil {
 			return nil, err
 		}
+		old, oldErr := repo.GetByID(ctx, input.ID)
 		tp, err := repo.Update(ctx, input.ID, UpdateParams{
 			VersionID:   input.Body.VersionID,
 			ParentID:    input.Body.ParentID,
@@ -170,9 +175,19 @@ func RegisterRoutes(api huma.API, repo Repository, emailSettings *notify.Setting
 			}
 			return nil, huma.Error400BadRequest("failed to update test plan", err)
 		}
+		oldMap := map[string]any{"name": old.Name, "description": old.Description, "plan_type": old.PlanType, "is_active": old.IsActive}
+		newMap := map[string]any{"name": tp.Name, "description": tp.Description, "plan_type": tp.PlanType, "is_active": tp.IsActive}
+		_, _, diffText := audit.DiffFields(oldMap, newMap)
+		if oldErr == nil {
+			audit.RecordChange(ctx, auditStore, "test_plan", tp.ID, "update", oldMap, newMap)
+		}
+		body := fmt.Sprintf("TestPlan #%d (%s) was updated.", tp.ID, tp.Name)
+		if diffText != "" {
+			body += "\n\nChanges:\n" + diffText
+		}
 		emailSettings.NotifyIfEnabled(emailClient, "test_plan", tp.ID,
 			fmt.Sprintf("[Kiwit] TestPlan #%d updated", tp.ID),
-			fmt.Sprintf("TestPlan #%d (%s) was updated.", tp.ID, tp.Name),
+			body,
 		)
 		return &TestPlanOutput{Body: tp}, nil
 	})
@@ -337,12 +352,14 @@ func RegisterRoutes(api huma.API, repo Repository, emailSettings *notify.Setting
 		if err := guard.EnforceTestPlan(ctx, input.ID, true); err != nil {
 			return nil, err
 		}
+		old, _ := repo.GetByID(ctx, input.ID)
 		if err := repo.Delete(ctx, input.ID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, huma.Error404NotFound("test plan not found")
 			}
 			return nil, huma.Error500InternalServerError("failed to delete test plan", err)
 		}
+		audit.RecordChange(ctx, auditStore, "test_plan", input.ID, "delete", map[string]any{"name": old.Name}, nil)
 		return nil, nil
 	})
 }

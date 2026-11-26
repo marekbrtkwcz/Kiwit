@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import {
   Bug,
@@ -18,7 +18,7 @@ import {
   UserCircle2,
   X,
 } from 'lucide-react'
-import { getAuthToken } from './api/client'
+import { getAuthToken, menuApi, MenuResponse } from './api/client'
 import { CommandPalette } from './components/CommandPalette'
 import { useWorkspace, WorkspaceProvider } from './context/WorkspaceContext'
 import { AuthView } from './features/auth/AuthView'
@@ -32,14 +32,27 @@ import { TestPlansView } from './features/testplans/TestPlansView'
 import { TestRunsView } from './features/testruns/TestRunsView'
 import { I18nProvider, Lang, useI18n } from './i18n'
 
-function AppShell() {
-  const { lang, setLang, t } = useI18n()
-  const { theme, toggleTheme, products, activeProductId, setActiveProductId, setCmdkOpen, toasts } = useWorkspace()
-  const [collapsed, setCollapsed] = useState(false)
-  const [mobileOpen, setMobileOpen] = useState(false)
-  const location = useLocation()
+// iconMap maps backend icon names (lucide kebab-case) to components.
+const iconMap: Record<string, typeof LayoutDashboard> = {
+  'layout-dashboard': LayoutDashboard,
+  'file-check': FileCheck2,
+  'folder-kanban': FolderKanban,
+  'play-circle': PlayCircle,
+  bug: Bug,
+  package: Package,
+  settings: Settings,
+  'user-circle': UserCircle2,
+}
 
-  const navLinks = [
+interface NavEntry {
+  to: string
+  label: string
+  icon: typeof LayoutDashboard
+}
+
+// flattenMenu extracts leaf items with URLs from the configurable menu groups.
+function flattenMenu(menu: MenuResponse | null, t: ReturnType<typeof useI18n>['t']): NavEntry[] {
+  const fallback: NavEntry[] = [
     { to: '/dashboard', label: t.nav.dashboard, icon: LayoutDashboard },
     { to: '/cases', label: t.nav.testcases, icon: FileCheck2 },
     { to: '/plans', label: t.nav.testplans, icon: FolderKanban },
@@ -49,12 +62,43 @@ function AppShell() {
     { to: '/settings', label: t.nav.settings, icon: Settings },
     { to: '/auth', label: t.nav.auth, icon: UserCircle2 },
   ]
+  if (!menu) return fallback
+  const out: NavEntry[] = []
+  for (const group of menu.main) {
+    for (const item of group.items) {
+      const it = item as { label: string; url?: string; icon?: string }
+      if (it.url && it.url !== '-' && it.url.startsWith('/')) {
+        out.push({
+          to: it.url.split('?')[0],
+          label: it.label,
+          icon: iconMap[it.icon ?? ''] ?? LayoutDashboard,
+        })
+      }
+    }
+  }
+  return out.length > 0 ? out : fallback
+}
+
+function AppShell() {
+  const { lang, setLang, t } = useI18n()
+  const { theme, toggleTheme, products, activeProductId, setActiveProductId, setCmdkOpen, toasts } = useWorkspace()
+  const [collapsed, setCollapsed] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const [menu, setMenu] = useState<MenuResponse | null>(null)
+  const location = useLocation()
+
+  useEffect(() => {
+    menuApi.get().then(setMenu).catch(() => setMenu(null))
+  }, [])
+
+  const navLinks = flattenMenu(menu, t)
 
   const currentNav = navLinks.find((n) => location.pathname.startsWith(n.to))
   const pageTitle = currentNav?.label ?? 'Kiwit TCMS'
 
   return (
     <div className="layout-root">
+      <a href="#main-content" className="skip-link">Skip to main content</a>
       {mobileOpen && (
         <div
           className="drawer-backdrop"
@@ -80,6 +124,7 @@ function AppShell() {
             }}
             title={collapsed ? t.shell.expandSidebar : t.shell.collapseSidebar}
             aria-label={collapsed ? t.shell.expandSidebar : t.shell.collapseSidebar}
+            aria-expanded={!collapsed}
           >
             {mobileOpen ? <X size={16} /> : collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
           </button>
@@ -140,7 +185,8 @@ function AppShell() {
               className="btn btn-ghost btn-icon"
               style={{ display: 'inline-flex' }}
               onClick={() => setMobileOpen((v) => !v)}
-              aria-label="Toggle menu"
+              aria-label="Toggle navigation menu"
+              aria-expanded={mobileOpen}
             >
               <Menu size={18} />
             </button>
@@ -194,7 +240,7 @@ function AppShell() {
           </div>
         </header>
 
-        <main className="workspace-content">
+        <main className="workspace-content" id="main-content" tabIndex={-1}>
           <Routes>
             <Route path="/" element={<Navigate to={getAuthToken() ? '/dashboard' : '/auth'} replace />} />
             <Route path="/dashboard" element={<DashboardView />} />
@@ -220,7 +266,18 @@ function AppShell() {
         <div className="toast-stack" role="status" aria-live="polite">
           {toasts.map((toast) => (
             <div key={toast.id} className={`toast ${toast.kind}`}>
-              {toast.text}
+              <span>{toast.text}</span>
+              {toast.actionLabel && toast.onAction && (
+                <button
+                  type="button"
+                  className="toast-action"
+                  onClick={() => {
+                    toast.onAction?.()
+                  }}
+                >
+                  {toast.actionLabel}
+                </button>
+              )}
             </div>
           ))}
         </div>

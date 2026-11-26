@@ -38,7 +38,7 @@ export function SettingsView() {
   const [statuses, setStatuses] = useState<ExecutionStatusItem[]>([])
 
   const [trackerName, setTrackerName] = useState('')
-  const [trackerProvider, setTrackerProvider] = useState<'github' | 'gitlab' | 'jira'>('github')
+  const [trackerProvider, setTrackerProvider] = useState<'github' | 'gitlab' | 'jira' | 'bugzilla' | 'azure'>('github')
   const [trackerURL, setTrackerURL] = useState('')
   const [trackerUsername, setTrackerUsername] = useState('')
 
@@ -173,10 +173,12 @@ export function SettingsView() {
             style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}
           >
             <input className="input" placeholder={t.settings.trackerNamePlaceholder} value={trackerName} onChange={(e) => setTrackerName(e.target.value)} required />
-            <select className="select" value={trackerProvider} onChange={(e) => setTrackerProvider(e.target.value as 'github' | 'gitlab' | 'jira')}>
+            <select className="select" value={trackerProvider} onChange={(e) => setTrackerProvider(e.target.value as 'github' | 'gitlab' | 'jira' | 'bugzilla' | 'azure')}>
               <option value="github">GitHub</option>
               <option value="gitlab">GitLab</option>
               <option value="jira">Jira</option>
+              <option value="bugzilla">Bugzilla</option>
+              <option value="azure">Azure Boards</option>
             </select>
             <input className="input" placeholder="https://api.github.com/repos/org/repo" value={trackerURL} onChange={(e) => setTrackerURL(e.target.value)} required style={{ flex: 1, minWidth: 220 }} />
             <input className="input" placeholder={t.settings.trackerUserPlaceholder} value={trackerUsername} onChange={(e) => setTrackerUsername(e.target.value)} style={{ minWidth: 200 }} />

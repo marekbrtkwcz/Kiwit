@@ -223,6 +223,76 @@ func ReportIssueWithClient(ctx context.Context, client *http.Client, tracker Tra
 		}
 		return ReportedIssue{ExternalKey: out.Key, URL: base + "/browse/" + out.Key}, nil
 
+	case "bugzilla":
+		payload, _ := json.Marshal(map[string]string{
+			"product":     projectKey,
+			"summary":     title,
+			"description": body,
+			"version":     "unspecified",
+		})
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/rest/bug", bytes.NewReader(payload))
+		if err != nil {
+			return ReportedIssue{}, err
+		}
+		setBugzillaAuth(req, tracker, apiToken)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+		res, err := client.Do(req)
+		if err != nil {
+			return ReportedIssue{}, err
+		}
+		defer func() { _ = res.Body.Close() }()
+		if res.StatusCode >= 400 {
+			return ReportedIssue{}, fmt.Errorf("bugzilla api returned %d", res.StatusCode)
+		}
+		var out struct {
+			ID int `json:"id"`
+		}
+		if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
+			return ReportedIssue{}, err
+		}
+		key := fmt.Sprintf("%d", out.ID)
+		return ReportedIssue{ExternalKey: key, URL: base + "/show_bug.cgi?id=" + key}, nil
+
+	case "azure":
+		// BaseURL already contains the project: https://dev.azure.com/{org}/{project}
+		patch, _ := json.Marshal([]map[string]string{
+			{"op": "add", "path": "/fields/System.Title", "value": title},
+			{"op": "add", "path": "/fields/Microsoft.VSTS.TCM.ReproSteps", "value": body},
+		})
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+			base+"/_apis/wit/workitems/$Bug?api-version=7.1", bytes.NewReader(patch))
+		if err != nil {
+			return ReportedIssue{}, err
+		}
+		setAzureAuth(req, apiToken)
+		req.Header.Set("Content-Type", "application/json-patch+json")
+		res, err := client.Do(req)
+		if err != nil {
+			return ReportedIssue{}, err
+		}
+		defer func() { _ = res.Body.Close() }()
+		if res.StatusCode >= 400 {
+			return ReportedIssue{}, fmt.Errorf("azure boards api returned %d", res.StatusCode)
+		}
+		var out struct {
+			ID    int `json:"id"`
+			Links struct {
+				HTML struct {
+					Href string `json:"href"`
+				} `json:"html"`
+			} `json:"_links"`
+		}
+		if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
+			return ReportedIssue{}, err
+		}
+		key := fmt.Sprintf("%d", out.ID)
+		issueURL := out.Links.HTML.Href
+		if issueURL == "" {
+			issueURL = base + "/_workitems/edit/" + key
+		}
+		return ReportedIssue{ExternalKey: key, URL: issueURL}, nil
+
 	default:
 		return ReportedIssue{}, fmt.Errorf("unsupported provider: %s", tracker.Provider)
 	}
@@ -319,6 +389,61 @@ func FetchIssueStatusWithClient(ctx context.Context, client *http.Client, tracke
 		}
 		return out.Fields.Status.Name, nil
 
+	case "bugzilla":
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/rest/bug/"+url.PathEscape(key), nil)
+		if err != nil {
+			return "", err
+		}
+		setBugzillaAuth(req, tracker, apiToken)
+		req.Header.Set("Accept", "application/json")
+		res, err := client.Do(req)
+		if err != nil {
+			return "", err
+		}
+		defer func() { _ = res.Body.Close() }()
+		if res.StatusCode >= 400 {
+			return "", fmt.Errorf("bugzilla api returned %d", res.StatusCode)
+		}
+		var out struct {
+			Bugs []struct {
+				Status string `json:"status"`
+			} `json:"bugs"`
+		}
+		if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
+			return "", err
+		}
+		if len(out.Bugs) == 0 {
+			return "", fmt.Errorf("bugzilla bug %s not found", key)
+		}
+		return out.Bugs[0].Status, nil
+
+	case "azure":
+		// BaseURL already contains the project: https://dev.azure.com/{org}/{project}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+			base+"/_apis/wit/workitems/"+url.PathEscape(key)+"?api-version=7.1&$expand=fields", nil)
+		if err != nil {
+			return "", err
+		}
+		setAzureAuth(req, apiToken)
+		res, err := client.Do(req)
+		if err != nil {
+			return "", err
+		}
+		defer func() { _ = res.Body.Close() }()
+		if res.StatusCode >= 400 {
+			return "", fmt.Errorf("azure boards api returned %d", res.StatusCode)
+		}
+		var out struct {
+			Fields map[string]any `json:"fields"`
+		}
+		if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
+			return "", err
+		}
+		if s, ok := out.Fields["System.State"].(string); ok {
+			return s, nil
+		}
+		return "", fmt.Errorf("azure work item %s has no state", key)
+
 	default:
 		return "", fmt.Errorf("unsupported provider: %s", tracker.Provider)
 	}
@@ -362,6 +487,22 @@ func PostIssueCommentWithClient(ctx context.Context, client *http.Client, tracke
 			return err
 		}
 		setJiraAuth(req, tracker, apiToken)
+	case "bugzilla":
+		comment, _ := json.Marshal(map[string]string{"comment": body})
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, base+"/rest/bug/"+url.PathEscape(key)+"/comment", bytes.NewReader(comment))
+		if err != nil {
+			return err
+		}
+		setBugzillaAuth(req, tracker, apiToken)
+	case "azure":
+		// BaseURL already contains the project: https://dev.azure.com/{org}/{project}
+		comment, _ := json.Marshal(map[string]string{"text": body})
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost,
+			base+"/_apis/wit/workitems/"+url.PathEscape(key)+"/comments?api-version=7.1-preview.3", bytes.NewReader(comment))
+		if err != nil {
+			return err
+		}
+		setAzureAuth(req, apiToken)
 	default:
 		return fmt.Errorf("unsupported provider: %s", tracker.Provider)
 	}
@@ -375,4 +516,24 @@ func PostIssueCommentWithClient(ctx context.Context, client *http.Client, tracke
 		return fmt.Errorf("%s api returned %d", tracker.Provider, res.StatusCode)
 	}
 	return nil
+}
+
+// setBugzillaAuth sets Bugzilla REST auth: X-BUGZILLA-API-KEY when no username is
+// configured, otherwise HTTP Basic (login:api_key).
+func setBugzillaAuth(req *http.Request, tracker Tracker, apiToken string) {
+	user := strings.TrimSpace(tracker.APIUsername)
+	if user == "" {
+		user = strings.TrimSpace(os.Getenv("KIWIT_TRACKER_USERNAME"))
+	}
+	if user != "" {
+		req.SetBasicAuth(user, apiToken)
+		return
+	}
+	req.Header.Set("X-BUGZILLA-API-KEY", apiToken)
+}
+
+// setAzureAuth sets Azure DevOps PAT auth: Basic with empty username and the PAT
+// as password (base64 of ":<PAT>").
+func setAzureAuth(req *http.Request, apiToken string) {
+	req.SetBasicAuth("", apiToken)
 }
