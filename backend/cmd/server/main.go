@@ -182,6 +182,7 @@ func main() {
 
 	router := chi.NewMux()
 	router.Use(middleware.RequestID)
+	router.Use(web.RequestIDMiddleware)
 	router.Use(middleware.RealIP)
 	router.Use(middleware.Recoverer)
 	router.Use(requestLogger(logger))
@@ -248,7 +249,9 @@ func main() {
 		logger.Info("SSO (OIDC) enabled", "issuer", cfg.OIDCIssuer, "provider", cfg.OIDCProviderName)
 	}
 
-	api := humachi.New(router, huma.DefaultConfig("Kiwit TCMS API", "0.1.0"))
+	humaConfig := huma.DefaultConfig("Kiwit TCMS API", "0.1.0")
+	humaConfig.Transformers = append(humaConfig.Transformers, web.ErrorRequestIDTransformer)
+	api := humachi.New(router, humaConfig)
 	auth.RegisterRoutes(api, authSvc)
 	if captchaStore != nil {
 		captcha.RegisterRoutes(api, captchaStore)

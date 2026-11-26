@@ -88,7 +88,15 @@ export async function request<T>(url: string, init?: RequestInit): Promise<T> {
   })
   if (!res.ok) {
     const text = await res.text()
-    throw new Error(text || `HTTP ${res.status}`)
+    let message = text || `HTTP ${res.status}`
+    try {
+      const body = JSON.parse(text) as { detail?: string; request_id?: string }
+      if (body.detail) message = body.detail
+      if (body.request_id) message += ` (req: ${body.request_id})`
+    } catch {
+      // not a JSON error body — keep raw text
+    }
+    throw new Error(message)
   }
   if (res.status === 204 || res.headers.get('content-length') === '0') {
     return undefined as T
