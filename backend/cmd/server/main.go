@@ -55,6 +55,7 @@ import (
 	"github.com/kiwit/kiwit/internal/testplan"
 	"github.com/kiwit/kiwit/internal/testrun"
 	"github.com/kiwit/kiwit/internal/web"
+	"github.com/kiwit/kiwit/internal/version"
 	"github.com/kiwit/kiwit/internal/webhook"
 	"github.com/kiwit/kiwit/internal/xmlrpc"
 )
@@ -272,11 +273,12 @@ func main() {
 		store = storage.NewLocal(cfg.UploadDir)
 	}
 	attachment.RegisterRoutes(router, attachmentRepo, store, guard)
-	xmlrpc.NewHandlerWithWebhooks(authSvc, sqlDBConn, "0.1.0", cfg.UploadDir, webhookStore).Register(router)
+	xmlrpc.NewHandlerWithWebhooks(authSvc, sqlDBConn, version.VERSION, cfg.UploadDir, webhookStore).Register(router)
 	initdb.Register(router, initdb.NewStore(sqlDBConn, pgPoolConn))
 	menu.Register(router)
 	permissions.Register(router, permissions.NewStore(sqlDBConn, pgPoolConn))
 	settings.Register(router, settingsStore)
+	version.Register(router)
 
 	// Runtime-changeable settings: wire DB changes to live service state
 	settings.OnChange(settings.KeyDomain, func(domain string) {
