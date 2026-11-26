@@ -83,3 +83,29 @@ func GeneratePrompt(requirementText string) string {
 
 // SystemPrompt returns the system prompt for test generation.
 func SystemPrompt() string { return systemPrompt }
+
+var jsonFenceRe = regexp.MustCompile("(?s)```(?:json)?\\s*(\\{.*\\})\\s*```")
+
+// ExtractJSON pulls a JSON object out of an LLM response (fenced or raw).
+func ExtractJSON(raw string) string {
+	if m := jsonFenceRe.FindStringSubmatch(raw); m != nil {
+		return m[1]
+	}
+	raw = strings.TrimSpace(raw)
+	if i := strings.Index(raw, "{"); i >= 0 {
+		if j := strings.LastIndex(raw, "}"); j > i {
+			return raw[i : j+1]
+		}
+	}
+	return raw
+}
+
+var codeFenceRe = regexp.MustCompile("(?s)```(?:ts|typescript)?\\s*(.*?)\\s*```")
+
+// ExtractCode pulls the first code block out of an LLM response.
+func ExtractCode(raw string) string {
+	if m := codeFenceRe.FindStringSubmatch(raw); m != nil {
+		return m[1]
+	}
+	return strings.TrimSpace(raw)
+}

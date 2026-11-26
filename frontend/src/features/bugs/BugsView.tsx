@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bug, Plus, Search, Trash2, X } from 'lucide-react'
+import { Bot, Bug, Plus, Search, Trash2, X } from 'lucide-react'
 import { api, InternalBug } from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
@@ -205,7 +205,25 @@ export function BugsView() {
                     ))}
                   </select>
                 )}
-                <input className="input" placeholder={t.bugs.summaryPlaceholder} value={summary} onChange={(e) => setSummary(e.target.value)} required />
+                <button
+              type="button"
+              className="btn btn-sm"
+              title="AI suggests severity and title"
+              onClick={async () => {
+                if (!summary.trim()) return
+                try {
+                  const res = await api.aiSuggestBug({ summary, description: '' })
+                  setSeverity(res.severity as InternalBug['severity'])
+                  if (res.title && !summary.trim()) setSummary(res.title)
+                  notify(`AI: severity=${res.severity}`)
+                } catch (err) {
+                  notify(err instanceof Error ? err.message : 'AI suggest failed', 'error')
+                }
+              }}
+            >
+              <Bot size={13} />
+            </button>
+            <input className="input" placeholder={t.bugs.summaryPlaceholder} value={summary} onChange={(e) => setSummary(e.target.value)} required />
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <select className="select" value={severity} onChange={(e) => setSeverity(e.target.value as InternalBug['severity'])}>
                     <option value="low">low</option>

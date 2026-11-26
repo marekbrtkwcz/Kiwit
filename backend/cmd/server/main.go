@@ -288,6 +288,7 @@ func main() {
 	report.RegisterRoutes(api, router, report.NewStore(sqlDBConn, pgPoolConn), guard)
 	campaign.RegisterRoutes(api, campaign.NewStore(sqlDBConn, pgPoolConn), guard)
 	ai.RegisterRoutes(api, llm.LoadConfig(), testCaseRepo, requirement.NewStore(sqlDBConn, pgPoolConn), guard)
+	ai.RegisterExtraRoutes(api, llm.LoadConfig(), testRunRepo, guard)
 	xmlrpc.NewHandlerWithWebhooks(authSvc, sqlDBConn, version.VERSION, cfg.UploadDir, webhookStore).Register(router)
 	initdb.Register(router, initdb.NewStore(sqlDBConn, pgPoolConn))
 	menu.Register(router)

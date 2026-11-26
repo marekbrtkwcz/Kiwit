@@ -826,6 +826,12 @@ export const api = {
   deleteIteration: (id: number) => request<void>(`/api/v1/iterations/${id}`, { method: 'DELETE' }),
   assignPlanToCampaign: (campaignId: number, testPlanId: number, iterationId?: number) =>
     request<void>(`/api/v1/campaigns/${campaignId}/assign-plan`, { method: 'POST', body: JSON.stringify({ test_plan_id: testPlanId, iteration_id: iterationId }) }),
+  aiSummarizeRun: (testRunId: number) =>
+    request<{ summary: string; model: string }>('/api/v1/ai/summarize-run', { method: 'POST', body: JSON.stringify({ test_run_id: testRunId }) }),
+  aiSuggestBug: (body: { summary: string; description?: string }) =>
+    request<{ severity: string; title: string; model: string }>('/api/v1/ai/suggest-bug', { method: 'POST', body: JSON.stringify(body) }),
+  aiGenerateSteps: (gherkin: string) =>
+    request<{ code: string; model: string }>('/api/v1/ai/generate-steps', { method: 'POST', body: JSON.stringify({ gherkin }) }),
   aiGenerateTests: (body: { product_id: number; requirement_id?: number; text?: string; max_scenarios?: number }) =>
     request<{ created: { id: number; summary: string }[]; gherkin: string; model: string; scenarios: number }>('/api/v1/ai/generate-tests', { method: 'POST', body: JSON.stringify(body) }),
   listVisualBaselines: (caseId: number) =>

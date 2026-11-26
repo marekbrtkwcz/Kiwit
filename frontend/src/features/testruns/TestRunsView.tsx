@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
+  Bot,
   Bug,
   CheckCircle2,
   Download,
@@ -649,6 +650,21 @@ export function TestRunsView() {
                 </span>
               </div>
 
+              <button
+                type="button"
+                className="btn btn-sm"
+                title="LLM summary of this run"
+                onClick={async () => {
+                  try {
+                    const res = await api.aiSummarizeRun(selectedRun.id)
+                    notify(res.summary.length > 220 ? res.summary.slice(0, 220) + '…' : res.summary)
+                  } catch (err) {
+                    notify(err instanceof Error ? err.message : 'AI summary failed', 'error')
+                  }
+                }}
+              >
+                <Bot size={13} /> AI summary
+              </button>
               <EntityTagsBar entity="testruns" entityId={selectedRun.id} />
             </div>
 
