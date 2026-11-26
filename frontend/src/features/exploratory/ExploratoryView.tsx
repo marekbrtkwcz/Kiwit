@@ -3,6 +3,7 @@ import { Compass, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { api, ExploratorySession, Product } from '../../api/client'
 import { ConfirmDialog, EmptyState, LoadingSkeleton } from '../../components/UiPrimitives'
 import { useWorkspace } from '../../context/WorkspaceContext'
+import { useI18n } from '../../i18n'
 
 interface FormState {
   product_id: number
@@ -13,6 +14,7 @@ interface FormState {
 }
 
 export function ExploratoryView() {
+  const { t } = useI18n()
   const { notify } = useWorkspace()
   const [items, setItems] = useState<ExploratorySession[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -34,11 +36,11 @@ export function ExploratoryView() {
       setItems(res.items ?? [])
       setProducts(prods.items ?? [])
     } catch {
-      notify('Failed to load sessions', 'error')
+      notify(t.exploratory.loadFailed, 'error')
     } finally {
       setLoading(false)
     }
-  }, [productId, notify])
+  }, [productId, notify, t])
 
   useEffect(() => {
     void load()
@@ -61,15 +63,15 @@ export function ExploratoryView() {
       const body = { ...form, product_id: Number(form.product_id) }
       if (editing) {
         await api.updateExploratory(editing.id, body)
-        notify('Session updated')
+        notify(t.exploratory.updatedToast)
       } else {
         await api.createExploratory(body)
-        notify('Session started')
+        notify(t.exploratory.startedToast)
       }
       setShowForm(false)
       await load()
     } catch {
-      notify('Failed to save session', 'error')
+      notify(t.exploratory.saveFailed, 'error')
     }
   }
 
@@ -77,25 +79,25 @@ export function ExploratoryView() {
     try {
       await api.deleteExploratory(s.id)
       setConfirmDelete(null)
-      notify('Session deleted')
+      notify(t.exploratory.deletedToast)
       await load()
     } catch {
-      notify('Failed to delete session', 'error')
+      notify(t.exploratory.deleteFailed, 'error')
     }
   }
 
   return (
     <div className="view">
       <div className="view-header">
-        <h1>Exploratory Testing</h1>
+        <h1>{t.exploratory.title}</h1>
         <button type="button" className="btn btn-primary" onClick={openCreate}>
-          <Plus size={16} /> New Session
+          <Plus size={16} /> {t.exploratory.newSession}
         </button>
       </div>
 
       <div style={{ marginBottom: '0.75rem' }}>
         <select className="select" value={productId} onChange={(e) => setProductId(Number(e.target.value))}>
-          <option value={0}>All products</option>
+          <option value={0}>{t.shell.allProducts}</option>
           {products.map((p) => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
@@ -107,9 +109,9 @@ export function ExploratoryView() {
       ) : items.length === 0 ? (
         <EmptyState
           icon={<Compass size={28} />}
-          title="No exploratory sessions yet"
-          description="Charter-based, timeboxed sessions with notes and findings."
-          actionLabel="New Session"
+          title={t.exploratory.empty}
+          description={t.exploratory.emptyDescription}
+          actionLabel={t.exploratory.newSession}
           onAction={openCreate}
         />
       ) : (
@@ -122,11 +124,11 @@ export function ExploratoryView() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <Compass size={15} />
                   <strong style={{ fontSize: '0.9rem' }}>{s.charter}</strong>
-                  <span className="badge">{s.timebox_minutes} min</span>
-                  {s.test_run_id ? <span className="badge">run #{s.test_run_id}</span> : null}
+                  <span className="badge">{t.exploratory.minutesBadge(s.timebox_minutes)}</span>
+                  {s.test_run_id ? <span className="badge">{t.exploratory.runBadge(s.test_run_id)}</span> : null}
                   <span style={{ marginLeft: 'auto', display: 'flex', gap: '0.25rem' }}>
-                    <button type="button" className="btn btn-sm" onClick={() => openEdit(s)} aria-label="Edit session"><Pencil size={13} /></button>
-                    <button type="button" className="btn btn-sm btn-danger" onClick={() => setConfirmDelete(s)} aria-label="Delete session"><Trash2 size={13} /></button>
+                    <button type="button" className="btn btn-sm" onClick={() => openEdit(s)} aria-label={t.exploratory.editAria}><Pencil size={13} /></button>
+                    <button type="button" className="btn btn-sm btn-danger" onClick={() => setConfirmDelete(s)} aria-label={t.exploratory.deleteAria}><Trash2 size={13} /></button>
                   </span>
                 </div>
                 {s.notes && <div style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>{s.notes}</div>}
@@ -146,8 +148,8 @@ export function ExploratoryView() {
 
       {showForm && (
         <div className="modal-backdrop" onClick={() => setShowForm(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Exploratory session form">
-            <h2>{editing ? 'Edit Session' : 'New Exploratory Session'}</h2>
+          <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t.exploratory.formAria}>
+            <h2>{editing ? t.exploratory.editSession : t.exploratory.newSessionTitle}</h2>
             <div style={{ display: 'grid', gap: '0.5rem' }}>
               <select className="select" value={form.product_id} onChange={(e) => setForm({ ...form, product_id: Number(e.target.value) })}>
                 {products.map((p) => (
@@ -155,38 +157,38 @@ export function ExploratoryView() {
                 ))}
               </select>
               <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                <input style={{ flex: 1 }} className="input" placeholder="Charter (mission, e.g. Explore checkout flow for edge cases)" value={form.charter} onChange={(e) => setForm({ ...form, charter: e.target.value })} />
+                <input style={{ flex: 1 }} className="input" placeholder={t.exploratory.charterPlaceholder} value={form.charter} onChange={(e) => setForm({ ...form, charter: e.target.value })} />
                 <button
                   type="button"
                   className="btn btn-sm"
                   disabled={aiBusy === 'charter'}
-                  title="AI drafts a session charter from your objective"
+                  title={t.exploratory.aiCharterHint}
                   onClick={async () => {
-                    const objective = form.charter.trim() || window.prompt('Describe the session objective (area + what worries you)') || ''
+                    const objective = form.charter.trim() || window.prompt(t.exploratory.aiObjectivePrompt) || ''
                     if (!objective.trim()) return
                     setAiBusy('charter')
                     try {
                       const res = await api.aiGenerateCharter(objective)
                       setForm((f) => ({ ...f, charter: res.charter }))
                     } catch (err) {
-                      notify(err instanceof Error ? err.message : 'AI charter failed', 'error')
+                      notify(err instanceof Error ? err.message : t.exploratory.aiCharterFailed, 'error')
                     } finally {
                       setAiBusy('')
                     }
                   }}
                 >
-                  <Sparkles size={13} /> {aiBusy === 'charter' ? '…' : 'AI charter'}
+                  <Sparkles size={13} /> {aiBusy === 'charter' ? '…' : t.exploratory.aiCharter}
                 </button>
               </div>
               <input className="input" type="number" min={5} step={5} value={form.timebox_minutes} onChange={(e) => setForm({ ...form, timebox_minutes: Number(e.target.value) })} />
-              <textarea className="input" rows={4} placeholder="Notes during the session" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              <textarea className="input" rows={4} placeholder={t.exploratory.notesPlaceholder} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
               <div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.3rem' }}>
                   <button
                     type="button"
                     className="btn btn-sm"
                     disabled={aiBusy === 'findings' || !editing}
-                    title={editing ? 'AI extracts structured findings from this session notes' : 'Save the session first, then use AI findings'}
+                    title={editing ? t.exploratory.aiFindingsHint : t.exploratory.aiFindingsHintDisabled}
                     onClick={async () => {
                       if (!editing) return
                       setAiBusy('findings')
@@ -194,22 +196,22 @@ export function ExploratoryView() {
                         const res = await api.aiNotesToFindings(editing.id)
                         setForm((f) => ({ ...f, findings: JSON.stringify(res.findings, null, 2) }))
                       } catch (err) {
-                        notify(err instanceof Error ? err.message : 'AI findings failed', 'error')
+                        notify(err instanceof Error ? err.message : t.exploratory.aiFindingsFailed, 'error')
                       } finally {
                         setAiBusy('')
                       }
                     }}
                   >
-                    <Sparkles size={13} /> {aiBusy === 'findings' ? '…' : 'AI findings'}
+                    <Sparkles size={13} /> {aiBusy === 'findings' ? '…' : t.exploratory.aiFindings}
                   </button>
                 </div>
-                <textarea className="input" rows={3} placeholder='Findings as JSON array: ["bug: coupon applied twice"]' value={form.findings} onChange={(e) => setForm({ ...form, findings: e.target.value })} />
+                <textarea className="input" rows={3} placeholder={t.exploratory.findingsPlaceholder} value={form.findings} onChange={(e) => setForm({ ...form, findings: e.target.value })} />
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.75rem' }}>
-              <button type="button" className="btn" onClick={() => setShowForm(false)}>Cancel</button>
+              <button type="button" className="btn" onClick={() => setShowForm(false)}>{t.common.cancel}</button>
               <button type="button" className="btn btn-primary" onClick={submit} disabled={!form.charter || !form.product_id}>
-                {editing ? 'Save' : 'Start'}
+                {editing ? t.common.save : t.exploratory.start}
               </button>
             </div>
           </div>
@@ -219,9 +221,9 @@ export function ExploratoryView() {
       {confirmDelete && (
         <ConfirmDialog
           open
-          title="Delete session?"
-          message={`"${confirmDelete.charter}" will be removed.`}
-          confirmLabel="Delete"
+          title={t.exploratory.confirmDeleteTitle}
+          message={t.exploratory.confirmDeleteMessage(confirmDelete.charter)}
+          confirmLabel={t.common.delete}
           onConfirm={() => void doDelete(confirmDelete)}
           onCancel={() => setConfirmDelete(null)}
         />

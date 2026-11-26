@@ -20,11 +20,13 @@ import {
 } from '../../api/client'
 import { ConfirmDialog, EmptyState, LoadingSkeleton } from '../../components/UiPrimitives'
 import { useWorkspace } from '../../context/WorkspaceContext'
+import { useI18n } from '../../i18n'
 
 const STATUSES = ['planned', 'in_progress', 'done'] as const
 
 export function MilestonesView() {
   const { notify } = useWorkspace()
+  const { t } = useI18n()
   const [items, setItems] = useState<Milestone[]>([])
   const [loading, setLoading] = useState(true)
   const [products, setProducts] = useState<Product[]>([])
@@ -57,11 +59,11 @@ export function MilestonesView() {
       setItems(res.items)
       setProducts(prods.items)
     } catch {
-      notify('Failed to load milestones', 'error')
+      notify(t.milestones.loadFailed, 'error')
     } finally {
       setLoading(false)
     }
-  }, [versionId, notify])
+  }, [versionId, notify, t])
 
   useEffect(() => {
     void load()
@@ -90,7 +92,7 @@ export function MilestonesView() {
       setRuns(allRuns.items)
       if (!runId && allRuns.items.length > 0) setRunId(allRuns.items[0].id)
     } catch {
-      notify('Failed to load milestone detail', 'error')
+      notify(t.milestones.loadDetailFailed, 'error')
     }
   }
 
@@ -128,15 +130,15 @@ export function MilestonesView() {
       const body = { version_id: vid, name, description, due_date: dueDate || undefined, status }
       if (editing) {
         await api.updateMilestone(editing.id, body)
-        notify('Milestone updated')
+        notify(t.milestones.updatedToast)
       } else {
         await api.createMilestone(body)
-        notify('Milestone created')
+        notify(t.milestones.createdToast)
       }
       setShowForm(false)
       await load()
     } catch {
-      notify('Failed to save milestone', 'error')
+      notify(t.milestones.saveFailed, 'error')
     }
   }
 
@@ -144,10 +146,10 @@ export function MilestonesView() {
     try {
       await api.deleteMilestone(m.id)
       setConfirmDelete(null)
-      notify('Milestone deleted')
+      notify(t.milestones.deletedToast)
       await load()
     } catch {
-      notify('Failed to delete milestone', 'error')
+      notify(t.milestones.deleteFailed, 'error')
     }
   }
 
@@ -155,11 +157,11 @@ export function MilestonesView() {
     try {
       await api.milestoneSignoff(m.id, { decision, note: signoffNote })
       setSignoffNote('')
-      notify(`Signoff recorded: ${decision.toUpperCase()}`)
+      notify(t.milestones.signoffRecorded(decision))
       await load()
       if (expandedId === m.id) await loadDetail(m.id)
     } catch {
-      notify('Failed to record signoff (admin only)', 'error')
+      notify(t.milestones.signoffFailed, 'error')
     }
   }
 
@@ -167,27 +169,27 @@ export function MilestonesView() {
     if (!expandedId || !runId) return
     try {
       await api.milestoneLinkRun(expandedId, runId)
-      notify('Run linked')
+      notify(t.milestones.runLinked)
       await loadDetail(expandedId)
     } catch {
-      notify('Failed to link run', 'error')
+      notify(t.milestones.runLinkFailed, 'error')
     }
   }
 
   const doUnlink = async (id: number, rid: number) => {
     try {
       await api.milestoneUnlinkRun(id, rid)
-      notify('Run unlinked')
+      notify(t.milestones.runUnlinked)
       await loadDetail(id)
     } catch {
-      notify('Failed to unlink run', 'error')
+      notify(t.milestones.runUnlinkFailed, 'error')
     }
   }
 
   return (
     <div className="view">
       <div className="view-header">
-        <h1>Milestones &amp; Releases</h1>
+        <h1>{t.milestones.title}</h1>
         <button
           type="button"
           className="btn"
@@ -198,17 +200,17 @@ export function MilestonesView() {
               window.open(url, '_blank', 'noopener,noreferrer')
               setTimeout(() => URL.revokeObjectURL(url), 60_000)
             } catch {
-              notify('Failed to generate report', 'error')
+              notify(t.milestones.reportFailed, 'error')
             }
           }}
         >
-          Report ({selectedIds.length})
+          {t.milestones.report(selectedIds.length)}
         </button>
         <button
           type="button"
           className="btn"
           disabled={selectedIds.length === 0}
-          title="AI executive summary of the selected milestones for release management"
+          title={t.milestones.aiSummaryHint}
           onClick={async () => {
             setAiSummary('busy')
             try {
@@ -216,14 +218,14 @@ export function MilestonesView() {
               setAiSummary(res)
             } catch (err) {
               setAiSummary(null)
-              notify(err instanceof Error ? err.message : 'AI summary failed', 'error')
+              notify(err instanceof Error ? err.message : t.milestones.aiSummaryFailed, 'error')
             }
           }}
         >
-          <Sparkles size={16} /> AI podsumowanie
+          <Sparkles size={16} /> {t.milestones.aiSummary}
         </button>
         <button type="button" className="btn btn-primary" onClick={openCreate}>
-          <Plus size={16} /> New Milestone
+          <Plus size={16} /> {t.milestones.newMilestone}
         </button>
       </div>
 
@@ -234,7 +236,7 @@ export function MilestonesView() {
           ))}
         </select>
         <select className="select" value={versionId} onChange={(e) => setVersionId(Number(e.target.value))}>
-          <option value={0}>All versions</option>
+          <option value={0}>{t.milestones.allVersions}</option>
           {versions.map((v) => (
             <option key={v.id} value={v.id}>{v.value}</option>
           ))}
@@ -245,9 +247,9 @@ export function MilestonesView() {
         <LoadingSkeleton rows={5} />
       ) : items.length === 0 ? (
         <EmptyState
-          title="No milestones yet"
-          description="Milestones group test runs under a release and carry the go/no-go signoff."
-          actionLabel="New Milestone"
+          title={t.milestones.empty}
+          description={t.milestones.emptyDescription}
+          actionLabel={t.milestones.newMilestone}
           onAction={openCreate}
         />
       ) : (
@@ -259,15 +261,15 @@ export function MilestonesView() {
                   type="checkbox"
                   checked={items.length > 0 && selectedIds.length === items.length}
                   onChange={() => setSelectedIds(selectedIds.length === items.length ? [] : items.map((m) => m.id))}
-                  aria-label="Select all milestones"
+                  aria-label={t.milestones.selectAllAria}
                 />
               </th>
-              <th>Name</th>
-              <th>Due</th>
-              <th>Status</th>
-              <th>Progress</th>
-              <th>Signoff</th>
-              <th style={{ width: '8rem' }}>Actions</th>
+              <th>{t.common.name}</th>
+              <th>{t.milestones.due}</th>
+              <th>{t.common.status}</th>
+              <th>{t.milestones.progress}</th>
+              <th>{t.milestones.signoff}</th>
+              <th style={{ width: '8rem' }}>{t.common.actions}</th>
             </tr>
           </thead>
           <tbody>
@@ -279,7 +281,7 @@ export function MilestonesView() {
                       type="checkbox"
                       checked={selectedIds.includes(m.id)}
                       onChange={() => setSelectedIds((prev) => prev.includes(m.id) ? prev.filter((x) => x !== m.id) : [...prev, m.id])}
-                      aria-label={`Select milestone ${m.name}`}
+                      aria-label={t.milestones.selectAria(m.name)}
                     />
                   </td>
                   <td>
@@ -299,10 +301,10 @@ export function MilestonesView() {
                     ) : '—'}
                   </td>
                   <td style={{ display: 'flex', gap: '0.25rem' }}>
-                    <button type="button" className="btn btn-sm" title="Edit" onClick={() => openEdit(m)}>
+                    <button type="button" className="btn btn-sm" title={t.milestones.editAria} onClick={() => openEdit(m)}>
                       <Pencil size={14} />
                     </button>
-                    <button type="button" className="btn btn-sm btn-danger" title="Delete" onClick={() => setConfirmDelete(m)}>
+                    <button type="button" className="btn btn-sm btn-danger" title={t.common.delete} onClick={() => setConfirmDelete(m)}>
                       <Trash2 size={14} />
                     </button>
                   </td>
@@ -313,23 +315,23 @@ export function MilestonesView() {
                       <div style={{ padding: '0.5rem 0', display: 'grid', gap: '0.5rem' }}>
                         {progress[m.id] && (
                           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', fontSize: '0.85rem' }}>
-                            <span>Total: <strong>{progress[m.id].total}</strong></span>
-                            <span className="badge badge-passed">passed {progress[m.id].passed}</span>
-                            <span className="badge badge-failed">failed {progress[m.id].failed}</span>
-                            <span className="badge badge-blocked">blocked {progress[m.id].blocked}</span>
-                            <span className="badge badge-skipped">skipped {progress[m.id].skipped}</span>
-                            <span className="badge badge-idle">idle {progress[m.id].idle}</span>
+                            <span>{t.milestones.total} <strong>{progress[m.id].total}</strong></span>
+                            <span className="badge badge-passed">{t.milestones.passed} {progress[m.id].passed}</span>
+                            <span className="badge badge-failed">{t.milestones.failed} {progress[m.id].failed}</span>
+                            <span className="badge badge-blocked">{t.milestones.blocked} {progress[m.id].blocked}</span>
+                            <span className="badge badge-skipped">{t.milestones.skipped} {progress[m.id].skipped}</span>
+                            <span className="badge badge-idle">{t.milestones.idle} {progress[m.id].idle}</span>
                             <strong>{progress[m.id].percent_done}</strong>
                           </div>
                         )}
                         <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
                           <Flag size={14} />
-                          <strong>Linked runs:</strong>
-                          {linkedRuns.length === 0 && <span style={{ color: 'var(--muted)' }}>none</span>}
+                          <strong>{t.milestones.linkedRuns}</strong>
+                          {linkedRuns.length === 0 && <span style={{ color: 'var(--muted)' }}>{t.milestones.none}</span>}
                           {linkedRuns.map((rid) => (
                             <span key={rid} className="badge" style={{ display: 'inline-flex', gap: '0.25rem', alignItems: 'center' }}>
-                              Run #{rid}
-                              <button type="button" className="btn btn-sm" onClick={() => doUnlink(m.id, rid)} aria-label={`Unlink run ${rid}`}>
+                              {t.milestones.runBadge(rid)}
+                              <button type="button" className="btn btn-sm" onClick={() => doUnlink(m.id, rid)} aria-label={t.milestones.unlinkRunAria(rid)}>
                                 <XCircle size={12} />
                               </button>
                             </span>
@@ -339,16 +341,16 @@ export function MilestonesView() {
                               <option key={r.id} value={r.id}>#{r.id} {r.summary}</option>
                             ))}
                           </select>
-                          <button type="button" className="btn btn-sm" onClick={doLink}>Link run</button>
+                          <button type="button" className="btn btn-sm" onClick={doLink}>{t.milestones.linkRun}</button>
                         </div>
                         <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                          <strong>Go/No-Go:</strong>
-                          <input className="input" placeholder="Note (optional)" value={signoffNote} onChange={(e) => setSignoffNote(e.target.value)} style={{ maxWidth: '16rem' }} />
+                          <strong>{t.milestones.goNoGo}</strong>
+                          <input className="input" placeholder={t.milestones.notePlaceholder} value={signoffNote} onChange={(e) => setSignoffNote(e.target.value)} style={{ maxWidth: '16rem' }} />
                           <button type="button" className="btn btn-sm btn-primary" onClick={() => doSignoff(m, 'go')}>
-                            <CheckCircle2 size={14} /> GO
+                            <CheckCircle2 size={14} /> {t.milestones.go}
                           </button>
                           <button type="button" className="btn btn-sm btn-danger" onClick={() => doSignoff(m, 'no-go')}>
-                            <XCircle size={14} /> NO-GO
+                            <XCircle size={14} /> {t.milestones.noGo}
                           </button>
                         </div>
                       </div>
@@ -363,8 +365,8 @@ export function MilestonesView() {
 
       {showForm && (
         <div className="modal-backdrop" onClick={() => setShowForm(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Milestone form">
-            <h2>{editing ? 'Edit Milestone' : 'New Milestone'}</h2>
+          <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t.milestones.formAria}>
+            <h2>{editing ? t.milestones.editMilestone : t.milestones.newMilestone}</h2>
             <div style={{ display: 'grid', gap: '0.5rem' }}>
               {!editing && (
                 <select className="select" value={versionId} onChange={(e) => setVersionId(Number(e.target.value))}>
@@ -373,8 +375,8 @@ export function MilestonesView() {
                   ))}
                 </select>
               )}
-              <input className="input" placeholder="Name (e.g. Release 1.2)" value={name} onChange={(e) => setName(e.target.value)} />
-              <textarea className="input" placeholder="Description" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
+              <input className="input" placeholder={t.milestones.namePlaceholder} value={name} onChange={(e) => setName(e.target.value)} />
+              <textarea className="input" placeholder={t.common.description} rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <input className="input" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
                 <select className="select" value={status} onChange={(e) => setStatus(e.target.value)}>
@@ -385,9 +387,9 @@ export function MilestonesView() {
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.75rem' }}>
-              <button type="button" className="btn" onClick={() => setShowForm(false)}>Cancel</button>
+              <button type="button" className="btn" onClick={() => setShowForm(false)}>{t.common.cancel}</button>
               <button type="button" className="btn btn-primary" onClick={submit} disabled={!name || (!editing && !versionId)}>
-                {editing ? 'Save' : 'Create'}
+                {editing ? t.common.save : t.milestones.create}
               </button>
             </div>
           </div>
@@ -397,21 +399,21 @@ export function MilestonesView() {
       {aiSummary === 'busy' && (
         <div className="modal-backdrop">
           <div className="modal" role="dialog" aria-modal="true">
-            <p style={{ margin: 0 }}>AI pisze podsumowanie…</p>
+            <p style={{ margin: 0 }}>{t.milestones.aiBusy}</p>
           </div>
         </div>
       )}
 
       {aiSummary && aiSummary !== 'busy' && (
         <div className="modal-backdrop" onClick={() => setAiSummary(null)}>
-          <div className="modal" style={{ maxWidth: 680 }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="AI report summary">
-            <h2 style={{ marginTop: 0 }}>AI: podsumowanie release'u</h2>
+          <div className="modal" style={{ maxWidth: 680 }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t.milestones.aiSummaryAria}>
+            <h2 style={{ marginTop: 0 }}>{t.milestones.aiTitle}</h2>
             <p style={{ fontSize: '0.92rem', lineHeight: 1.5 }}>{aiSummary.summary}</p>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem' }}>
               <span style={{ color: 'var(--muted)', fontSize: '0.75rem' }}>{aiSummary.model}</span>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button type="button" className="btn" onClick={() => void navigator.clipboard.writeText(aiSummary.summary)}>Kopiuj</button>
-                <button type="button" className="btn btn-primary" onClick={() => setAiSummary(null)}>Zamknij</button>
+                <button type="button" className="btn" onClick={() => void navigator.clipboard.writeText(aiSummary.summary)}>{t.milestones.copy}</button>
+                <button type="button" className="btn btn-primary" onClick={() => setAiSummary(null)}>{t.common.close}</button>
               </div>
             </div>
           </div>
@@ -421,9 +423,9 @@ export function MilestonesView() {
       {confirmDelete && (
         <ConfirmDialog
           open
-          title="Delete milestone?"
-          message={`"${confirmDelete.name}" will be removed.`}
-          confirmLabel="Delete"
+          title={t.milestones.confirmDeleteTitle}
+          message={t.milestones.confirmDeleteMessage(confirmDelete.name)}
+          confirmLabel={t.common.delete}
           onConfirm={() => void doDelete(confirmDelete)}
           onCancel={() => setConfirmDelete(null)}
         />

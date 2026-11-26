@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw, ScrollText, Search, X } from 'lucide-react'
 import { api } from '../../api/client'
+import { useI18n } from '../../i18n'
 
 type LogEntry = { time: string; level: string; message: string; attrs?: Record<string, string> }
 
@@ -17,6 +18,7 @@ const LEVEL_ORDER: Record<string, number> = { error: 0, warn: 1, info: 2, debug:
 
 // LogViewerSection shows the in-memory server log buffer (admin).
 export function LogViewerSection() {
+  const { t } = useI18n()
   const [entries, setEntries] = useState<LogEntry[]>([])
   const [level, setLevel] = useState('all')
   const [query, setQuery] = useState('')
@@ -53,7 +55,7 @@ export function LogViewerSection() {
       if (!Number.isNaN(toTs) && ts > toTs) return false
       if (terms.length === 0) return true
       const haystack = `${e.message} ${e.level} ${Object.entries(e.attrs ?? {}).map(([k, v]) => `${k}=${v}`).join(' ')}`.toLowerCase()
-      return terms.every((t) => haystack.includes(t))
+      return terms.every((term) => haystack.includes(term))
     })
     const dir = sort.desc ? -1 : 1
     return [...rows].sort((a, b) => {
@@ -76,7 +78,7 @@ export function LogViewerSection() {
       className="btn btn-ghost btn-sm"
       style={{ padding: 0, fontSize: 'inherit', fontWeight: 'inherit', textTransform: 'inherit' }}
       onClick={() => setSort((s) => (s.key === key ? { key, desc: !s.desc } : { key, desc: key !== 'time' }))}
-      aria-label={`Sort by ${label}`}
+      aria-label={`${t.logs.level === label ? 'Sort by level' : `Sort by ${label}`}`}
     >
       {label} {sort.key === key ? (sort.desc ? '↓' : '↑') : <span style={{ opacity: 0.4 }}>⇅</span>}
     </button>
@@ -85,53 +87,53 @@ export function LogViewerSection() {
   return (
     <div className="card">
       <div className="card-header">
-        <h3 className="card-title"><ScrollText size={15} /> Server logs</h3>
+        <h3 className="card-title"><ScrollText size={15} /> {t.logs.title}</h3>
         <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ position: 'relative' }}>
             <Search size={13} style={{ position: 'absolute', left: 8, top: 9, color: 'var(--muted)', pointerEvents: 'none' }} />
             <input
               className="input"
-              placeholder="Search message, details…"
+              placeholder={t.logs.search}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              aria-label="Search logs"
+              aria-label={t.logs.searchAria}
               style={{ width: 220, fontSize: '0.8rem', paddingLeft: 26 }}
             />
           </div>
           <label style={{ fontSize: '0.8rem', display: 'inline-flex', gap: '0.25rem', alignItems: 'center' }}>
-            <input className="input" type="datetime-local" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From time" style={{ fontSize: '0.8rem' }} />
+            <input className="input" type="datetime-local" value={from} onChange={(e) => setFrom(e.target.value)} aria-label={t.logs.fromAria} style={{ fontSize: '0.8rem' }} />
           </label>
           <label style={{ fontSize: '0.8rem', display: 'inline-flex', gap: '0.25rem', alignItems: 'center' }}>
-            <input className="input" type="datetime-local" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To time" style={{ fontSize: '0.8rem' }} />
+            <input className="input" type="datetime-local" value={to} onChange={(e) => setTo(e.target.value)} aria-label={t.logs.toAria} style={{ fontSize: '0.8rem' }} />
           </label>
           {(from || to) && (
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setFrom(''); setTo('') }} aria-label="Clear time range">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setFrom(''); setTo('') }} aria-label={t.logs.clearRangeAria}>
               <X size={13} />
             </button>
           )}
-          <select className="select" value={level} onChange={(e) => setLevel(e.target.value)} style={{ fontSize: '0.8rem' }} aria-label="Log level filter">
+          <select className="select" value={level} onChange={(e) => setLevel(e.target.value)} style={{ fontSize: '0.8rem' }} aria-label={t.logs.levelAria}>
             {LEVELS.map((l) => (
               <option key={l} value={l}>{l}</option>
             ))}
           </select>
-          <button type="button" className="btn btn-sm" onClick={load} disabled={busy} aria-label="Refresh logs">
-            <RefreshCw size={13} /> {busy ? 'Loading…' : 'Refresh'}
+          <button type="button" className="btn btn-sm" onClick={load} disabled={busy} aria-label={t.logs.refreshAria}>
+            <RefreshCw size={13} /> {busy ? t.logs.loading : t.logs.refresh}
           </button>
         </div>
       </div>
       {entries.length === 0 ? (
-        <p style={{ color: 'var(--muted)', fontSize: '0.85rem', margin: 0 }}>No log entries for the selected level.</p>
+        <p style={{ color: 'var(--muted)', fontSize: '0.85rem', margin: 0 }}>{t.logs.noEntries}</p>
       ) : filtered.length === 0 ? (
-        <p style={{ color: 'var(--muted)', fontSize: '0.85rem', margin: 0 }}>No entries match the search.</p>
+        <p style={{ color: 'var(--muted)', fontSize: '0.85rem', margin: 0 }}>{t.logs.noMatch}</p>
       ) : (
         <div className="table-wrap" style={{ maxHeight: '45vh', overflowY: 'auto' }}>
           <table className="data-table">
             <thead>
               <tr>
-                <th>{sortBtn('time', 'Time')}</th>
-                <th>{sortBtn('level', 'Level')}</th>
-                <th>{sortBtn('message', 'Message')}</th>
-                <th>Details</th>
+                <th>{sortBtn('time', t.logs.time)}</th>
+                <th>{sortBtn('level', t.logs.level)}</th>
+                <th>{sortBtn('message', t.logs.message)}</th>
+                <th>{t.logs.details}</th>
               </tr>
             </thead>
             <tbody>
@@ -152,7 +154,7 @@ export function LogViewerSection() {
         </div>
       )}
       <p style={{ color: 'var(--muted)', fontSize: '0.75rem', margin: 0 }}>
-        Last 2000 entries in memory{query ? `, showing ${filtered.length} of ${entries.length}` : ''}. Set KIWIT_LOG_FILE / KIWIT_LOG_LEVEL / KIWIT_LOG_FORMAT for persistent output.
+        {query ? `${entries.length}${t.logs.showing(filtered.length, entries.length)}` : ''} KIWIT_LOG_FILE / KIWIT_LOG_LEVEL / KIWIT_LOG_FORMAT
       </p>
     </div>
   )

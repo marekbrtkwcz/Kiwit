@@ -3,8 +3,10 @@ import { ChevronDown, ChevronRight, FolderTree, Plus, Trash2 } from 'lucide-reac
 import { api, Campaign, CampaignTree, Product, TestPlan } from '../../api/client'
 import { ConfirmDialog, EmptyState, LoadingSkeleton } from '../../components/UiPrimitives'
 import { useWorkspace } from '../../context/WorkspaceContext'
+import { useI18n } from '../../i18n'
 
 export function CampaignsView() {
+  const { t } = useI18n()
   const { notify } = useWorkspace()
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -31,11 +33,11 @@ export function CampaignsView() {
       setProducts(prods.items ?? [])
       setPlans(pl.items ?? [])
     } catch {
-      notify('Failed to load campaigns', 'error')
+      notify(t.campaigns.loadFailed, 'error')
     } finally {
       setLoading(false)
     }
-  }, [productId, notify])
+  }, [productId, notify, t])
 
   useEffect(() => {
     void load()
@@ -46,7 +48,7 @@ export function CampaignsView() {
       const tree = await api.campaignTree(id)
       setTrees((prev) => ({ ...prev, [id]: tree }))
     } catch {
-      notify('Failed to load campaign tree', 'error')
+      notify(t.campaigns.treeLoadFailed, 'error')
     }
   }
 
@@ -59,13 +61,13 @@ export function CampaignsView() {
     if (!name.trim()) return
     try {
       await api.createCampaign({ product_id: productId || (products[0]?.id ?? 0), name: name.trim(), description })
-      notify('Campaign created')
+      notify(t.campaigns.createdToast)
       setShowForm(false)
       setName('')
       setDescription('')
       await load()
     } catch {
-      notify('Failed to create campaign', 'error')
+      notify(t.campaigns.createFailed, 'error')
     }
   }
 
@@ -75,35 +77,35 @@ export function CampaignsView() {
     try {
       await api.createIteration(campaignId, { name: n })
       setNewIter((prev) => ({ ...prev, [campaignId]: '' }))
-      notify('Iteration added')
+      notify(t.campaigns.iterationAdded)
       await loadTree(campaignId)
     } catch {
-      notify('Failed to add iteration', 'error')
+      notify(t.campaigns.iterationAddFailed, 'error')
     }
   }
 
   const assignPlan = async (campaignId: number, planId: number) => {
     try {
       await api.assignPlanToCampaign(campaignId, planId)
-      notify('Plan assigned')
+      notify(t.campaigns.planAssigned)
       await loadTree(campaignId)
     } catch {
-      notify('Failed to assign plan', 'error')
+      notify(t.campaigns.planAssignFailed, 'error')
     }
   }
 
   return (
     <div className="view">
       <div className="view-header">
-        <h1>Campaigns</h1>
+        <h1>{t.campaigns.title}</h1>
         <button type="button" className="btn btn-primary" onClick={() => setShowForm(true)}>
-          <Plus size={16} /> New Campaign
+          <Plus size={16} /> {t.campaigns.newCampaign}
         </button>
       </div>
 
       <div style={{ marginBottom: '0.75rem' }}>
         <select className="select" value={productId} onChange={(e) => setProductId(Number(e.target.value))}>
-          <option value={0}>All products</option>
+          <option value={0}>{t.shell.allProducts}</option>
           {products.map((p) => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
@@ -115,9 +117,9 @@ export function CampaignsView() {
       ) : campaigns.length === 0 ? (
         <EmptyState
           icon={<FolderTree size={28} />}
-          title="No campaigns yet"
-          description="Campaigns group iterations, which group test plans (suites) — the SquashTM-style hierarchy."
-          actionLabel="New Campaign"
+          title={t.campaigns.empty}
+          description={t.campaigns.emptyDescription}
+          actionLabel={t.campaigns.newCampaign}
           onAction={() => setShowForm(true)}
         />
       ) : (
@@ -125,14 +127,14 @@ export function CampaignsView() {
           {campaigns.map((c) => (
             <div key={c.id} className="card" style={{ display: 'grid', gap: '0.4rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <button type="button" className="btn btn-sm" onClick={() => toggle(c.id)} aria-label="Toggle campaign">
+                <button type="button" className="btn btn-sm" onClick={() => toggle(c.id)} aria-label={t.campaigns.toggleAria}>
                   {expanded[c.id] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 </button>
                 <FolderTree size={15} />
                 <strong>{c.name}</strong>
                 <span className={`badge badge-${c.status === 'active' ? 'running' : c.status === 'completed' ? 'passed' : 'idle'}`}>{c.status}</span>
                 <span style={{ marginLeft: 'auto' }}>
-                  <button type="button" className="btn btn-sm btn-danger" onClick={() => setConfirmDelete(c)} aria-label="Delete campaign">
+                  <button type="button" className="btn btn-sm btn-danger" onClick={() => setConfirmDelete(c)} aria-label={t.campaigns.deleteAria}>
                     <Trash2 size={13} />
                   </button>
                 </span>
@@ -143,19 +145,19 @@ export function CampaignsView() {
                   {trees[c.id].iterations.map((it) => (
                     <div key={it.id}>
                       <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-                        Iteration: {it.name} <span className="badge">{it.status}</span>
+                        {t.campaigns.iterationLabel(it.name)} <span className="badge">{it.status}</span>
                       </div>
                       <ul style={{ margin: '0.2rem 0 0.4rem', paddingLeft: '1.2rem', fontSize: '0.82rem' }}>
                         {it.plans.map((p) => (
                           <li key={p.id}>#{p.id} {p.name}</li>
                         ))}
-                        {it.plans.length === 0 && <li style={{ color: 'var(--muted)' }}>no plans</li>}
+                        {it.plans.length === 0 && <li style={{ color: 'var(--muted)' }}>{t.campaigns.noPlans}</li>}
                       </ul>
                     </div>
                   ))}
                   {trees[c.id].plans.length > 0 && (
                     <div style={{ fontSize: '0.85rem' }}>
-                      <strong>Plans (no iteration):</strong>
+                      <strong>{t.campaigns.plansNoIteration}</strong>
                       <ul style={{ margin: '0.2rem 0', paddingLeft: '1.2rem', fontSize: '0.82rem' }}>
                         {trees[c.id].plans.map((p) => (
                           <li key={p.id}>#{p.id} {p.name}</li>
@@ -166,12 +168,12 @@ export function CampaignsView() {
                   <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', flexWrap: 'wrap' }}>
                     <input
                       className="input"
-                      placeholder="New iteration name"
+                      placeholder={t.campaigns.iterationNamePlaceholder}
                       value={newIter[c.id] ?? ''}
                       onChange={(e) => setNewIter((prev) => ({ ...prev, [c.id]: e.target.value }))}
                       style={{ width: 160, fontSize: '0.8rem' }}
                     />
-                    <button type="button" className="btn btn-sm" onClick={() => addIteration(c.id)}>Add iteration</button>
+                    <button type="button" className="btn btn-sm" onClick={() => addIteration(c.id)}>{t.campaigns.addIteration}</button>
                     <select
                       className="select"
                       defaultValue=""
@@ -183,7 +185,7 @@ export function CampaignsView() {
                         }
                       }}
                     >
-                      <option value="">Assign test plan…</option>
+                      <option value="">{t.campaigns.assignPlanPlaceholder}</option>
                       {plans.map((p) => (
                         <option key={p.id} value={p.id}>#{p.id} {p.name}</option>
                       ))}
@@ -198,20 +200,20 @@ export function CampaignsView() {
 
       {showForm && (
         <div className="modal-backdrop" onClick={() => setShowForm(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Campaign form">
-            <h2>New Campaign</h2>
+          <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t.campaigns.formAria}>
+            <h2>{t.campaigns.newCampaign}</h2>
             <div style={{ display: 'grid', gap: '0.5rem' }}>
               <select className="select" value={productId || (products[0]?.id ?? 0)} onChange={(e) => setProductId(Number(e.target.value))}>
                 {products.map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
-              <input className="input" placeholder="Name (e.g. Q1 Regression)" value={name} onChange={(e) => setName(e.target.value)} />
-              <textarea className="input" rows={3} placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
+              <input className="input" placeholder={t.campaigns.namePlaceholder} value={name} onChange={(e) => setName(e.target.value)} />
+              <textarea className="input" rows={3} placeholder={t.common.description} value={description} onChange={(e) => setDescription(e.target.value)} />
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.75rem' }}>
-              <button type="button" className="btn" onClick={() => setShowForm(false)}>Cancel</button>
-              <button type="button" className="btn btn-primary" onClick={create} disabled={!name.trim()}>Create</button>
+              <button type="button" className="btn" onClick={() => setShowForm(false)}>{t.common.cancel}</button>
+              <button type="button" className="btn btn-primary" onClick={create} disabled={!name.trim()}>{t.campaigns.create}</button>
             </div>
           </div>
         </div>
@@ -220,17 +222,17 @@ export function CampaignsView() {
       {confirmDelete && (
         <ConfirmDialog
           open
-          title="Delete campaign?"
-          message={`"${confirmDelete.name}" and its iterations will be removed; test plans are kept.`}
-          confirmLabel="Delete"
+          title={t.campaigns.confirmDeleteTitle}
+          message={t.campaigns.confirmDeleteMessage(confirmDelete.name)}
+          confirmLabel={t.common.delete}
           onConfirm={async () => {
             try {
               await api.deleteCampaign(confirmDelete.id)
               setConfirmDelete(null)
-              notify('Campaign deleted')
+              notify(t.campaigns.deletedToast)
               await load()
             } catch {
-              notify('Failed to delete campaign', 'error')
+              notify(t.campaigns.deleteFailed, 'error')
             }
           }}
           onCancel={() => setConfirmDelete(null)}
