@@ -247,6 +247,64 @@ export interface TelemetryBreakdown {
   by_category: NamedCount[]
 }
 
+export interface RunProgress {
+  test_run_id: number
+  test_plan_id: number
+  plan_name: string
+  summary: string
+  started_at: string
+  stopped: boolean
+  total: number
+  passed: number
+  failed: number
+  blocked: number
+  skipped: number
+  idle: number
+  progress: number
+}
+
+export interface RecentExecution {
+  execution_id: number
+  test_case_id: number
+  test_run_id: number
+  case_summary: string
+  run_summary: string
+  status: string
+  tester: string
+  updated_at: string
+}
+
+export interface TesterLoad {
+  user_id: number
+  username: string
+  total: number
+  passed: number
+  failed: number
+  pass_rate: number
+}
+
+export interface ExecutionDashboard {
+  runs: RunProgress[]
+  recent_executions: RecentExecution[]
+  testers: TesterLoad[]
+}
+
+export interface WebhookItem {
+  id: number
+  name: string
+  url: string
+  events: string[]
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface WebhookTestResult {
+  delivered: boolean
+  status_code?: number
+  error?: string
+}
+
 export interface TelemetryFilterParams {
   product_id?: number
   version_id?: number
@@ -365,6 +423,23 @@ export interface EmailSettingsItem {
   entity_id: number
   notify_on_update: boolean
   cc_list: string[]
+}
+
+export interface NotificationItem {
+  id: number
+  event_type: string
+  entity_type?: string
+  entity_id?: number
+  title: string
+  body?: string
+  read_at?: string
+  created_at: string
+}
+
+export interface NotificationEventPreference {
+  event_type: string
+  in_app: boolean
+  email: boolean
 }
 
 export const api = {
@@ -546,6 +621,8 @@ export const api = {
     request<{ items: CaseHealth[] }>(`/api/v1/telemetry/test-case-health${buildTelemetryQuery(params)}`),
   getTelemetryBreakdown: (params?: TelemetryFilterParams) =>
     request<TelemetryBreakdown>(`/api/v1/telemetry/breakdown${buildTelemetryQuery(params)}`),
+  getExecutionDashboard: (params?: TelemetryFilterParams) =>
+    request<ExecutionDashboard>(`/api/v1/telemetry/execution-dashboard${buildTelemetryQuery(params)}`),
   uploadAttachment: async (entityType: 'test_case' | 'test_execution', entityId: number, file: File) => {
     const form = new FormData()
     form.append('entity_type', entityType)
@@ -615,6 +692,15 @@ export const api = {
   listIssueTrackers: () => request<{ items: IssueTrackerItem[] }>('/api/v1/issue-trackers'),
   createIssueTracker: (body: { name: string; provider: 'github' | 'gitlab' | 'jira'; base_url: string; api_username?: string }) =>
     request<IssueTrackerItem>('/api/v1/issue-trackers', { method: 'POST', body: JSON.stringify(body) }),
+  listWebhooks: () => request<{ items: WebhookItem[] }>('/api/v1/webhooks'),
+  createWebhook: (body: { name: string; url: string; secret?: string; events: string[]; is_active?: boolean }) =>
+    request<WebhookItem>('/api/v1/webhooks', { method: 'POST', body: JSON.stringify(body) }),
+  updateWebhook: (id: number, body: { name: string; url: string; secret?: string; events: string[]; is_active?: boolean }) =>
+    request<WebhookItem>(`/api/v1/webhooks/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteWebhook: (id: number) =>
+    request<{ deleted: boolean }>(`/api/v1/webhooks/${id}`, { method: 'DELETE' }),
+  testWebhook: (id: number) =>
+    request<WebhookTestResult>(`/api/v1/webhooks/${id}/test`, { method: 'POST' }),
   reportExecutionBug: (
     executionId: number,
     body: { tracker_id: number; api_token?: string; project_key?: string; title: string; body?: string },
@@ -679,4 +765,25 @@ export const api = {
     request<{ sent: boolean }>('/api/v1/notifications/test', { method: 'POST', body: JSON.stringify({ message }) }),
   sendTestEmail: (body: { to: string[]; subject: string; body: string }) =>
     request<{ sent: boolean }>('/api/v1/notifications/email-test', { method: 'POST', body: JSON.stringify(body) }),
+  listNotifications: (params?: { unread?: boolean; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams()
+    if (params?.unread) q.set('unread', 'true')
+    if (params?.limit) q.set('limit', String(params.limit))
+    if (params?.offset) q.set('offset', String(params.offset))
+    const qs = q.toString()
+    return request<{ items: NotificationItem[]; total: number; unread_count: number }>(
+      `/api/v1/notifications${qs ? `?${qs}` : ''}`
+    )
+  },
+  readNotification: (id: number) =>
+    request<{ read: boolean }>(`/api/v1/notifications/${id}/read`, { method: 'POST' }),
+  readAllNotifications: () =>
+    request<{ updated: number }>('/api/v1/notifications/read-all', { method: 'POST' }),
+  getMyNotificationSettings: () =>
+    request<{ events: NotificationEventPreference[] }>('/api/v1/me/notification-settings'),
+  putMyNotificationSettings: (events: NotificationEventPreference[]) =>
+    request<{ events: NotificationEventPreference[] }>('/api/v1/me/notification-settings', {
+      method: 'PUT',
+      body: JSON.stringify({ events }),
+    }),
 }

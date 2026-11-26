@@ -6,11 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/kiwit/kiwit/internal/auth"
+	"github.com/kiwit/kiwit/internal/notification"
 	"github.com/kiwit/kiwit/internal/notify"
+	"github.com/kiwit/kiwit/internal/webhook"
 )
 
 type TestRun struct {
@@ -84,7 +87,7 @@ type ExecutionLink struct {
 }
 
 // RegisterRoutes registers TestRun and TestExecution OpenAPI endpoints.
-func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClient, guard *auth.AccessGuard) {
+func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClient, notifications *notification.Store, emailClient *notify.EmailClient, webhooks *webhook.Store, guard *auth.AccessGuard) {
 	huma.Register(api, huma.Operation{
 		OperationID: "list-testruns",
 		Method:      http.MethodGet,
@@ -180,16 +183,29 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 		if err := guard.EnforceTestRun(ctx, input.ID, true); err != nil {
 			return nil, err
 		}
+		// Read the run before stopping so re-stopping an already stopped run
+		// does not emit duplicate notifications (idempotency guard).
+		run, err := repo.GetByID(ctx, input.ID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, huma.Error404NotFound("test run not found")
+			}
+			return nil, huma.Error500InternalServerError("failed to load test run", err)
+		}
+		wasStopped := run.StoppedAt != nil
 		if err := repo.Stop(ctx, input.ID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, huma.Error404NotFound("test run not found")
 			}
 			return nil, huma.Error500InternalServerError("failed to stop test run", err)
 		}
-		if notifier != nil && notifier.Enabled() {
-			go func(id int64) {
-				_ = notifier.Send(context.Background(), fmt.Sprintf("TestRun #%d stopped", id))
-			}(input.ID)
+		if !wasStopped {
+			if notifier != nil && notifier.Enabled() {
+				go func(id int64) {
+					_ = notifier.Send(context.Background(), fmt.Sprintf("TestRun #%d stopped", id))
+				}(input.ID)
+			}
+			emitRunStopped(ctx, repo, notifications, emailClient, webhooks, input.ID)
 		}
 		out := &struct {
 			Body struct {
@@ -486,10 +502,18 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 				testedBy = &uid
 			}
 		}
+		// Snapshot statuses before the update so emissions can guard on the
+		// status transition. A read failure skips the emissions (fail-closed)
+		// without blocking the bulk update itself.
+		prev, prevErr := repo.GetExecutionStatuses(ctx, input.Body.IDs)
 		n, err := repo.BulkUpdateExecutions(ctx, input.Body.IDs, input.Body.Status, input.Body.AssigneeID, testedBy)
 		if err != nil {
 			return nil, huma.Error400BadRequest("failed to bulk update executions", err)
 		}
+		if prevErr != nil {
+			prev = nil
+		}
+		emitBulkUpdate(ctx, repo, notifications, emailClient, webhooks, input.Body.IDs, prev, input.Body.Status, input.Body.AssigneeID, actorID(ctx))
 		out := &struct {
 			Body struct {
 				Updated int64 `json:"updated"`
@@ -532,6 +556,7 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 			}
 			return nil, huma.Error400BadRequest("failed to update execution", err)
 		}
+		emitExecutionUpdate(ctx, repo, notifications, emailClient, webhooks, input.ID, input.Body.Status, res.PrevStatus, res.AssigneeID, res.Comment)
 		return &ExecutionOutput{Body: res}, nil
 	})
 
@@ -639,4 +664,145 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 		}
 		return nil, nil
 	})
+}
+
+// actorID returns the authenticated user making the request, or 0 when unknown.
+func actorID(ctx context.Context) int64 {
+	if u, ok := auth.UserFromContext(ctx); ok {
+		return u.ID
+	}
+	return 0
+}
+
+// runStakeholders collects distinct notification recipients from a run's
+// manager and default tester, excluding the actor.
+func runStakeholders(run TestRun, actor int64) []int64 {
+	out := make([]int64, 0, 2)
+	if run.ManagerID != nil && *run.ManagerID > 0 && *run.ManagerID != actor {
+		out = append(out, *run.ManagerID)
+	}
+	if run.DefaultTesterID != nil && *run.DefaultTesterID > 0 && *run.DefaultTesterID != actor {
+		out = append(out, *run.DefaultTesterID)
+	}
+	return out
+}
+
+// emitRunStopped notifies the run manager and default tester when a run stops.
+func emitRunStopped(ctx context.Context, repo Repository, store *notification.Store, emailClient *notify.EmailClient, webhooks *webhook.Store, runID int64) {
+	if store == nil {
+		return
+	}
+	actor := actorID(ctx)
+	run, err := repo.GetByID(ctx, runID)
+	if err != nil {
+		return
+	}
+	recipients := runStakeholders(run, actor)
+	if len(recipients) == 0 {
+		return
+	}
+	title := fmt.Sprintf("Test run #%d stopped", runID)
+	_ = store.Emit(ctx, recipients, "run.stopped", "test_run", runID, title, run.Summary)
+	store.EmitEmail(ctx, emailClient, recipients, "run.stopped", title, run.Summary)
+	webhooks.EmitEvent("run.stopped", "test_run", runID, title, run.Summary)
+}
+
+// emitExecutionUpdate notifies stakeholders when an execution fails for the
+// first time (a repeated failed PATCH on an already failed execution is not
+// re-emitted) and the assignee when an execution gets assigned to them
+// without a status change.
+func emitExecutionUpdate(ctx context.Context, repo Repository, store *notification.Store, emailClient *notify.EmailClient, webhooks *webhook.Store, executionID int64, status, prevStatus string, assigneeID *int64, comment string) {
+	if store == nil {
+		return
+	}
+	actor := actorID(ctx)
+
+	if strings.EqualFold(strings.TrimSpace(status), "failed") && !strings.EqualFold(strings.TrimSpace(prevStatus), "failed") {
+		run, err := repo.GetExecutionRun(ctx, executionID)
+		if err != nil {
+			return
+		}
+		recipients := runStakeholders(run, actor)
+		if assigneeID != nil && *assigneeID > 0 && *assigneeID != actor {
+			recipients = append(recipients, *assigneeID)
+		}
+		if len(recipients) == 0 {
+			return
+		}
+		body := run.Summary
+		if strings.TrimSpace(comment) != "" {
+			body = comment
+		}
+		title := fmt.Sprintf("Execution #%d failed (run #%d)", executionID, run.ID)
+		_ = store.Emit(ctx, recipients, "execution.failed", "test_execution", executionID, title, body)
+		store.EmitEmail(ctx, emailClient, recipients, "execution.failed", title, body)
+		webhooks.EmitEvent("execution.failed", "test_execution", executionID, title, body)
+		return
+	}
+
+	if status == "" && assigneeID != nil && *assigneeID > 0 && *assigneeID != actor {
+		title := fmt.Sprintf("Execution #%d assigned to you", executionID)
+		_ = store.Emit(ctx, []int64{*assigneeID}, "execution.assigned", "test_execution", executionID, title, "")
+		store.EmitEmail(ctx, emailClient, []int64{*assigneeID}, "execution.assigned", title, "")
+		webhooks.EmitEvent("execution.assigned", "test_execution", executionID, title, "")
+	}
+}
+
+// emitBulkUpdate emits consolidated per-run notifications after a bulk update:
+// one notification per run (not one per execution). A nil/missing prev entry
+// for an ID means the execution did not exist before the update, so nothing
+// is emitted for it.
+func emitBulkUpdate(ctx context.Context, repo Repository, store *notification.Store, emailClient *notify.EmailClient, webhooks *webhook.Store, ids []int64, prev map[int64]string, status string, assigneeID *int64, actor int64) {
+	if store == nil {
+		return
+	}
+	isFailed := strings.EqualFold(strings.TrimSpace(status), "failed")
+	notifyAssignee := status == "" && assigneeID != nil && *assigneeID > 0 && *assigneeID != actor
+	if !isFailed && !notifyAssignee {
+		return
+	}
+
+	type runGroup struct {
+		run      TestRun
+		affected int
+	}
+	groups := make(map[int64]*runGroup)
+	for _, id := range ids {
+		if _, ok := prev[id]; !ok {
+			continue // not present before the update: nothing to emit
+		}
+		if isFailed && strings.EqualFold(strings.TrimSpace(prev[id]), "failed") {
+			continue // already failed: no status transition
+		}
+		run, err := repo.GetExecutionRun(ctx, id)
+		if err != nil {
+			continue // ignore individual lookup errors
+		}
+		g := groups[run.ID]
+		if g == nil {
+			g = &runGroup{run: run}
+			groups[run.ID] = g
+		}
+		g.affected++
+	}
+
+	for runID, g := range groups {
+		if isFailed {
+			recipients := runStakeholders(g.run, actor)
+			if len(recipients) == 0 {
+				continue
+			}
+			title := fmt.Sprintf("%d executions failed (run #%d)", g.affected, runID)
+			body := g.run.Summary
+			_ = store.Emit(ctx, recipients, "execution.failed", "test_run", runID, title, body)
+			store.EmitEmail(ctx, emailClient, recipients, "execution.failed", title, body)
+			webhooks.EmitEvent("execution.failed", "test_run", runID, title, body)
+			continue
+		}
+		title := fmt.Sprintf("%d executions assigned to you (run #%d)", g.affected, runID)
+		body := g.run.Summary
+		_ = store.Emit(ctx, []int64{*assigneeID}, "execution.assigned", "test_run", runID, title, body)
+		store.EmitEmail(ctx, emailClient, []int64{*assigneeID}, "execution.assigned", title, body)
+		webhooks.EmitEvent("execution.assigned", "test_run", runID, title, body)
+	}
 }

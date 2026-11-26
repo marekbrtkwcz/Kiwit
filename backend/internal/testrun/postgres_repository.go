@@ -103,6 +103,23 @@ func (r *PostgresRepository) ListFiltered(ctx context.Context, f ListFilter) ([]
 	return items, total, rows.Err()
 }
 
+func (r *PostgresRepository) GetExecutionRun(ctx context.Context, executionID int64) (TestRun, error) {
+	row := r.pool.QueryRow(ctx, `
+		SELECT tr.id, tr.test_plan_id, tr.build_id, tr.environment_id, tr.manager_id, tr.default_tester_id,
+		       tr.summary, tr.notes, tr.planned_start, tr.planned_stop, tr.started_at, tr.stopped_at
+		FROM test_runs tr
+		JOIN test_executions te ON te.test_run_id = tr.id
+		WHERE te.id = $1`, executionID)
+	tr, err := scanTestRun(row)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return TestRun{}, sql.ErrNoRows
+		}
+		return TestRun{}, err
+	}
+	return tr, nil
+}
+
 func (r *PostgresRepository) GetByID(ctx context.Context, runID int64) (TestRun, error) {
 	row := r.pool.QueryRow(ctx, `
 		SELECT id, test_plan_id, build_id, environment_id, manager_id, default_tester_id,
@@ -434,11 +451,42 @@ func (r *PostgresRepository) UpdateExecutionFull(ctx context.Context, executionI
 	return ExecutionResult{
 		ID:            executionID,
 		Status:        nextStatus,
+		PrevStatus:    curStatus,
 		Comment:       nextComment,
 		AssigneeID:    nextAssignee,
 		TestedByID:    nextTestedBy,
 		EnvironmentID: nextEnv,
 	}, nil
+}
+
+// GetExecutionStatuses returns the status of every listed execution that
+// exists, keyed by ID. An empty ID list returns an empty map without querying.
+func (r *PostgresRepository) GetExecutionStatuses(ctx context.Context, ids []int64) (map[int64]string, error) {
+	out := make(map[int64]string, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = id
+	}
+	rows, err := r.pool.Query(ctx,
+		"SELECT id, status FROM test_executions WHERE id IN ("+strings.Join(placeholders, ",")+")", args...)
+	if err != nil {
+		return nil, fmt.Errorf("query execution statuses: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var status string
+		if err := rows.Scan(&id, &status); err != nil {
+			return nil, fmt.Errorf("scan execution status: %w", err)
+		}
+		out[id] = status
+	}
+	return out, rows.Err()
 }
 
 func (r *PostgresRepository) BulkUpdateExecutions(ctx context.Context, ids []int64, status string, assigneeID, testedByID *int64) (int64, error) {

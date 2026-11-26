@@ -28,6 +28,7 @@ import (
 	"github.com/kiwit/kiwit/internal/environment"
 	"github.com/kiwit/kiwit/internal/issuetracker"
 	"github.com/kiwit/kiwit/internal/management"
+	"github.com/kiwit/kiwit/internal/notification"
 	"github.com/kiwit/kiwit/internal/notify"
 	"github.com/kiwit/kiwit/internal/platform/config"
 	"github.com/kiwit/kiwit/internal/platform/db"
@@ -37,6 +38,7 @@ import (
 	"github.com/kiwit/kiwit/internal/testplan"
 	"github.com/kiwit/kiwit/internal/testrun"
 	"github.com/kiwit/kiwit/internal/web"
+	"github.com/kiwit/kiwit/internal/webhook"
 )
 
 func main() {
@@ -134,7 +136,15 @@ func main() {
 	testcase.RegisterTemplateRoutes(api, sqlDBConn, pgPoolConn)
 	testplan.RegisterRoutes(api, testPlanRepo, emailSettings, emailClient, guard)
 	notifier := notify.NewWebhookClient(os.Getenv("KIWIT_WEBHOOK_URL"))
-	testrun.RegisterRoutes(api, testRunRepo, notifier, guard)
+	notificationStore := notification.NewStore(sqlDBConn, pgPoolConn)
+	webhookStore := webhook.NewStore(sqlDBConn, pgPoolConn)
+	// Local development may need webhooks against loopback targets; production
+	// keeps the SSRF dial guard on (block loopback/private/link-local IPs).
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("KIWIT_WEBHOOK_ALLOW_PRIVATE"))) {
+	case "1", "true", "yes":
+		webhook.AllowPrivateTargets = true
+	}
+	testrun.RegisterRoutes(api, testRunRepo, notifier, notificationStore, emailClient, webhookStore, guard)
 	testrun.RegisterExportRoutes(router, testRunRepo, guard)
 	issuetracker.RegisterRoutes(api, issueRepo, guard)
 	bug.RegisterRoutes(api, bug.NewStore(sqlDBConn, pgPoolConn), guard)
@@ -142,6 +152,8 @@ func main() {
 	comment.RegisterRoutes(api, commentRepo, guard)
 	notify.RegisterRoutes(api, notifier)
 	notify.RegisterEmailRoutes(api, emailSettings, emailClient, guard)
+	notification.RegisterRoutes(api, notificationStore)
+	webhook.RegisterRoutes(api, webhookStore)
 	environment.RegisterRoutes(api, environment.NewStore(sqlDBConn, pgPoolConn))
 	pluginReg := plugin.NewRegistry()
 	pluginReg.InitAll(api)

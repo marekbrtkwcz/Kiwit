@@ -24,6 +24,7 @@ import { useWorkspace, WorkspaceProvider } from './context/WorkspaceContext'
 import { AuthView } from './features/auth/AuthView'
 import { BugsView } from './features/bugs/BugsView'
 import { ProductsView } from './features/management/ProductsView'
+import { NotificationBell } from './features/notifications/NotificationBell'
 import { SettingsView } from './features/settings/SettingsView'
 import { DashboardView } from './features/telemetry/DashboardView'
 import { TestCasesView } from './features/testcases/TestCasesView'
@@ -167,6 +168,8 @@ function AppShell() {
             >
               {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
             </button>
+
+            <NotificationBell />
 
             <div style={{ display: 'inline-flex', border: '1px solid var(--border-strong)', borderRadius: 8, overflow: 'hidden' }}>
               {(['pl', 'en'] as Lang[]).map((l) => (

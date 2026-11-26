@@ -53,10 +53,13 @@ type ExecutionUpdateParams struct {
 	EnvironmentID *int64
 }
 
-// ExecutionResult represents an updated test execution.
+// ExecutionResult represents an updated test execution. PrevStatus is the
+// status the execution had before the update (additive field used for
+// idempotency guards in event emission).
 type ExecutionResult struct {
 	ID            int64  `json:"id"`
 	Status        string `json:"status"`
+	PrevStatus    string `json:"prev_status,omitempty"`
 	Comment       string `json:"comment,omitempty"`
 	AssigneeID    *int64 `json:"assignee_id,omitempty"`
 	TestedByID    *int64 `json:"tested_by_id,omitempty"`
@@ -92,10 +95,15 @@ type Repository interface {
 	Stop(ctx context.Context, runID int64) error
 	Delete(ctx context.Context, runID int64) error
 	ListExecutions(ctx context.Context, runID int64) ([]ExecutionItem, error)
+	// GetExecutionRun returns the TestRun owning the given execution.
+	GetExecutionRun(ctx context.Context, executionID int64) (TestRun, error)
 	AddCases(ctx context.Context, runID int64, caseIDs []int64, envID *int64) (int, error)
 	DeleteExecution(ctx context.Context, runID, execID int64) error
 	UpdateExecution(ctx context.Context, executionID int64, status, comment string) (ExecutionResult, error)
 	UpdateExecutionFull(ctx context.Context, executionID int64, p ExecutionUpdateParams) (ExecutionResult, error)
+	// GetExecutionStatuses returns the current status of each execution whose
+	// ID is present in the database, keyed by execution ID.
+	GetExecutionStatuses(ctx context.Context, ids []int64) (map[int64]string, error)
 	BulkUpdateExecutions(ctx context.Context, ids []int64, status string, assigneeID, testedByID *int64) (int64, error)
 	SyncExecutionCase(ctx context.Context, executionID int64) (ExecutionItem, error)
 	ListLinks(ctx context.Context, executionID int64) ([]ExecutionLink, error)
@@ -264,6 +272,16 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, runID int64) (TestRun, e
 		SELECT id, test_plan_id, build_id, environment_id, manager_id, default_tester_id,
 		       summary, notes, planned_start, planned_stop, started_at, stopped_at
 		FROM test_runs WHERE id = ?`, runID)
+	return scanTestRun(row)
+}
+
+func (r *SQLiteRepository) GetExecutionRun(ctx context.Context, executionID int64) (TestRun, error) {
+	row := r.db.QueryRowContext(ctx, `
+		SELECT tr.id, tr.test_plan_id, tr.build_id, tr.environment_id, tr.manager_id, tr.default_tester_id,
+		       tr.summary, tr.notes, tr.planned_start, tr.planned_stop, tr.started_at, tr.stopped_at
+		FROM test_runs tr
+		JOIN test_executions te ON te.test_run_id = tr.id
+		WHERE te.id = ?`, executionID)
 	return scanTestRun(row)
 }
 
@@ -607,11 +625,42 @@ func (r *SQLiteRepository) UpdateExecutionFull(ctx context.Context, executionID 
 	return ExecutionResult{
 		ID:            executionID,
 		Status:        nextStatus,
+		PrevStatus:    curStatus,
 		Comment:       nextComment,
 		AssigneeID:    nextAssignee,
 		TestedByID:    nextTestedBy,
 		EnvironmentID: nextEnv,
 	}, nil
+}
+
+// GetExecutionStatuses returns the status of every listed execution that
+// exists, keyed by ID. An empty ID list returns an empty map without querying.
+func (r *SQLiteRepository) GetExecutionStatuses(ctx context.Context, ids []int64) (map[int64]string, error) {
+	out := make(map[int64]string, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	rows, err := r.db.QueryContext(ctx,
+		"SELECT id, status FROM test_executions WHERE id IN ("+strings.Join(placeholders, ",")+")", args...)
+	if err != nil {
+		return nil, fmt.Errorf("query execution statuses: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var id int64
+		var status string
+		if err := rows.Scan(&id, &status); err != nil {
+			return nil, fmt.Errorf("scan execution status: %w", err)
+		}
+		out[id] = status
+	}
+	return out, rows.Err()
 }
 
 func (r *SQLiteRepository) BulkUpdateExecutions(ctx context.Context, ids []int64, status string, assigneeID, testedByID *int64) (int64, error) {

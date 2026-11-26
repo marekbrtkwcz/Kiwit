@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Bell, Bug, Layers, Sliders } from 'lucide-react'
+import { Bell, Bug, Layers, Sliders, Webhook as WebhookIcon } from 'lucide-react'
 import {
   api,
   EmailSettingsItem,
   EnvironmentItem,
   ExecutionStatusItem,
   IssueTrackerItem,
+  NotificationEventPreference,
   PriorityItem,
   TemplateItem,
+  WebhookItem,
 } from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
@@ -26,7 +28,7 @@ function parseProperties(raw: string): Record<string, string> {
 export function SettingsView() {
   const { t } = useI18n()
   const { notify } = useWorkspace()
-  const [tab, setTab] = useState<'trackers' | 'env' | 'dicts' | 'notify'>('trackers')
+  const [tab, setTab] = useState<'trackers' | 'env' | 'dicts' | 'notify' | 'webhooks'>('trackers')
 
   const [trackers, setTrackers] = useState<IssueTrackerItem[]>([])
   const [environments, setEnvironments] = useState<EnvironmentItem[]>([])
@@ -59,23 +61,35 @@ export function SettingsView() {
   const [testEmailTo, setTestEmailTo] = useState('')
   const [testEmailSubject, setTestEmailSubject] = useState('Kiwit SMTP Test')
   const [testEmailBody, setTestEmailBody] = useState('SMTP notification test from Kiwit TCMS.')
+  const [notifPrefs, setNotifPrefs] = useState<NotificationEventPreference[]>([])
+
+  const [webhooks, setWebhooks] = useState<WebhookItem[]>([])
+  const [hookName, setHookName] = useState('')
+  const [hookURL, setHookURL] = useState('')
+  const [hookSecret, setHookSecret] = useState('')
+  const [hookEvents, setHookEvents] = useState<string[]>(['run.stopped'])
+  const [hookActive, setHookActive] = useState(true)
 
   const [error, setError] = useState<string | null>(null)
 
   const loadAll = async () => {
     try {
-      const [tr, env, tpl, pri, st] = await Promise.all([
+      const [tr, env, tpl, pri, st, prefs, hooks] = await Promise.all([
         api.listIssueTrackers(),
         api.listEnvironments(),
         api.listTemplates(),
         api.listPriorities(),
         api.listExecutionStatuses(),
+        api.getMyNotificationSettings(),
+        api.listWebhooks().catch(() => ({ items: [] as WebhookItem[] })),
       ])
       setTrackers(tr.items)
       setEnvironments(env.items)
       setTemplates(tpl.items)
       setPriorities(pri.items)
       setStatuses(st.items)
+      setNotifPrefs(prefs.events)
+      setWebhooks(hooks.items)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : t.settings.loadFailed)
@@ -97,6 +111,15 @@ export function SettingsView() {
     }
   }
 
+  const eventLabels: Record<string, string> = {
+    'run.stopped': t.notifications.eventRunStopped,
+    'execution.failed': t.notifications.eventExecutionFailed,
+    'execution.assigned': t.notifications.eventExecutionAssigned,
+  }
+  const updateNotifPref = (eventType: string, channel: 'in_app' | 'email', value: boolean) => {
+    setNotifPrefs((prev) => prev.map((p) => (p.event_type === eventType ? { ...p, [channel]: value } : p)))
+  }
+
   return (
     <section style={{ display: 'grid', gap: '1rem' }}>
       {error && <p className="alert-error">{error}</p>}
@@ -113,6 +136,9 @@ export function SettingsView() {
         </button>
         <button type="button" className={`tab-btn ${tab === 'notify' ? 'active' : ''}`} onClick={() => setTab('notify')}>
           <Bell size={15} /> {t.settings.tabNotify}
+        </button>
+        <button type="button" className={`tab-btn ${tab === 'webhooks' ? 'active' : ''}`} onClick={() => setTab('webhooks')}>
+          <WebhookIcon size={15} /> {t.settings.tabWebhooks} ({webhooks.length})
         </button>
       </div>
 
@@ -383,6 +409,175 @@ export function SettingsView() {
               <button type="submit" className="btn btn-sm">{t.settings.sendEmail}</button>
             </div>
           </form>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              void runAction(async () => {
+                await api.putMyNotificationSettings(notifPrefs)
+              }, t.notifications.prefsSaved)
+            }}
+            className="card"
+            style={{ display: 'grid', gap: '0.6rem', alignContent: 'start' }}
+          >
+            <h3 className="card-title">{t.notifications.eventsTitle}</h3>
+            <p style={{ color: 'var(--muted)', fontSize: '0.8rem', margin: 0 }}>{t.notifications.eventsHint}</p>
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>{t.notifications.eventColumn}</th>
+                    <th>{t.notifications.channelInApp}</th>
+                    <th>{t.notifications.channelEmail}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {notifPrefs.map((p) => (
+                    <tr key={p.event_type}>
+                      <td>{eventLabels[p.event_type] ?? p.event_type}</td>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={p.in_app}
+                          onChange={(e) => updateNotifPref(p.event_type, 'in_app', e.target.checked)}
+                          aria-label={`${eventLabels[p.event_type] ?? p.event_type} — ${t.notifications.channelInApp}`}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={p.email}
+                          onChange={(e) => updateNotifPref(p.event_type, 'email', e.target.checked)}
+                          aria-label={`${eventLabels[p.event_type] ?? p.event_type} — ${t.notifications.channelEmail}`}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div>
+              <button type="submit" className="btn btn-primary btn-sm">{t.notifications.savePrefs}</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {tab === 'webhooks' && (
+        <div className="card" style={{ display: 'grid', gap: '0.85rem' }}>
+          <h3 className="card-title">{t.settings.webhooksTitle}</h3>
+          <p style={{ color: 'var(--muted)', fontSize: '0.8rem', margin: 0 }}>{t.settings.webhooksHint}</p>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (!hookName.trim() || !hookURL.trim() || hookEvents.length === 0) return
+              void runAction(async () => {
+                await api.createWebhook({
+                  name: hookName.trim(),
+                  url: hookURL.trim(),
+                  secret: hookSecret.trim() || undefined,
+                  events: [...hookEvents],
+                  is_active: hookActive,
+                })
+                setHookName('')
+                setHookURL('')
+                setHookSecret('')
+                setHookEvents(['run.stopped'])
+                setHookActive(true)
+              }, `${t.settings.addWebhook}: OK`)
+            }}
+            style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}
+          >
+            <input className="input" placeholder={t.settings.webhookNamePlaceholder} value={hookName} onChange={(e) => setHookName(e.target.value)} required style={{ minWidth: 140 }} />
+            <input className="input" placeholder="https://hooks.example.com/..." value={hookURL} onChange={(e) => setHookURL(e.target.value)} required style={{ flex: 1, minWidth: 240 }} />
+            <input className="input" placeholder={t.settings.webhookSecretPlaceholder} value={hookSecret} onChange={(e) => setHookSecret(e.target.value)} style={{ minWidth: 140 }} />
+            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              {Object.keys(eventLabels).map((ev) => (
+                <label key={ev} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={hookEvents.includes(ev)}
+                    onChange={(e) => setHookEvents((prev) => (e.target.checked ? [...prev, ev] : prev.filter((x) => x !== ev)))}
+                  />
+                  {eventLabels[ev]}
+                </label>
+              ))}
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem' }}>
+                <input type="checkbox" checked={hookActive} onChange={(e) => setHookActive(e.target.checked)} />
+                {t.settings.webhookActive}
+              </label>
+            </div>
+            <button type="submit" className="btn btn-primary btn-sm">{t.settings.addWebhook}</button>
+          </form>
+
+          {webhooks.length > 0 && (
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>{t.common.id}</th>
+                    <th>{t.common.name}</th>
+                    <th>URL</th>
+                    <th>{t.settings.webhookEvents}</th>
+                    <th>{t.common.status}</th>
+                    <th>{t.common.actions}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {webhooks.map((h) => (
+                    <tr key={h.id}>
+                      <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--muted)' }}>#{h.id}</td>
+                      <td>{h.name}</td>
+                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>{h.url}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+                          {h.events.map((ev) => (
+                            <span key={ev} className="badge">{eventLabels[ev] ?? ev}</span>
+                          ))}
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`badge ${h.is_active ? 'pill-passed' : 'pill-idle'}`}>
+                          {h.is_active ? t.settings.webhookActive : t.settings.webhookInactive}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={async () => {
+                            setError(null)
+                            try {
+                              await api.testWebhook(h.id)
+                              notify(`${h.name}: ${t.settings.webhookTestOk}`)
+                            } catch (err) {
+                              setError(err instanceof Error ? err.message : t.settings.opFailed)
+                            }
+                          }}
+                        >
+                          {t.settings.testWebhook}
+                        </button>{' '}
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => {
+                            if (window.confirm(`${t.common.delete}: ${h.name}?`)) {
+                              void runAction(async () => {
+                                await api.deleteWebhook(h.id)
+                              }, `${t.common.delete}: OK`)
+                            }
+                          }}
+                        >
+                          {t.common.delete}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </section>
