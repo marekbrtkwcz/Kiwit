@@ -78,7 +78,7 @@ export function LogViewerSection() {
       onClick={() => setSort((s) => (s.key === key ? { key, desc: !s.desc } : { key, desc: key !== 'time' }))}
       aria-label={`Sort by ${label}`}
     >
-      {label} {sort.key === key ? (sort.desc ? '↓' : '↑') : ''}
+      {label} {sort.key === key ? (sort.desc ? '↓' : '↑') : <span style={{ opacity: 0.4 }}>⇅</span>}
     </button>
   )
 
