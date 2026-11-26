@@ -41,13 +41,13 @@ type CreateTestPlanInput struct {
 type UpdateTestPlanInput struct {
 	ID   int64 `path:"id"`
 	Body struct {
-		VersionID   *int64  `json:"version_id,omitempty"`
-		ParentID    *int64  `json:"parent_id,omitempty"`
-		Name        string  `json:"name" minLength:"1" maxLength:"255"`
-		Description string  `json:"description,omitempty"`
-		PlanType    string  `json:"plan_type,omitempty"`
-		ExtraLink   string  `json:"extra_link,omitempty"`
-		IsActive    *bool   `json:"is_active,omitempty"`
+		VersionID   *int64 `json:"version_id,omitempty"`
+		ParentID    *int64 `json:"parent_id,omitempty"`
+		Name        string `json:"name" minLength:"1" maxLength:"255"`
+		Description string `json:"description,omitempty"`
+		PlanType    string `json:"plan_type,omitempty"`
+		ExtraLink   string `json:"extra_link,omitempty"`
+		IsActive    *bool  `json:"is_active,omitempty"`
 	}
 }
 

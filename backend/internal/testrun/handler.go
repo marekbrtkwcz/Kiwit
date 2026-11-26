@@ -183,23 +183,16 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 		if err := guard.EnforceTestRun(ctx, input.ID, true); err != nil {
 			return nil, err
 		}
-		// Read the run before stopping so re-stopping an already stopped run
-		// does not emit duplicate notifications (idempotency guard).
-		run, err := repo.GetByID(ctx, input.ID)
+		// The atomic stoppedNow signal from the repository decides whether this
+		// call performed the transition; emissions only run on the first stop.
+		stoppedNow, err := repo.Stop(ctx, input.ID)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return nil, huma.Error404NotFound("test run not found")
-			}
-			return nil, huma.Error500InternalServerError("failed to load test run", err)
-		}
-		wasStopped := run.StoppedAt != nil
-		if err := repo.Stop(ctx, input.ID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, huma.Error404NotFound("test run not found")
 			}
 			return nil, huma.Error500InternalServerError("failed to stop test run", err)
 		}
-		if !wasStopped {
+		if stoppedNow {
 			if notifier != nil && notifier.Enabled() {
 				go func(id int64) {
 					_ = notifier.Send(context.Background(), fmt.Sprintf("TestRun #%d stopped", id))
@@ -495,25 +488,29 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 				return nil, err
 			}
 		}
+		// Statuses are dictionary-driven (execution_statuses in settings), so
+		// the input is only normalized — never validated against a fixed enum.
+		status := strings.ToLower(strings.TrimSpace(input.Body.Status))
 		var testedBy *int64
-		if input.Body.Status != "" {
+		if status != "" {
 			if u, ok := auth.UserFromContext(ctx); ok {
 				uid := u.ID
 				testedBy = &uid
 			}
 		}
-		// Snapshot statuses before the update so emissions can guard on the
-		// status transition. A read failure skips the emissions (fail-closed)
-		// without blocking the bulk update itself.
-		prev, prevErr := repo.GetExecutionStatuses(ctx, input.Body.IDs)
-		n, err := repo.BulkUpdateExecutions(ctx, input.Body.IDs, input.Body.Status, input.Body.AssigneeID, testedBy)
+		// Snapshot the execution states before the update so emissions can
+		// guard on the status transition and resolve recipients. A read
+		// failure skips the emissions (fail-closed) without blocking the
+		// bulk update itself.
+		prev, prevErr := repo.GetExecutionStates(ctx, input.Body.IDs)
+		n, err := repo.BulkUpdateExecutions(ctx, input.Body.IDs, status, input.Body.AssigneeID, testedBy)
 		if err != nil {
 			return nil, huma.Error400BadRequest("failed to bulk update executions", err)
 		}
 		if prevErr != nil {
 			prev = nil
 		}
-		emitBulkUpdate(ctx, repo, notifications, emailClient, webhooks, input.Body.IDs, prev, input.Body.Status, input.Body.AssigneeID, actorID(ctx))
+		emitBulkUpdate(ctx, repo, notifications, emailClient, webhooks, input.Body.IDs, prev, status, input.Body.AssigneeID, actorID(ctx))
 		out := &struct {
 			Body struct {
 				Updated int64 `json:"updated"`
@@ -536,15 +533,18 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 		if err := guard.EnforceExecution(ctx, input.ID, true); err != nil {
 			return nil, err
 		}
+		// Statuses are dictionary-driven (execution_statuses in settings), so
+		// the input is only normalized — never validated against a fixed enum.
+		status := strings.ToLower(strings.TrimSpace(input.Body.Status))
 		testedBy := input.Body.TestedByID
-		if testedBy == nil && input.Body.Status != "" {
+		if testedBy == nil && status != "" {
 			if u, ok := auth.UserFromContext(ctx); ok {
 				uid := u.ID
 				testedBy = &uid
 			}
 		}
 		res, err := repo.UpdateExecutionFull(ctx, input.ID, ExecutionUpdateParams{
-			Status:        input.Body.Status,
+			Status:        status,
 			Comment:       input.Body.Comment,
 			AssigneeID:    input.Body.AssigneeID,
 			TestedByID:    testedBy,
@@ -556,7 +556,7 @@ func RegisterRoutes(api huma.API, repo Repository, notifier *notify.WebhookClien
 			}
 			return nil, huma.Error400BadRequest("failed to update execution", err)
 		}
-		emitExecutionUpdate(ctx, repo, notifications, emailClient, webhooks, input.ID, input.Body.Status, res.PrevStatus, res.AssigneeID, res.Comment)
+		emitExecutionUpdate(ctx, repo, notifications, emailClient, webhooks, input.ID, status, res.PrevStatus, res.AssigneeID, res.Comment)
 		return &ExecutionOutput{Body: res}, nil
 	})
 
@@ -751,8 +751,10 @@ func emitExecutionUpdate(ctx context.Context, repo Repository, store *notificati
 // emitBulkUpdate emits consolidated per-run notifications after a bulk update:
 // one notification per run (not one per execution). A nil/missing prev entry
 // for an ID means the execution did not exist before the update, so nothing
-// is emitted for it.
-func emitBulkUpdate(ctx context.Context, repo Repository, store *notification.Store, emailClient *notify.EmailClient, webhooks *webhook.Store, ids []int64, prev map[int64]string, status string, assigneeID *int64, actor int64) {
+// is emitted for it. Run details are resolved once per unique run; failing
+// executions additionally notify their assignees (deduplicated with the run
+// stakeholders and excluding the actor).
+func emitBulkUpdate(ctx context.Context, repo Repository, store *notification.Store, emailClient *notify.EmailClient, webhooks *webhook.Store, ids []int64, prev map[int64]ExecutionState, status string, assigneeID *int64, actor int64) {
 	if store == nil {
 		return
 	}
@@ -763,34 +765,58 @@ func emitBulkUpdate(ctx context.Context, repo Repository, store *notification.St
 	}
 
 	type runGroup struct {
-		run      TestRun
-		affected int
+		run       TestRun
+		affected  int
+		assignees []int64
 	}
 	groups := make(map[int64]*runGroup)
 	for _, id := range ids {
-		if _, ok := prev[id]; !ok {
+		state, ok := prev[id]
+		if !ok {
 			continue // not present before the update: nothing to emit
 		}
-		if isFailed && strings.EqualFold(strings.TrimSpace(prev[id]), "failed") {
+		if isFailed && strings.EqualFold(strings.TrimSpace(state.Status), "failed") {
 			continue // already failed: no status transition
 		}
-		run, err := repo.GetExecutionRun(ctx, id)
-		if err != nil {
-			continue // ignore individual lookup errors
-		}
-		g := groups[run.ID]
+		g := groups[state.RunID]
 		if g == nil {
+			run, err := repo.GetByID(ctx, state.RunID)
+			if err != nil {
+				continue // ignore runs that cannot be resolved (fail-closed)
+			}
 			g = &runGroup{run: run}
-			groups[run.ID] = g
+			groups[state.RunID] = g
 		}
 		g.affected++
+		if isFailed && state.AssigneeID != nil {
+			g.assignees = append(g.assignees, *state.AssigneeID)
+		}
 	}
 
 	for runID, g := range groups {
 		if isFailed {
-			recipients := runStakeholders(g.run, actor)
-			if len(recipients) == 0 {
+			seen := make(map[int64]struct{})
+			addRecipient := func(id int64) {
+				if id <= 0 || id == actor {
+					return
+				}
+				if _, dup := seen[id]; dup {
+					return
+				}
+				seen[id] = struct{}{}
+			}
+			for _, r := range runStakeholders(g.run, actor) {
+				addRecipient(r)
+			}
+			for _, a := range g.assignees {
+				addRecipient(a)
+			}
+			if len(seen) == 0 {
 				continue
+			}
+			recipients := make([]int64, 0, len(seen))
+			for id := range seen {
+				recipients = append(recipients, id)
 			}
 			title := fmt.Sprintf("%d executions failed (run #%d)", g.affected, runID)
 			body := g.run.Summary

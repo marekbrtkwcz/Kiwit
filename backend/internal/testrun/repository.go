@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -83,6 +84,14 @@ type ExecutionItem struct {
 	StoppedAt         *time.Time `json:"stopped_at,omitempty"`
 }
 
+// ExecutionState captures the pre-update state of an execution that event
+// emission guards rely on: its status, assignee, and owning run.
+type ExecutionState struct {
+	Status     string
+	AssigneeID *int64
+	RunID      int64
+}
+
 // Repository defines persistence operations for test runs and executions.
 type Repository interface {
 	List(ctx context.Context) ([]TestRun, error)
@@ -92,7 +101,10 @@ type Repository interface {
 	Create(ctx context.Context, testPlanID, buildID int64, summary, notes string) (TestRun, error)
 	CreateWithMeta(ctx context.Context, p CreateParams) (TestRun, error)
 	Update(ctx context.Context, runID int64, p UpdateParams) (TestRun, error)
-	Stop(ctx context.Context, runID int64) error
+	// Stop marks a run as stopped. stoppedNow reports whether this call
+	// performed the transition (false when the run was already stopped);
+	// sql.ErrNoRows is returned when the run does not exist.
+	Stop(ctx context.Context, runID int64) (stoppedNow bool, err error)
 	Delete(ctx context.Context, runID int64) error
 	ListExecutions(ctx context.Context, runID int64) ([]ExecutionItem, error)
 	// GetExecutionRun returns the TestRun owning the given execution.
@@ -101,9 +113,9 @@ type Repository interface {
 	DeleteExecution(ctx context.Context, runID, execID int64) error
 	UpdateExecution(ctx context.Context, executionID int64, status, comment string) (ExecutionResult, error)
 	UpdateExecutionFull(ctx context.Context, executionID int64, p ExecutionUpdateParams) (ExecutionResult, error)
-	// GetExecutionStatuses returns the current status of each execution whose
+	// GetExecutionStates returns the current state of each execution whose
 	// ID is present in the database, keyed by execution ID.
-	GetExecutionStatuses(ctx context.Context, ids []int64) (map[int64]string, error)
+	GetExecutionStates(ctx context.Context, ids []int64) (map[int64]ExecutionState, error)
 	BulkUpdateExecutions(ctx context.Context, ids []int64, status string, assigneeID, testedByID *int64) (int64, error)
 	SyncExecutionCase(ctx context.Context, executionID int64) (ExecutionItem, error)
 	ListLinks(ctx context.Context, executionID int64) ([]ExecutionLink, error)
@@ -328,15 +340,26 @@ func (r *SQLiteRepository) Update(ctx context.Context, runID int64, p UpdatePara
 	return cur, nil
 }
 
-func (r *SQLiteRepository) Stop(ctx context.Context, runID int64) error {
-	res, err := r.db.ExecContext(ctx, `UPDATE test_runs SET stopped_at = ? WHERE id = ?`, time.Now().UTC(), runID)
+func (r *SQLiteRepository) Stop(ctx context.Context, runID int64) (bool, error) {
+	// Atomic guard: only the first stop transitions the row, so concurrent or
+	// repeated stops cannot emit duplicate events (TOCTOU-safe).
+	res, err := r.db.ExecContext(ctx, `UPDATE test_runs SET stopped_at = ? WHERE id = ? AND stopped_at IS NULL`, time.Now().UTC(), runID)
 	if err != nil {
-		return fmt.Errorf("stop test run: %w", err)
+		return false, fmt.Errorf("stop test run: %w", err)
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return sql.ErrNoRows
+	if n, _ := res.RowsAffected(); n > 0 {
+		return true, nil
 	}
-	return nil
+	// The row was already stopped (or missing): distinguish "not found" from
+	// "already stopped" so the handler can keep returning 404 for missing runs.
+	var one int
+	if err := r.db.QueryRowContext(ctx, `SELECT 1 FROM test_runs WHERE id = ?`, runID).Scan(&one); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, sql.ErrNoRows
+		}
+		return false, fmt.Errorf("check test run: %w", err)
+	}
+	return false, nil
 }
 
 func (r *SQLiteRepository) Delete(ctx context.Context, runID int64) error {
@@ -546,10 +569,19 @@ func (r *SQLiteRepository) UpdateExecution(ctx context.Context, executionID int6
 }
 
 func (r *SQLiteRepository) UpdateExecutionFull(ctx context.Context, executionID int64, p ExecutionUpdateParams) (ExecutionResult, error) {
+	// The SELECT (prev status/state) and the UPDATE run in one transaction so
+	// PrevStatus is read atomically with respect to the write (SQLite
+	// serializes writers); concurrent updates cannot split the pair.
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return ExecutionResult{}, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
 	var curStatus, curComment string
 	var curAssignee, curTestedBy, curEnv sql.NullInt64
 	var curStarted sql.NullTime
-	err := r.db.QueryRowContext(ctx, `
+	err = tx.QueryRowContext(ctx, `
 		SELECT status, comment, assignee_id, tested_by_id, environment_id, started_at
 		FROM test_executions WHERE id = ?`, executionID,
 	).Scan(&curStatus, &curComment, &curAssignee, &curTestedBy, &curEnv, &curStarted)
@@ -611,7 +643,7 @@ func (r *SQLiteRepository) UpdateExecutionFull(ctx context.Context, executionID 
 		stoppedAt = &now
 	}
 
-	_, err = r.db.ExecContext(ctx, `
+	_, err = tx.ExecContext(ctx, `
 		UPDATE test_executions
 		SET status = ?, comment = ?, assignee_id = ?, tested_by_id = ?, environment_id = ?,
 		    started_at = ?, stopped_at = ?, executed_at = ?, updated_at = ?
@@ -621,6 +653,9 @@ func (r *SQLiteRepository) UpdateExecutionFull(ctx context.Context, executionID 
 	)
 	if err != nil {
 		return ExecutionResult{}, fmt.Errorf("update execution: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return ExecutionResult{}, fmt.Errorf("commit tx: %w", err)
 	}
 	return ExecutionResult{
 		ID:            executionID,
@@ -633,10 +668,10 @@ func (r *SQLiteRepository) UpdateExecutionFull(ctx context.Context, executionID 
 	}, nil
 }
 
-// GetExecutionStatuses returns the status of every listed execution that
-// exists, keyed by ID. An empty ID list returns an empty map without querying.
-func (r *SQLiteRepository) GetExecutionStatuses(ctx context.Context, ids []int64) (map[int64]string, error) {
-	out := make(map[int64]string, len(ids))
+// GetExecutionStates returns the state of every listed execution that exists,
+// keyed by ID. An empty ID list returns an empty map without querying.
+func (r *SQLiteRepository) GetExecutionStates(ctx context.Context, ids []int64) (map[int64]ExecutionState, error) {
+	out := make(map[int64]ExecutionState, len(ids))
 	if len(ids) == 0 {
 		return out, nil
 	}
@@ -647,18 +682,24 @@ func (r *SQLiteRepository) GetExecutionStatuses(ctx context.Context, ids []int64
 		args[i] = id
 	}
 	rows, err := r.db.QueryContext(ctx,
-		"SELECT id, status FROM test_executions WHERE id IN ("+strings.Join(placeholders, ",")+")", args...)
+		"SELECT id, status, assignee_id, test_run_id FROM test_executions WHERE id IN ("+strings.Join(placeholders, ",")+")", args...)
 	if err != nil {
-		return nil, fmt.Errorf("query execution statuses: %w", err)
+		return nil, fmt.Errorf("query execution states: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	for rows.Next() {
-		var id int64
+		var id, runID int64
 		var status string
-		if err := rows.Scan(&id, &status); err != nil {
-			return nil, fmt.Errorf("scan execution status: %w", err)
+		var assignee sql.NullInt64
+		if err := rows.Scan(&id, &status, &assignee, &runID); err != nil {
+			return nil, fmt.Errorf("scan execution state: %w", err)
 		}
-		out[id] = status
+		state := ExecutionState{Status: status, RunID: runID}
+		if assignee.Valid {
+			v := assignee.Int64
+			state.AssigneeID = &v
+		}
+		out[id] = state
 	}
 	return out, rows.Err()
 }

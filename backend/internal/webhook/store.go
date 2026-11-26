@@ -155,16 +155,24 @@ func (s *Store) Create(ctx context.Context, w Webhook) (Webhook, error) {
 }
 
 // Update replaces the mutable fields of a webhook and returns the stored row.
-// An empty secret keeps the currently stored secret, so updating a webhook
-// without re-sending the secret never disables signing.
-func (s *Store) Update(ctx context.Context, id int64, w Webhook) (Webhook, error) {
+// keepSecret controls the semantics of an empty w.Secret: with keepSecret=true
+// the currently stored secret is kept (an update without re-sending the
+// secret never disables signing); with keepSecret=false the secret is taken
+// as-is, so an empty one disables signing (the secret was explicitly cleared).
+func (s *Store) Update(ctx context.Context, id int64, w Webhook, keepSecret bool) (Webhook, error) {
 	now := time.Now().UTC()
 	events := marshalEvents(w.Events)
 
 	if s.pgPool != nil {
-		tag, err := s.pgPool.Exec(ctx, `
-			UPDATE webhooks SET name = $1, url = $2, secret = CASE WHEN $3 = '' THEN secret ELSE $3 END, events = $4, is_active = $5, updated_at = $6
-			WHERE id = $7`, w.Name, w.URL, w.Secret, events, w.Active, now, id)
+		var query string
+		if keepSecret {
+			query = `UPDATE webhooks SET name = $1, url = $2, secret = CASE WHEN $3 = '' THEN secret ELSE $3 END, events = $4, is_active = $5, updated_at = $6
+			WHERE id = $7`
+		} else {
+			query = `UPDATE webhooks SET name = $1, url = $2, secret = $3, events = $4, is_active = $5, updated_at = $6
+			WHERE id = $7`
+		}
+		tag, err := s.pgPool.Exec(ctx, query, w.Name, w.URL, w.Secret, events, w.Active, now, id)
 		if err != nil {
 			return Webhook{}, err
 		}
@@ -174,9 +182,18 @@ func (s *Store) Update(ctx context.Context, id int64, w Webhook) (Webhook, error
 		return s.Get(ctx, id)
 	}
 
-	res, err := s.db.ExecContext(ctx, `
-		UPDATE webhooks SET name = ?, url = ?, secret = CASE WHEN ? = '' THEN secret ELSE ? END, events = ?, is_active = ?, updated_at = ?
-		WHERE id = ?`, w.Name, w.URL, w.Secret, w.Secret, events, w.Active, now, id)
+	var query string
+	var args []any
+	if keepSecret {
+		query = `UPDATE webhooks SET name = ?, url = ?, secret = CASE WHEN ? = '' THEN secret ELSE ? END, events = ?, is_active = ?, updated_at = ?
+		WHERE id = ?`
+		args = []any{w.Name, w.URL, w.Secret, w.Secret, events, w.Active, now, id}
+	} else {
+		query = `UPDATE webhooks SET name = ?, url = ?, secret = ?, events = ?, is_active = ?, updated_at = ?
+		WHERE id = ?`
+		args = []any{w.Name, w.URL, w.Secret, events, w.Active, now, id}
+	}
+	res, err := s.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return Webhook{}, err
 	}

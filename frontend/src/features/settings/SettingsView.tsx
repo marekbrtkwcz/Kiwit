@@ -5,6 +5,7 @@ import {
   EmailSettingsItem,
   EnvironmentItem,
   ExecutionStatusItem,
+  getUserRole,
   IssueTrackerItem,
   NotificationEventPreference,
   PriorityItem,
@@ -72,6 +73,10 @@ export function SettingsView() {
 
   const [error, setError] = useState<string | null>(null)
 
+  // Webhooks are an admin-only resource on the backend; hide the tab for
+  // non-admin users and skip the list request entirely for them.
+  const isAdmin = getUserRole() === 'admin'
+
   const loadAll = async () => {
     try {
       const [tr, env, tpl, pri, st, prefs, hooks] = await Promise.all([
@@ -81,7 +86,9 @@ export function SettingsView() {
         api.listPriorities(),
         api.listExecutionStatuses(),
         api.getMyNotificationSettings(),
-        api.listWebhooks().catch(() => ({ items: [] as WebhookItem[] })),
+        isAdmin
+          ? api.listWebhooks().catch(() => ({ items: [] as WebhookItem[] }))
+          : Promise.resolve({ items: [] as WebhookItem[] }),
       ])
       setTrackers(tr.items)
       setEnvironments(env.items)
@@ -137,9 +144,11 @@ export function SettingsView() {
         <button type="button" className={`tab-btn ${tab === 'notify' ? 'active' : ''}`} onClick={() => setTab('notify')}>
           <Bell size={15} /> {t.settings.tabNotify}
         </button>
-        <button type="button" className={`tab-btn ${tab === 'webhooks' ? 'active' : ''}`} onClick={() => setTab('webhooks')}>
-          <WebhookIcon size={15} /> {t.settings.tabWebhooks} ({webhooks.length})
-        </button>
+        {isAdmin && (
+          <button type="button" className={`tab-btn ${tab === 'webhooks' ? 'active' : ''}`} onClick={() => setTab('webhooks')}>
+            <WebhookIcon size={15} /> {t.settings.tabWebhooks} ({webhooks.length})
+          </button>
+        )}
       </div>
 
       {tab === 'trackers' && (
@@ -463,7 +472,7 @@ export function SettingsView() {
         </div>
       )}
 
-      {tab === 'webhooks' && (
+      {isAdmin && tab === 'webhooks' && (
         <div className="card" style={{ display: 'grid', gap: '0.85rem' }}>
           <h3 className="card-title">{t.settings.webhooksTitle}</h3>
           <p style={{ color: 'var(--muted)', fontSize: '0.8rem', margin: 0 }}>{t.settings.webhooksHint}</p>

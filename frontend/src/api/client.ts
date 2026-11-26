@@ -41,6 +41,7 @@ export interface TestCase {
 }
 
 const TOKEN_KEY = 'kiwit_jwt'
+const ROLE_KEY = 'kiwit_role'
 
 export function getAuthToken(): string | null {
   return localStorage.getItem(TOKEN_KEY)
@@ -49,6 +50,30 @@ export function getAuthToken(): string | null {
 export function setAuthToken(token: string | null) {
   if (token) localStorage.setItem(TOKEN_KEY, token)
   else localStorage.removeItem(TOKEN_KEY)
+}
+
+export function setUserRole(role: string | null) {
+  if (role) localStorage.setItem(ROLE_KEY, role)
+  else localStorage.removeItem(ROLE_KEY)
+}
+
+// getUserRole returns the authenticated user's role for UI decisions (e.g.
+// hiding admin-only tabs). The role is stored at login; for sessions persisted
+// before that, the JWT payload is decoded without verification (UI only —
+// the backend always authorizes).
+export function getUserRole(): string | null {
+  const stored = localStorage.getItem(ROLE_KEY)
+  if (stored) return stored
+  const token = getAuthToken()
+  if (!token) return null
+  const parts = token.split('.')
+  if (parts.length !== 3) return null
+  try {
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
+    return typeof payload.role === 'string' ? payload.role : null
+  } catch {
+    return null
+  }
 }
 
 export async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -695,7 +720,7 @@ export const api = {
   listWebhooks: () => request<{ items: WebhookItem[] }>('/api/v1/webhooks'),
   createWebhook: (body: { name: string; url: string; secret?: string; events: string[]; is_active?: boolean }) =>
     request<WebhookItem>('/api/v1/webhooks', { method: 'POST', body: JSON.stringify(body) }),
-  updateWebhook: (id: number, body: { name: string; url: string; secret?: string; events: string[]; is_active?: boolean }) =>
+  updateWebhook: (id: number, body: { name: string; url: string; secret?: string; secret_clear?: boolean; events: string[]; is_active?: boolean }) =>
     request<WebhookItem>(`/api/v1/webhooks/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteWebhook: (id: number) =>
     request<{ deleted: boolean }>(`/api/v1/webhooks/${id}`, { method: 'DELETE' }),

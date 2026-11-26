@@ -74,7 +74,7 @@ func RegisterRoutes(api huma.API, store *Store) {
 		Method:      http.MethodPut,
 		Path:        "/api/v1/webhooks/{id}",
 		Summary:     "Update a webhook",
-		Description: "Update a webhook. An omitted or empty secret keeps the currently stored secret, so an update never silently disables signing.",
+		Description: "Update a webhook. An omitted or empty secret (without secret_clear) keeps the currently stored secret, so such an update never silently disables signing. Set secret_clear=true to remove the stored secret and disable the signature header; a non-empty secret overwrites it.",
 		Tags:        []string{"Webhooks"},
 	}, func(ctx context.Context, input *struct {
 		ID   int64 `path:"id" minimum:"1"`
@@ -89,7 +89,8 @@ func RegisterRoutes(api huma.API, store *Store) {
 		if err != nil {
 			return nil, huma.Error400BadRequest(err.Error())
 		}
-		updated, err := store.Update(ctx, input.ID, w)
+		keepSecret := input.Body.Secret == "" && !input.Body.SecretClear
+		updated, err := store.Update(ctx, input.ID, w, keepSecret)
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
 				return nil, huma.Error404NotFound("webhook not found")
@@ -180,13 +181,17 @@ func RegisterRoutes(api huma.API, store *Store) {
 }
 
 // webhookBody is the request body shared by create and update.
-// is_active is optional and defaults to true on create.
+// is_active is optional and defaults to true on create. On update, SecretClear
+// is the explicit third secret state next to the Secret string: an empty
+// secret alone keeps the stored secret, while secret_clear=true removes it
+// (disabling signing); a non-empty secret always overwrites.
 type webhookBody struct {
-	Name   string   `json:"name"`
-	URL    string   `json:"url"`
-	Secret string   `json:"secret,omitempty"`
-	Events []string `json:"events"`
-	Active *bool    `json:"is_active,omitempty"`
+	Name        string   `json:"name"`
+	URL         string   `json:"url"`
+	Secret      string   `json:"secret,omitempty"`
+	SecretClear bool     `json:"secret_clear,omitempty"`
+	Events      []string `json:"events"`
+	Active      *bool    `json:"is_active,omitempty"`
 }
 
 // buildWebhook validates the request body shared by create and update.

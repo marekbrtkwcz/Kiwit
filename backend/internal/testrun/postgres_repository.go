@@ -307,15 +307,26 @@ func (r *PostgresRepository) ListExecutions(ctx context.Context, runID int64) ([
 	return items, rows.Err()
 }
 
-func (r *PostgresRepository) Stop(ctx context.Context, runID int64) error {
-	tag, err := r.pool.Exec(ctx, `UPDATE test_runs SET stopped_at = $1 WHERE id = $2`, time.Now().UTC(), runID)
+func (r *PostgresRepository) Stop(ctx context.Context, runID int64) (bool, error) {
+	// Atomic guard: only the first stop transitions the row, so concurrent or
+	// repeated stops cannot emit duplicate events (TOCTOU-safe).
+	tag, err := r.pool.Exec(ctx, `UPDATE test_runs SET stopped_at = $1 WHERE id = $2 AND stopped_at IS NULL`, time.Now().UTC(), runID)
 	if err != nil {
-		return fmt.Errorf("stop test run: %w", err)
+		return false, fmt.Errorf("stop test run: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
-		return sql.ErrNoRows
+	if tag.RowsAffected() > 0 {
+		return true, nil
 	}
-	return nil
+	// The row was already stopped (or missing): distinguish "not found" from
+	// "already stopped" so the handler can keep returning 404 for missing runs.
+	var one int
+	if err := r.pool.QueryRow(ctx, `SELECT 1 FROM test_runs WHERE id = $1`, runID).Scan(&one); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, sql.ErrNoRows
+		}
+		return false, fmt.Errorf("check test run: %w", err)
+	}
+	return false, nil
 }
 
 func (r *PostgresRepository) Delete(ctx context.Context, runID int64) error {
@@ -369,12 +380,21 @@ func (r *PostgresRepository) UpdateExecution(ctx context.Context, executionID in
 }
 
 func (r *PostgresRepository) UpdateExecutionFull(ctx context.Context, executionID int64, p ExecutionUpdateParams) (ExecutionResult, error) {
+	// The SELECT (prev status/state, locked with FOR UPDATE) and the UPDATE
+	// run in one transaction so PrevStatus is read atomically with respect to
+	// the write; concurrent updates cannot split the pair.
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return ExecutionResult{}, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
 	var curStatus, curComment string
 	var curAssignee, curTestedBy, curEnv sql.NullInt64
 	var curStarted sql.NullTime
-	err := r.pool.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		SELECT status, comment, assignee_id, tested_by_id, environment_id, started_at
-		FROM test_executions WHERE id = $1`, executionID,
+		FROM test_executions WHERE id = $1 FOR UPDATE`, executionID,
 	).Scan(&curStatus, &curComment, &curAssignee, &curTestedBy, &curEnv, &curStarted)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -437,7 +457,7 @@ func (r *PostgresRepository) UpdateExecutionFull(ctx context.Context, executionI
 		stoppedAt = &now
 	}
 
-	_, err = r.pool.Exec(ctx, `
+	_, err = tx.Exec(ctx, `
 		UPDATE test_executions
 		SET status = $1, comment = $2, assignee_id = $3, tested_by_id = $4, environment_id = $5,
 		    started_at = $6, stopped_at = $7, executed_at = $8, updated_at = $9
@@ -447,6 +467,9 @@ func (r *PostgresRepository) UpdateExecutionFull(ctx context.Context, executionI
 	)
 	if err != nil {
 		return ExecutionResult{}, fmt.Errorf("update execution: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return ExecutionResult{}, fmt.Errorf("commit tx: %w", err)
 	}
 	return ExecutionResult{
 		ID:            executionID,
@@ -459,10 +482,10 @@ func (r *PostgresRepository) UpdateExecutionFull(ctx context.Context, executionI
 	}, nil
 }
 
-// GetExecutionStatuses returns the status of every listed execution that
-// exists, keyed by ID. An empty ID list returns an empty map without querying.
-func (r *PostgresRepository) GetExecutionStatuses(ctx context.Context, ids []int64) (map[int64]string, error) {
-	out := make(map[int64]string, len(ids))
+// GetExecutionStates returns the state of every listed execution that exists,
+// keyed by ID. An empty ID list returns an empty map without querying.
+func (r *PostgresRepository) GetExecutionStates(ctx context.Context, ids []int64) (map[int64]ExecutionState, error) {
+	out := make(map[int64]ExecutionState, len(ids))
 	if len(ids) == 0 {
 		return out, nil
 	}
@@ -473,18 +496,24 @@ func (r *PostgresRepository) GetExecutionStatuses(ctx context.Context, ids []int
 		args[i] = id
 	}
 	rows, err := r.pool.Query(ctx,
-		"SELECT id, status FROM test_executions WHERE id IN ("+strings.Join(placeholders, ",")+")", args...)
+		"SELECT id, status, assignee_id, test_run_id FROM test_executions WHERE id IN ("+strings.Join(placeholders, ",")+")", args...)
 	if err != nil {
-		return nil, fmt.Errorf("query execution statuses: %w", err)
+		return nil, fmt.Errorf("query execution states: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var id int64
+		var id, runID int64
 		var status string
-		if err := rows.Scan(&id, &status); err != nil {
-			return nil, fmt.Errorf("scan execution status: %w", err)
+		var assignee sql.NullInt64
+		if err := rows.Scan(&id, &status, &assignee, &runID); err != nil {
+			return nil, fmt.Errorf("scan execution state: %w", err)
 		}
-		out[id] = status
+		state := ExecutionState{Status: status, RunID: runID}
+		if assignee.Valid {
+			v := assignee.Int64
+			state.AssigneeID = &v
+		}
+		out[id] = state
 	}
 	return out, rows.Err()
 }

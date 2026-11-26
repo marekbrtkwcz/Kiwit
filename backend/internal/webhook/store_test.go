@@ -88,7 +88,7 @@ func TestWebhookCRUDFlow(t *testing.T) {
 	updated, err := store.Update(ctx, created.ID, webhook.Webhook{
 		Name: "ci2", URL: "http://example.com/hook2", Secret: "",
 		Events: []string{"execution.assigned"}, Active: false,
-	})
+	}, true)
 	require.NoError(t, err)
 	require.Equal(t, "ci2", updated.Name)
 	require.False(t, updated.Active)
@@ -106,8 +106,79 @@ func TestWebhookCRUDFlow(t *testing.T) {
 	_, err = store.Get(ctx, created.ID)
 	require.ErrorIs(t, err, webhook.ErrNotFound)
 	require.ErrorIs(t, store.Delete(ctx, created.ID), webhook.ErrNotFound)
-	_, err = store.Update(ctx, created.ID, got)
+	_, err = store.Update(ctx, created.ID, got, true)
 	require.ErrorIs(t, err, webhook.ErrNotFound)
+}
+
+// TestWebhookUpdateKeepsStoredSecretWhenKeepSecretSet verifies that an update
+// with an empty secret and keepSecret=true preserves signing.
+func TestWebhookUpdateKeepsStoredSecretWhenKeepSecretSet(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+
+	created, err := store.Create(ctx, webhook.Webhook{
+		Name: "keep", URL: "http://example.com/hook", Secret: "s3cr3t",
+		Events: []string{"run.stopped"}, Active: true,
+	})
+	require.NoError(t, err)
+
+	updated, err := store.Update(ctx, created.ID, webhook.Webhook{
+		Name: "keep2", URL: "http://example.com/hook", Secret: "",
+		Events: []string{"run.stopped"}, Active: true,
+	}, true)
+	require.NoError(t, err)
+	require.Equal(t, "s3cr3t", updated.Secret, "keepSecret=true with an empty secret must keep the current secret")
+}
+
+// TestWebhookUpdateClearsSecretWhenKeepSecretUnset verifies that an update with
+// an empty secret and keepSecret=false disables signing.
+func TestWebhookUpdateClearsSecretWhenKeepSecretUnset(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+
+	created, err := store.Create(ctx, webhook.Webhook{
+		Name: "clear", URL: "http://example.com/hook", Secret: "s3cr3t",
+		Events: []string{"run.stopped"}, Active: true,
+	})
+	require.NoError(t, err)
+
+	updated, err := store.Update(ctx, created.ID, webhook.Webhook{
+		Name: "clear2", URL: "http://example.com/hook", Secret: "",
+		Events: []string{"run.stopped"}, Active: true,
+	}, false)
+	require.NoError(t, err)
+	require.Empty(t, updated.Secret, "keepSecret=false with an empty secret must disable signing")
+
+	stored, err := store.Get(ctx, created.ID)
+	require.NoError(t, err)
+	require.Empty(t, stored.Secret)
+}
+
+// TestWebhookUpdateOverwritesSecretWhenProvided verifies that a non-empty
+// secret overwrites the stored one in both keepSecret modes.
+func TestWebhookUpdateOverwritesSecretWhenProvided(t *testing.T) {
+	ctx := context.Background()
+	store := newStore(t)
+
+	created, err := store.Create(ctx, webhook.Webhook{
+		Name: "rotate", URL: "http://example.com/hook", Secret: "old",
+		Events: []string{"run.stopped"}, Active: true,
+	})
+	require.NoError(t, err)
+
+	updated, err := store.Update(ctx, created.ID, webhook.Webhook{
+		Name: "rotate", URL: "http://example.com/hook", Secret: "new",
+		Events: []string{"run.stopped"}, Active: true,
+	}, true)
+	require.NoError(t, err)
+	require.Equal(t, "new", updated.Secret)
+
+	updated, err = store.Update(ctx, created.ID, webhook.Webhook{
+		Name: "rotate", URL: "http://example.com/hook", Secret: "newest",
+		Events: []string{"run.stopped"}, Active: true,
+	}, false)
+	require.NoError(t, err)
+	require.Equal(t, "newest", updated.Secret)
 }
 
 // TestWebhookEmitFanOut verifies that only active webhooks subscribed to the

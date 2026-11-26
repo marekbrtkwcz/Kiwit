@@ -993,12 +993,18 @@ func runE2ESuite(t *testing.T, sqlDB *sql.DB, pgPool *pgxpool.Pool) {
 	_ = res.Body.Close()
 	require.Equal(t, stoppedList.UnreadCount, fetchUnread().UnreadCount)
 
-	// Failing an execution notifies stakeholders; re-failing the same execution does not.
+	// Failing an execution (padded/mixed-case status is normalized to "failed")
+	// notifies stakeholders; re-failing the same execution does not.
 	res = doJSON(http.MethodPatch, fmt.Sprintf("/api/v1/executions/%d", guardExecIDs[0]), testerAJWT, map[string]any{
-		"status": "failed",
+		"status": "  Failed  ",
 	})
 	require.Equal(t, http.StatusOK, res.StatusCode)
+	var normPatch struct {
+		Status string `json:"status"`
+	}
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&normPatch))
 	_ = res.Body.Close()
+	require.Equal(t, "failed", normPatch.Status, "padded/mixed-case status must be normalized to lowercase trimmed form")
 
 	failedList := fetchUnread()
 	require.Equal(t, stoppedList.UnreadCount+1, failedList.UnreadCount)
@@ -1012,7 +1018,20 @@ func runE2ESuite(t *testing.T, sqlDB *sql.DB, pgPool *pgxpool.Pool) {
 	_ = res.Body.Close()
 	require.Equal(t, failedList.UnreadCount, fetchUnread().UnreadCount)
 
-	// Bulk-failing the remaining two executions emits ONE consolidated notification per run.
+	// Bulk-fail also notifies the assignee of each failing execution: assign
+	// one of the two remaining executions to testerB (also a run stakeholder)
+	// and check the notification is still consolidated into a single one.
+	unreadBeforeBulkAssign := fetchUnread().UnreadCount
+	res = doJSON(http.MethodPatch, fmt.Sprintf("/api/v1/executions/%d", guardExecIDs[1]), testerAJWT, map[string]any{
+		"assignee_id": testerBID,
+	})
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	_ = res.Body.Close()
+	bulkAssignList := fetchUnread()
+	require.Equal(t, unreadBeforeBulkAssign+1, bulkAssignList.UnreadCount)
+
+	// Bulk-failing the remaining two executions (one of them assigned to
+	// testerB) emits ONE consolidated notification per run.
 	res = doJSON(http.MethodPatch, "/api/v1/executions/bulk", testerAJWT, map[string]any{
 		"ids": guardExecIDs[1:], "status": "failed",
 	})
@@ -1025,7 +1044,7 @@ func runE2ESuite(t *testing.T, sqlDB *sql.DB, pgPool *pgxpool.Pool) {
 	require.Equal(t, int64(2), bulkUpdated.Updated)
 
 	bulkList := fetchUnread()
-	require.Equal(t, failedList.UnreadCount+1, bulkList.UnreadCount)
+	require.Equal(t, bulkAssignList.UnreadCount+1, bulkList.UnreadCount)
 	require.Equal(t, "execution.failed", bulkList.Items[0].EventType)
 	require.Equal(t, "test_run", bulkList.Items[0].EntityType)
 	require.Equal(t, gtr.ID, bulkList.Items[0].EntityID)
@@ -1151,6 +1170,47 @@ func runE2ESuite(t *testing.T, sqlDB *sql.DB, pgPool *pgxpool.Pool) {
 	require.NotEmpty(t, deliveries)
 	lastDelivery := deliveries[len(deliveries)-1]
 	verifyHookSignature(t, "topsecret2", lastDelivery.Sig, lastDelivery.Body)
+
+	// PUT with secret_clear=true removes the stored secret: the test delivery
+	// arrives without the X-Kiwit-Signature header (signing disabled).
+	res = doJSON(http.MethodPut, fmt.Sprintf("/api/v1/webhooks/%d", sigHookID), adminJWT, map[string]any{
+		"name": "sig-hook-3", "url": hookSrv2.URL, "events": []string{"execution.failed"}, "is_active": true,
+		"secret_clear": true,
+	})
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	_ = res.Body.Close()
+
+	hookMu.Lock()
+	deliveriesBeforeClear := len(deliveries)
+	hookMu.Unlock()
+
+	res = doJSON(http.MethodPost, fmt.Sprintf("/api/v1/webhooks/%d/test", sigHookID), adminJWT, nil)
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	var clearTestOut struct {
+		Delivered  bool `json:"delivered"`
+		StatusCode int  `json:"status_code"`
+	}
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&clearTestOut))
+	_ = res.Body.Close()
+	require.True(t, clearTestOut.Delivered)
+
+	deadline = time.Now().Add(3 * time.Second)
+	for {
+		hookMu.Lock()
+		delivered := len(hookLog)
+		hookMu.Unlock()
+		if delivered > deliveriesBeforeClear || !time.Now().Before(deadline) {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	hookMu.Lock()
+	deliveries = append([]capturedHookReq(nil), hookLog...)
+	hookMu.Unlock()
+	require.Greater(t, len(deliveries), deliveriesBeforeClear, "cleared-secret test delivery must reach the receiver")
+	clearedDelivery := deliveries[len(deliveries)-1]
+	require.Empty(t, clearedDelivery.Sig, "delivery after secret_clear must not carry an X-Kiwit-Signature header")
+	require.Equal(t, "webhook.test", clearedDelivery.Event)
 }
 
 // verifyHookSignature independently recomputes the GitHub-style HMAC over

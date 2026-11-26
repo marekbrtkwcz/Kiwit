@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api, ApiTokenInfo, getAuthToken, setAuthToken, User } from '../../api/client'
+import { api, ApiTokenInfo, getAuthToken, setAuthToken, setUserRole, User } from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 
@@ -55,6 +55,7 @@ export function AuthView() {
       }
       const res = await api.login({ email, password })
       setAuthToken(res.access_token)
+      setUserRole(res.user.role)
       setJwt(res.access_token)
       setPassword('')
       notify(t.auth.loggedIn)
@@ -116,6 +117,7 @@ export function AuthView() {
 
   const handleLogout = () => {
     setAuthToken(null)
+    setUserRole(null)
     setJwt(null)
     setGeneratedToken(null)
     setTokens([])
