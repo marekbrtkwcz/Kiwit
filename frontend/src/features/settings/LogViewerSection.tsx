@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { RefreshCw, ScrollText, Search } from 'lucide-react'
+import { RefreshCw, ScrollText, Search, X } from 'lucide-react'
 import { api } from '../../api/client'
 
 type LogEntry = { time: string; level: string; message: string; attrs?: Record<string, string> }
@@ -17,6 +17,8 @@ export function LogViewerSection() {
   const [entries, setEntries] = useState<LogEntry[]>([])
   const [level, setLevel] = useState('all')
   const [query, setQuery] = useState('')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
@@ -35,16 +37,21 @@ export function LogViewerSection() {
     void load()
   }, [load])
 
-  // Text search runs client-side over the loaded entries (message + attrs),
-  // case-insensitive; whitespace-separated terms must all match (AND).
+  // Text search and time range run client-side over the loaded entries;
+  // whitespace-separated terms must all match (AND).
   const filtered = useMemo(() => {
     const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
-    if (terms.length === 0) return entries
+    const fromTs = from ? new Date(from).getTime() : NaN
+    const toTs = to ? new Date(to).getTime() + 60_000 : NaN // include the picked minute
     return entries.filter((e) => {
+      const ts = new Date(e.time).getTime()
+      if (!Number.isNaN(fromTs) && ts < fromTs) return false
+      if (!Number.isNaN(toTs) && ts > toTs) return false
+      if (terms.length === 0) return true
       const haystack = `${e.message} ${e.level} ${Object.entries(e.attrs ?? {}).map(([k, v]) => `${k}=${v}`).join(' ')}`.toLowerCase()
       return terms.every((t) => haystack.includes(t))
     })
-  }, [entries, query])
+  }, [entries, query, from, to])
 
   return (
     <div className="card">
@@ -62,6 +69,17 @@ export function LogViewerSection() {
               style={{ width: 220, fontSize: '0.8rem', paddingLeft: 26 }}
             />
           </div>
+          <label style={{ fontSize: '0.8rem', display: 'inline-flex', gap: '0.25rem', alignItems: 'center' }}>
+            <input className="input" type="datetime-local" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From time" style={{ fontSize: '0.8rem' }} />
+          </label>
+          <label style={{ fontSize: '0.8rem', display: 'inline-flex', gap: '0.25rem', alignItems: 'center' }}>
+            <input className="input" type="datetime-local" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To time" style={{ fontSize: '0.8rem' }} />
+          </label>
+          {(from || to) && (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setFrom(''); setTo('') }} aria-label="Clear time range">
+              <X size={13} />
+            </button>
+          )}
           <select className="select" value={level} onChange={(e) => setLevel(e.target.value)} style={{ fontSize: '0.8rem' }} aria-label="Log level filter">
             {LEVELS.map((l) => (
               <option key={l} value={l}>{l}</option>
