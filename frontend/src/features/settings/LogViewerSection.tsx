@@ -12,6 +12,9 @@ const LEVEL_BADGE: Record<string, string> = {
   error: 'pill-failed',
 }
 
+type SortKey = 'time' | 'level' | 'message'
+const LEVEL_ORDER: Record<string, number> = { error: 0, warn: 1, info: 2, debug: 3 }
+
 // LogViewerSection shows the in-memory server log buffer (admin).
 export function LogViewerSection() {
   const [entries, setEntries] = useState<LogEntry[]>([])
@@ -19,6 +22,7 @@ export function LogViewerSection() {
   const [query, setQuery] = useState('')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
+  const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: 'time', desc: true })
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
@@ -38,12 +42,12 @@ export function LogViewerSection() {
   }, [load])
 
   // Text search and time range run client-side over the loaded entries;
-  // whitespace-separated terms must all match (AND).
+  // whitespace-separated terms must all match (AND). Sorting afterwards.
   const filtered = useMemo(() => {
     const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
     const fromTs = from ? new Date(from).getTime() : NaN
     const toTs = to ? new Date(to).getTime() + 60_000 : NaN // include the picked minute
-    return entries.filter((e) => {
+    const rows = entries.filter((e) => {
       const ts = new Date(e.time).getTime()
       if (!Number.isNaN(fromTs) && ts < fromTs) return false
       if (!Number.isNaN(toTs) && ts > toTs) return false
@@ -51,7 +55,32 @@ export function LogViewerSection() {
       const haystack = `${e.message} ${e.level} ${Object.entries(e.attrs ?? {}).map(([k, v]) => `${k}=${v}`).join(' ')}`.toLowerCase()
       return terms.every((t) => haystack.includes(t))
     })
-  }, [entries, query, from, to])
+    const dir = sort.desc ? -1 : 1
+    return [...rows].sort((a, b) => {
+      switch (sort.key) {
+        case 'level': {
+          const d = (LEVEL_ORDER[a.level] ?? 9) - (LEVEL_ORDER[b.level] ?? 9)
+          return d !== 0 ? d * dir : a.time.localeCompare(b.time) * -1
+        }
+        case 'message':
+          return a.message.localeCompare(b.message) * dir
+        default:
+          return a.time.localeCompare(b.time) * dir
+      }
+    })
+  }, [entries, query, from, to, sort])
+
+  const sortBtn = (key: SortKey, label: string) => (
+    <button
+      type="button"
+      className="btn btn-ghost btn-sm"
+      style={{ padding: 0, fontSize: 'inherit', fontWeight: 'inherit', textTransform: 'inherit' }}
+      onClick={() => setSort((s) => (s.key === key ? { key, desc: !s.desc } : { key, desc: key !== 'time' }))}
+      aria-label={`Sort by ${label}`}
+    >
+      {label} {sort.key === key ? (sort.desc ? '↓' : '↑') : ''}
+    </button>
+  )
 
   return (
     <div className="card">
@@ -99,9 +128,9 @@ export function LogViewerSection() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Time</th>
-                <th>Level</th>
-                <th>Message</th>
+                <th>{sortBtn('time', 'Time')}</th>
+                <th>{sortBtn('level', 'Level')}</th>
+                <th>{sortBtn('message', 'Message')}</th>
                 <th>Details</th>
               </tr>
             </thead>
