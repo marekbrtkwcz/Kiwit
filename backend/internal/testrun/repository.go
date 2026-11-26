@@ -78,6 +78,8 @@ type ExecutionItem struct {
 	AssigneeID        *int64     `json:"assignee_id,omitempty"`
 	TestedByID        *int64     `json:"tested_by_id,omitempty"`
 	EnvironmentID     *int64     `json:"environment_id,omitempty"`
+	DatasetID         *int64     `json:"dataset_id,omitempty"`
+	DatasetName       string     `json:"dataset_name,omitempty"`
 	CaseTextVersion   int        `json:"case_text_version"`
 	LatestCaseVersion int        `json:"latest_case_version"`
 	StartedAt         *time.Time `json:"started_at,omitempty"`
@@ -183,12 +185,13 @@ func scanTestRun(s rowScanner) (TestRun, error) {
 
 func scanExecutionItem(s rowScanner) (ExecutionItem, error) {
 	var ex ExecutionItem
-	var assigneeID, testedByID, envID sql.NullInt64
+	var assigneeID, testedByID, envID, datasetID sql.NullInt64
 	var started, stopped sql.NullTime
+	var datasetName sql.NullString
 	if err := s.Scan(
 		&ex.ID, &ex.TestRunID, &ex.TestCaseID, &ex.Summary, &ex.Status, &ex.Comment,
 		&assigneeID, &testedByID, &envID, &ex.CaseTextVersion, &ex.LatestCaseVersion,
-		&started, &stopped,
+		&started, &stopped, &datasetID, &datasetName,
 	); err != nil {
 		return ExecutionItem{}, err
 	}
@@ -208,6 +211,12 @@ func scanExecutionItem(s rowScanner) (ExecutionItem, error) {
 	if stopped.Valid {
 		t := stopped.Time
 		ex.StoppedAt = &t
+	}
+	if datasetID.Valid {
+		ex.DatasetID = &datasetID.Int64
+	}
+	if datasetName.Valid {
+		ex.DatasetName = datasetName.String
 	}
 	return ex, nil
 }
@@ -413,9 +422,10 @@ func (r *SQLiteRepository) ListExecutions(ctx context.Context, runID int64) ([]E
 		SELECT e.id, e.test_run_id, e.test_case_id, tc.summary, e.status, e.comment,
 		       e.assignee_id, e.tested_by_id, e.environment_id, e.case_text_version,
 		       COALESCE((SELECT MAX(rev.version) FROM test_case_revisions rev WHERE rev.test_case_id = e.test_case_id), 1),
-		       e.started_at, e.stopped_at
+		       e.started_at, e.stopped_at, e.dataset_id, d.name
 		FROM test_executions e
 		JOIN test_cases tc ON tc.id = e.test_case_id
+		LEFT JOIN test_case_datasets d ON d.id = e.dataset_id
 		WHERE e.test_run_id = ?
 		ORDER BY e.id ASC`, runID)
 	if err != nil {

@@ -84,6 +84,12 @@ func (h *Handler) registerMissingMethods() {
 	h.register("Milestone.remove", h.msRemove)
 	h.register("Milestone.add_run", h.msLinkRun)
 	h.register("Milestone.remove_run", h.msUnlinkRun)
+
+	// --- Datasets (data-driven testing) ---
+	h.register("Dataset.filter", h.filterRows("test_case_datasets", []string{"id", "test_case_id", "name", "params", "created_at"}))
+	h.register("Dataset.create", h.simpleCreate("test_case_datasets", []string{"test_case_id", "name", "params"}))
+	h.register("Dataset.update", h.simpleUpdate("test_case_datasets", []string{"name", "params"}))
+	h.register("Dataset.remove", h.dsRemove)
 }
 
 // --- generic update helper ---
@@ -653,5 +659,13 @@ func (h *Handler) msUnlinkRun(r *http.Request, args []any) (any, error) {
 		return nil, errNoDB
 	}
 	_, err := h.db.ExecContext(r.Context(), `DELETE FROM milestone_runs WHERE milestone_id = ? AND test_run_id = ?`, argInt(args[0]), argInt(args[1]))
+	return map[string]any{"ok": err == nil}, err
+}
+
+func (h *Handler) dsRemove(r *http.Request, args []any) (any, error) {
+	if h.db == nil {
+		return nil, errNoDB
+	}
+	_, err := h.db.ExecContext(r.Context(), `DELETE FROM test_case_datasets WHERE id = ?`, argInt(args[0]))
 	return map[string]any{"ok": err == nil}, err
 }

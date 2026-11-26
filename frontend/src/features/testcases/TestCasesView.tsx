@@ -27,6 +27,7 @@ import { ConfirmDialog, EmptyState, LoadingSkeleton } from '../../components/UiP
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 import { AttachmentsPanel } from '../attachments/AttachmentsPanel'
+import { CaseDatasetsPanel } from './CaseDatasetsPanel'
 import { CommentsPanel } from '../comments/CommentsPanel'
 import { EntityTagsBar } from '../management/EntityTagsBar'
 
@@ -762,7 +763,12 @@ export function TestCasesView() {
               )}
 
               {editingId !== null && drawerTab === 'attachments' && (
-                <AttachmentsPanel entityType="test_case" entityId={editingId} />
+                <>
+                  <AttachmentsPanel entityType="test_case" entityId={editingId} />
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+                    <CaseDatasetsPanel caseId={editingId} />
+                  </div>
+                </>
               )}
 
               {editingId !== null && drawerTab === 'revisions' && (

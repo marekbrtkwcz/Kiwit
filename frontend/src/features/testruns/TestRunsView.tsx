@@ -677,7 +677,10 @@ export function TestRunsView() {
                         <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--muted)', marginRight: 5 }}>#{ex.test_case_id}</span>
                         {ex.summary}
                       </span>
-                      <span className={`badge pill-${ex.status}`}>{ex.status}</span>
+                      <span style={{ display: 'inline-flex', gap: '0.3rem', alignItems: 'center' }}>
+                        {ex.dataset_name && <span className="badge" title="Dataset">DS: {ex.dataset_name}</span>}
+                        <span className={`badge pill-${ex.status}`}>{ex.status}</span>
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -690,6 +693,11 @@ export function TestRunsView() {
                           Execution #{activeExec.id} · TestCase #{activeExec.test_case_id}
                         </div>
                         <h4 style={{ margin: '0.2rem 0 0', fontSize: '1rem' }}>{activeExec.summary}</h4>
+                        {activeExec.dataset_name && (
+                          <div style={{ fontSize: '0.75rem', marginTop: '0.2rem' }}>
+                            <span className="badge">Dataset: {activeExec.dataset_name}</span>
+                          </div>
+                        )}
                       </div>
                       <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
                         {activeExec.latest_case_version && activeExec.case_text_version && activeExec.latest_case_version > activeExec.case_text_version && (
@@ -733,6 +741,24 @@ export function TestRunsView() {
                       </div>
                     )}
 
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        title="Create one execution per dataset of this test case"
+                        onClick={async () => {
+                          try {
+                            const res = await api.expandDatasets(selectedRun.id, activeExec.test_case_id)
+                            notify(`Created ${res.created} execution(s) from datasets`)
+                            await loadRuns()
+                          } catch {
+                            notify('Failed to expand datasets', 'error')
+                          }
+                        }}
+                      >
+                        Expand datasets
+                      </button>
+                    </div>
                     <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
                       <ExecutionLinksPanel executionId={activeExec.id} />
                     </div>

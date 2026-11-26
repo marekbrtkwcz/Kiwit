@@ -287,9 +287,10 @@ func (r *PostgresRepository) ListExecutions(ctx context.Context, runID int64) ([
 		SELECT e.id, e.test_run_id, e.test_case_id, tc.summary, e.status, e.comment,
 		       e.assignee_id, e.tested_by_id, e.environment_id, e.case_text_version,
 		       COALESCE((SELECT MAX(rev.version) FROM test_case_revisions rev WHERE rev.test_case_id = e.test_case_id), 1),
-		       e.started_at, e.stopped_at
+		       e.started_at, e.stopped_at, e.dataset_id, d.name
 		FROM test_executions e
 		JOIN test_cases tc ON tc.id = e.test_case_id
+		LEFT JOIN test_case_datasets d ON d.id = e.dataset_id
 		WHERE e.test_run_id = $1 ORDER BY e.id ASC`, runID)
 	if err != nil {
 		return nil, fmt.Errorf("query executions: %w", err)

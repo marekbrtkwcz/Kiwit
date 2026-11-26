@@ -188,6 +188,16 @@ export interface TestExecution {
   latest_case_version?: number
   started_at?: string
   stopped_at?: string
+  dataset_id?: number
+  dataset_name?: string
+}
+
+export interface Dataset {
+  id: number
+  test_case_id: number
+  name: string
+  params: string
+  created_at: string
 }
 
 export interface LinkRefItem {
@@ -803,6 +813,15 @@ export const api = {
     downloadAuthenticated(`/api/v1/attachments/${id}/download`, filename),
   deleteAttachment: (id: number) =>
     request<void>(`/api/v1/attachments/${id}`, { method: 'DELETE' }),
+  listCaseDatasets: (caseId: number) =>
+    request<{ items: Dataset[] }>(`/api/v1/testcases/${caseId}/datasets`),
+  createDataset: (caseId: number, body: { name: string; params?: string }) =>
+    request<Dataset>(`/api/v1/testcases/${caseId}/datasets`, { method: 'POST', body: JSON.stringify(body) }),
+  updateDataset: (id: number, body: { name: string; params?: string }) =>
+    request<Dataset>(`/api/v1/datasets/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteDataset: (id: number) => request<void>(`/api/v1/datasets/${id}`, { method: 'DELETE' }),
+  expandDatasets: (runId: number, caseId: number) =>
+    request<{ created: number }>(`/api/v1/testruns/${runId}/cases/${caseId}/expand-datasets`, { method: 'POST' }),
   listExecutionScreenshots: (executionId: number) =>
     request<{ items: AttachmentItem[] }>(`/api/v1/executions/${executionId}/screenshots`),
   fetchAttachmentBlob: async (id: number): Promise<string> => {

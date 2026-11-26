@@ -29,6 +29,7 @@ import (
 	"github.com/kiwit/kiwit/internal/classification"
 	"github.com/kiwit/kiwit/internal/comment"
 	"github.com/kiwit/kiwit/internal/dashboard"
+	"github.com/kiwit/kiwit/internal/dataset"
 	"github.com/kiwit/kiwit/internal/environment"
 	"github.com/kiwit/kiwit/internal/group"
 	"github.com/kiwit/kiwit/internal/initdb"
@@ -229,6 +230,7 @@ func main() {
 	testcase.RegisterRoutes(api, testCaseRepo, emailSettings, emailClient, guard, auditStore)
 	requirement.RegisterRoutes(api, requirement.NewStore(sqlDBConn, pgPoolConn), guard)
 	milestone.RegisterRoutes(api, milestone.NewStore(sqlDBConn, pgPoolConn), guard)
+	dataset.RegisterRoutes(api, dataset.NewStore(sqlDBConn, pgPoolConn), guard)
 	testcase.RegisterTemplateRoutes(api, sqlDBConn, pgPoolConn)
 	testplan.RegisterRoutes(api, testPlanRepo, emailSettings, emailClient, guard, auditStore)
 	notifier := notify.NewWebhookClient(os.Getenv("KIWIT_WEBHOOK_URL"))
