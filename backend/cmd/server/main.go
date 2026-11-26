@@ -26,6 +26,7 @@ import (
 	"github.com/kiwit/kiwit/internal/auth"
 	"github.com/kiwit/kiwit/internal/captcha"
 	"github.com/kiwit/kiwit/internal/bug"
+	"github.com/kiwit/kiwit/internal/campaign"
 	"github.com/kiwit/kiwit/internal/classification"
 	"github.com/kiwit/kiwit/internal/comment"
 	"github.com/kiwit/kiwit/internal/customfield"
@@ -283,6 +284,7 @@ func main() {
 	attachment.RegisterRoutes(router, attachmentRepo, store, guard)
 	visual.RegisterRoutes(api, visual.NewStore(sqlDBConn, pgPoolConn), attachmentRepo, store, guard)
 	report.RegisterRoutes(api, router, report.NewStore(sqlDBConn, pgPoolConn), guard)
+	campaign.RegisterRoutes(api, campaign.NewStore(sqlDBConn, pgPoolConn), guard)
 	xmlrpc.NewHandlerWithWebhooks(authSvc, sqlDBConn, version.VERSION, cfg.UploadDir, webhookStore).Register(router)
 	initdb.Register(router, initdb.NewStore(sqlDBConn, pgPoolConn))
 	menu.Register(router)

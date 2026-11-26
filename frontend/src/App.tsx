@@ -6,6 +6,7 @@ import {
   ClipboardList,
   Compass,
   FileCheck2,
+  FolderTree,
   Flag,
   FolderKanban,
   LayoutDashboard,
@@ -26,6 +27,7 @@ import { CommandPalette } from './components/CommandPalette'
 import { useWorkspace, WorkspaceProvider } from './context/WorkspaceContext'
 import { AuthView } from './features/auth/AuthView'
 import { BugsView } from './features/bugs/BugsView'
+import { CampaignsView } from './features/campaigns/CampaignsView'
 import { MilestonesView } from './features/milestones/MilestonesView'
 import { ProductsView } from './features/management/ProductsView'
 import { RequirementsView } from './features/requirements/RequirementsView'
@@ -42,6 +44,7 @@ import { I18nProvider, Lang, useI18n } from './i18n'
 const iconMap: Record<string, typeof LayoutDashboard> = {
   'clipboard-list': ClipboardList,
   compass: Compass,
+  'folder-tree': FolderTree,
   flag: Flag,
   'layout-dashboard': LayoutDashboard,
   'file-check': FileCheck2,
@@ -258,6 +261,7 @@ function AppShell() {
             <Route path="/requirements" element={<RequirementsView />} />
             <Route path="/milestones" element={<MilestonesView />} />
             <Route path="/exploratory" element={<ExploratoryView />} />
+            <Route path="/campaigns" element={<CampaignsView />} />
             <Route path="/cases/:id" element={<TestCasesView />} />
             <Route path="/plans" element={<TestPlansView />} />
             <Route path="/plans/:id" element={<TestPlansView />} />

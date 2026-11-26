@@ -96,6 +96,16 @@ func (h *Handler) registerMissingMethods() {
 	h.register("CustomField.create", h.simpleCreate("custom_field_defs", []string{"entity_type", "name", "field_type", "options", "required"}))
 	h.register("CustomField.update", h.simpleUpdate("custom_field_defs", []string{"name", "field_type", "options", "required"}))
 	h.register("CustomField.remove", h.cfRemove)
+
+	// --- Campaigns / Iterations hierarchy ---
+	h.register("Campaign.filter", h.filterRows("campaigns", []string{"id", "product_id", "name", "description", "status", "start_date", "end_date", "created_at", "updated_at"}))
+	h.register("Campaign.create", h.simpleCreate("campaigns", []string{"product_id", "name", "description", "status", "start_date", "end_date"}))
+	h.register("Campaign.update", h.simpleUpdate("campaigns", []string{"name", "description", "status", "start_date", "end_date"}))
+	h.register("Campaign.remove", h.campRemove)
+	h.register("Iteration.filter", h.filterRows("campaign_iterations", []string{"id", "campaign_id", "name", "status", "start_date", "end_date", "created_at", "updated_at"}))
+	h.register("Iteration.create", h.simpleCreate("campaign_iterations", []string{"campaign_id", "name", "status", "start_date", "end_date"}))
+	h.register("Iteration.update", h.simpleUpdate("campaign_iterations", []string{"name", "status", "start_date", "end_date"}))
+	h.register("Iteration.remove", h.iterRemove)
 }
 
 // --- generic update helper ---
@@ -681,5 +691,21 @@ func (h *Handler) cfRemove(r *http.Request, args []any) (any, error) {
 		return nil, errNoDB
 	}
 	_, err := h.db.ExecContext(r.Context(), `DELETE FROM custom_field_defs WHERE id = ?`, argInt(args[0]))
+	return map[string]any{"ok": err == nil}, err
+}
+
+func (h *Handler) campRemove(r *http.Request, args []any) (any, error) {
+	if h.db == nil {
+		return nil, errNoDB
+	}
+	_, err := h.db.ExecContext(r.Context(), `DELETE FROM campaigns WHERE id = ?`, argInt(args[0]))
+	return map[string]any{"ok": err == nil}, err
+}
+
+func (h *Handler) iterRemove(r *http.Request, args []any) (any, error) {
+	if h.db == nil {
+		return nil, errNoDB
+	}
+	_, err := h.db.ExecContext(r.Context(), `DELETE FROM campaign_iterations WHERE id = ?`, argInt(args[0]))
 	return map[string]any{"ok": err == nil}, err
 }

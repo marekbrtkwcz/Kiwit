@@ -50,6 +50,7 @@ func Default() MenuResponse {
 				Item{Label: "Requirements", URL: "/requirements", Icon: "clipboard-list"},
 				Item{Label: "Milestones", URL: "/milestones", Icon: "flag"},
 				Item{Label: "Exploratory", URL: "/exploratory", Icon: "compass"},
+				Item{Label: "Campaigns", URL: "/campaigns", Icon: "folder-tree"},
 				Item{Label: "Search Test Executions", URL: "/dashboard", Icon: "layout-dashboard"},
 				Item{Label: "Search Bugs", URL: "/bugs", Icon: "bug"},
 			}},

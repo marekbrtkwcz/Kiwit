@@ -192,6 +192,41 @@ export interface TestExecution {
   dataset_name?: string
 }
 
+export interface Campaign {
+  id: number
+  product_id: number
+  name: string
+  description?: string
+  status: 'active' | 'completed' | 'archived'
+  start_date?: string
+  end_date?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Iteration {
+  id: number
+  campaign_id: number
+  name: string
+  status: 'planned' | 'in_progress' | 'done'
+  start_date?: string
+  end_date?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CampaignPlanNode {
+  id: number
+  name: string
+  is_active: boolean
+  iteration_id?: number
+}
+
+export interface CampaignTree extends Campaign {
+  iterations: (Iteration & { plans: CampaignPlanNode[] })[]
+  plans: CampaignPlanNode[]
+}
+
 export interface VisualBaseline {
   id: number
   test_case_id: number
@@ -779,6 +814,18 @@ export const api = {
     const blob = await res.blob()
     return URL.createObjectURL(blob)
   },
+  listCampaigns: (productId?: number) =>
+    request<{ items: Campaign[] }>(`/api/v1/campaigns${productId ? `?product_id=${productId}` : ''}`),
+  createCampaign: (body: { product_id: number; name: string; description?: string; status?: string; start_date?: string; end_date?: string }) =>
+    request<Campaign>('/api/v1/campaigns', { method: 'POST', body: JSON.stringify(body) }),
+  deleteCampaign: (id: number) => request<void>(`/api/v1/campaigns/${id}`, { method: 'DELETE' }),
+  campaignTree: (id: number) => request<CampaignTree>(`/api/v1/campaigns/${id}/tree`),
+  listIterations: (campaignId: number) => request<{ items: Iteration[] }>(`/api/v1/campaigns/${campaignId}/iterations`),
+  createIteration: (campaignId: number, body: { name: string; status?: string }) =>
+    request<Iteration>(`/api/v1/campaigns/${campaignId}/iterations`, { method: 'POST', body: JSON.stringify(body) }),
+  deleteIteration: (id: number) => request<void>(`/api/v1/iterations/${id}`, { method: 'DELETE' }),
+  assignPlanToCampaign: (campaignId: number, testPlanId: number, iterationId?: number) =>
+    request<void>(`/api/v1/campaigns/${campaignId}/assign-plan`, { method: 'POST', body: JSON.stringify({ test_plan_id: testPlanId, iteration_id: iterationId }) }),
   listVisualBaselines: (caseId: number) =>
     request<{ items: VisualBaseline[] }>(`/api/v1/testcases/${caseId}/visual-baselines`),
   addVisualBaseline: (caseId: number, attachmentId: number, label?: string) =>
