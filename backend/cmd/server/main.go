@@ -460,15 +460,22 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 			start := time.Now()
 			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 			next.ServeHTTP(ww, r)
-			logger.Info("http request",
+			dur := time.Since(start)
+			fields := []any{
 				"method", r.Method,
 				"path", r.URL.Path,
 				"status", ww.Status(),
 				"bytes", ww.BytesWritten(),
-				"duration_ms", time.Since(start).Milliseconds(),
+				"duration_ms", dur.Milliseconds(),
 				"request_id", middleware.GetReqID(r.Context()),
 				"remote_addr", r.RemoteAddr,
-			)
+			}
+			// Slow requests are promoted to WARN so they stand out in the log viewer.
+			if dur >= time.Second {
+				logger.Warn("slow request", fields...)
+				return
+			}
+			logger.Info("http request", fields...)
 		})
 	}
 }
