@@ -6,6 +6,7 @@ import {
   Flag,
   Pencil,
   Plus,
+  Sparkles,
   Trash2,
   XCircle,
 } from 'lucide-react'
@@ -43,6 +44,7 @@ export function MilestonesView() {
   const [runs, setRuns] = useState<TestRun[]>([])
   const [runId, setRunId] = useState(0)
   const [signoffNote, setSignoffNote] = useState('')
+  const [aiSummary, setAiSummary] = useState<{ summary: string; model: string } | 'busy' | null>(null)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
 
   const load = useCallback(async () => {
@@ -201,6 +203,24 @@ export function MilestonesView() {
           }}
         >
           Report ({selectedIds.length})
+        </button>
+        <button
+          type="button"
+          className="btn"
+          disabled={selectedIds.length === 0}
+          title="AI executive summary of the selected milestones for release management"
+          onClick={async () => {
+            setAiSummary('busy')
+            try {
+              const res = await api.aiReportSummary(selectedIds)
+              setAiSummary(res)
+            } catch (err) {
+              setAiSummary(null)
+              notify(err instanceof Error ? err.message : 'AI summary failed', 'error')
+            }
+          }}
+        >
+          <Sparkles size={16} /> AI podsumowanie
         </button>
         <button type="button" className="btn btn-primary" onClick={openCreate}>
           <Plus size={16} /> New Milestone
@@ -369,6 +389,30 @@ export function MilestonesView() {
               <button type="button" className="btn btn-primary" onClick={submit} disabled={!name || (!editing && !versionId)}>
                 {editing ? 'Save' : 'Create'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {aiSummary === 'busy' && (
+        <div className="modal-backdrop">
+          <div className="modal" role="dialog" aria-modal="true">
+            <p style={{ margin: 0 }}>AI pisze podsumowanie…</p>
+          </div>
+        </div>
+      )}
+
+      {aiSummary && aiSummary !== 'busy' && (
+        <div className="modal-backdrop" onClick={() => setAiSummary(null)}>
+          <div className="modal" style={{ maxWidth: 680 }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="AI report summary">
+            <h2 style={{ marginTop: 0 }}>AI: podsumowanie release'u</h2>
+            <p style={{ fontSize: '0.92rem', lineHeight: 1.5 }}>{aiSummary.summary}</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem' }}>
+              <span style={{ color: 'var(--muted)', fontSize: '0.75rem' }}>{aiSummary.model}</span>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button type="button" className="btn" onClick={() => void navigator.clipboard.writeText(aiSummary.summary)}>Kopiuj</button>
+                <button type="button" className="btn btn-primary" onClick={() => setAiSummary(null)}>Zamknij</button>
+              </div>
             </div>
           </div>
         </div>
