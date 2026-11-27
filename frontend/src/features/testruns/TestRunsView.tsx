@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { api, VisualComparison, BugItem, Build, EnvironmentItem, ExecutionLinkItem, IssueTrackerItem, TestExecution, TestPlan, TestRun } from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
+import { ExportButton } from '../../components/ExportButton'
 import { useI18n } from '../../i18n'
 import { AttachmentsPanel } from '../attachments/AttachmentsPanel'
 import { ScreenshotsGallery } from '../attachments/ScreenshotsGallery'
@@ -471,6 +472,16 @@ export function TestRunsView() {
         <button type="button" className="btn" onClick={() => { setShowJUnit((v) => !v); setShowCreate(false) }}>
           <FileCode2 size={15} /> {t.testruns.importJUnit}
         </button>
+        <ExportButton
+          path="/api/v1/testruns"
+          filename="testruns"
+          params={{
+            product_id: activeProductId ?? undefined,
+            status: filterStatus || undefined,
+            q: filterQ || undefined,
+          }}
+          onError={(msg) => notify(msg, 'error')}
+        />
       </div>
 
       {showCreate && (

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ChevronDown, ChevronUp, Copy, ExternalLink, FolderKanban, Plus, Search, Trash2, Unlink } from 'lucide-react'
 import { api, PlanCaseItem, PlanType, TestCase, TestPlan, Version } from '../../api/client'
 import { ConfirmDialog } from '../../components/UiPrimitives'
+import { ExportButton } from '../../components/ExportButton'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 import { EntityTagsBar } from '../management/EntityTagsBar'
@@ -151,7 +152,13 @@ export function TestPlansView() {
         <button type="submit" disabled={!versionId} className="btn btn-primary">
           <Plus size={15} /> {t.testplans.create}
         </button>
-      </form>
+              <ExportButton
+          path="/api/v1/testplans"
+          filename="testplans"
+          params={{ product_id: productId || undefined, version_id: versionId || undefined }}
+          onError={(msg) => notify(msg, 'error')}
+        />
+</form>
 
       <div className="split-layout">
         <div className="card" style={{ padding: '0.75rem', display: 'grid', gap: '0.45rem' }}>

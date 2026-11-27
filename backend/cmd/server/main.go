@@ -293,6 +293,13 @@ func main() {
 	}
 	testrun.RegisterRoutes(api, testRunRepo, notifier, notificationStore, emailClient, webhookStore, guard, auditStore)
 	testrun.RegisterExportRoutes(router, testRunRepo, guard)
+	testcase.RegisterExportRoutes(router, testCaseRepo, guard)
+	testplan.RegisterExportRoutes(router, testPlanRepo)
+	requirement.RegisterExportRoutes(router, requirement.NewStore(sqlDBConn, pgPoolConn))
+	milestone.RegisterExportRoutes(router, milestone.NewStore(sqlDBConn, pgPoolConn), guard)
+	bug.RegisterExportRoutes(router, bug.NewStore(sqlDBConn, pgPoolConn))
+	audit.RegisterExportRoutes(router, auditStore)
+	telemetry.RegisterExportRoutes(router, sqlDBConn, pgPoolConn)
 	issuetracker.RegisterRoutes(api, issueRepo, guard)
 	bug.RegisterRoutes(api, bug.NewStore(sqlDBConn, pgPoolConn), guard, webhookStore)
 	telemetry.RegisterRoutes(api, sqlDBConn, pgPoolConn)

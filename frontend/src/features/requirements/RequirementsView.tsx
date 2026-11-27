@@ -21,6 +21,7 @@ import {
   TestCase,
 } from '../../api/client'
 import { ConfirmDialog, EmptyState, LoadingSkeleton } from '../../components/UiPrimitives'
+import { ExportButton } from '../../components/ExportButton'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 
@@ -225,6 +226,12 @@ export function RequirementsView() {
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
+        <ExportButton
+          path="/api/v1/requirements"
+          filename="requirements"
+          params={{ q: q || undefined, product_id: productId || undefined, status: status || undefined }}
+          onError={(msg) => notify(msg, 'error')}
+        />
       </div>
 
       {loading ? (

@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronUp,
   Copy,
+  FileDown,
   History,
   Link2,
   MessageSquare,
@@ -18,12 +19,14 @@ import {
   api,
   Category,
   ComponentItem,
+  downloadExport,
   RevisionItem,
   TemplateItem,
   TestCase,
   TestStep,
 } from '../../api/client'
 import { ConfirmDialog, EmptyState, LoadingSkeleton } from '../../components/UiPrimitives'
+import { ExportButton } from '../../components/ExportButton'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 import { AttachmentsPanel } from '../attachments/AttachmentsPanel'
@@ -362,6 +365,19 @@ export function TestCasesView() {
           <option value="false">{t.testcases.manualOnly}</option>
         </select>
 
+        <ExportButton
+          path="/api/v1/testcases"
+          filename="testcases"
+          params={{
+            q: filterQ || undefined,
+            product_id: activeProductId ?? undefined,
+            category_id: filterCategory || undefined,
+            priority: filterPriority || undefined,
+            status: filterStatus || undefined,
+            is_automated: filterAutomated || undefined,
+          }}
+          onError={(msg) => notify(msg, 'error')}
+        />
         <button type="button" className="btn btn-primary" onClick={openNewDrawer}>
           <Plus size={15} />
           {t.testcases.newCase}
@@ -388,6 +404,13 @@ export function TestCasesView() {
           <button type="button" className="btn btn-primary btn-sm" onClick={() => void handleBulkUpdate()} disabled={!bulkStatus && !bulkPriority}>
             {t.testcases.applyBulk}
           </button>
+          <ExportButton
+            path="/api/v1/testcases"
+            filename="testcases"
+            ids={selectedIds}
+            small
+            onError={(msg) => notify(msg, 'error')}
+          />
           <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelectedIds([])}>
             {t.common.clear}
           </button>
@@ -543,6 +566,22 @@ export function TestCasesView() {
                     }}
                   >
                     <Link2 size={14} />
+                  </button>
+                )}
+                {editingId !== null && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    title={t.common.exportMd}
+                    onClick={async () => {
+                      try {
+                        await downloadExport(`/api/v1/testcases/${editingId}/export`, 'md', `testcase-${editingId}.md`)
+                      } catch (err) {
+                        notify(err instanceof Error ? err.message : t.common.exportFailed, 'error')
+                      }
+                    }}
+                  >
+                    <FileDown size={14} />
                   </button>
                 )}
               </div>

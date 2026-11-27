@@ -133,6 +133,54 @@ export async function downloadAuthenticated(url: string, filename: string, openI
   URL.revokeObjectURL(blobUrl)
 }
 
+export type ExportFormat = 'csv' | 'json' | 'md'
+
+/** Downloads an entity list export (GET /api/v1/<entity>/export?format=...). */
+export async function downloadExport(
+  path: string,
+  format: ExportFormat,
+  filename: string,
+  params: Record<string, string | number | undefined> = {},
+): Promise<void> {
+  const qs = new URLSearchParams()
+  qs.set('format', format)
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== '' && v !== 0) qs.set(k, String(v))
+  }
+  await downloadAuthenticated(`${path}?${qs.toString()}`, filename)
+}
+
+/** Downloads a selection export (POST /api/v1/<entity>/export with ids). */
+export async function downloadExportSelection(
+  path: string,
+  format: ExportFormat,
+  ids: number[],
+  filename: string,
+): Promise<void> {
+  const token = getAuthToken()
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ ids, format }),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(text || `HTTP ${res.status}`)
+  }
+  const blob = await res.blob()
+  const blobUrl = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = blobUrl
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(blobUrl)
+}
+
 export interface Version {
   id: number
   product_id: number

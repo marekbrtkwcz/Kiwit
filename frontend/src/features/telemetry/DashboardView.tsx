@@ -40,6 +40,7 @@ import {
 } from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
+import { ExportButton } from '../../components/ExportButton'
 
 const PIE_COLORS = ['#6366f1', '#94a3b8']
 
@@ -67,6 +68,7 @@ export function DashboardView() {
   const [uxMetrics, setUxMetrics] = useState<UXMetricRow[]>([])
   const [tldr, setTldr] = useState<string | null>(null)
   const [tldrBusy, setTldrBusy] = useState(false)
+  const [dataset, setDataset] = useState('summary')
 
   const generateTldr = async () => {
     setTldrBusy(true)
@@ -237,6 +239,27 @@ export function DashboardView() {
           <Sparkles size={14} />
           {tldrBusy ? t.dashboard.aiTldrBusy : t.dashboard.aiTldr}
         </button>
+        <select className="select" value={dataset} onChange={(e) => setDataset(e.target.value)} title={t.common.exportDataset}>
+          <option value="summary">summary</option>
+          <option value="trends">trends</option>
+          <option value="matrix">matrix</option>
+          <option value="health">health</option>
+          <option value="breakdown">breakdown</option>
+          <option value="dashboard">dashboard</option>
+          <option value="ux">ux</option>
+        </select>
+        <ExportButton
+          path="/api/v1/telemetry/export"
+          filename={`telemetry-${dataset}`}
+          params={{
+            dataset,
+            product_id: activeProductId ?? undefined,
+            from: from || undefined,
+            to: to || undefined,
+          }}
+          small
+          onError={(msg) => notify(msg, 'error')}
+        />
       </div>
 
       {tldr && (

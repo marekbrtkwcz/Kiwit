@@ -19,6 +19,7 @@ import {
   Version,
 } from '../../api/client'
 import { ConfirmDialog, EmptyState, LoadingSkeleton } from '../../components/UiPrimitives'
+import { ExportButton } from '../../components/ExportButton'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 
@@ -190,6 +191,13 @@ export function MilestonesView() {
     <div className="view">
       <div className="view-header">
         <h1>{t.milestones.title}</h1>
+        <ExportButton
+          path="/api/v1/milestones"
+          filename="milestones"
+          ids={selectedIds}
+          params={{ version_id: versionId || undefined }}
+          onError={(msg) => notify(msg, 'error')}
+        />
         <button
           type="button"
           className="btn"

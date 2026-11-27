@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Bot, Bug, Plus, Save, ScanSearch, Search, Trash2, X } from 'lucide-react'
 import { api, InternalBug } from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
+import { ExportButton } from '../../components/ExportButton'
 import { useI18n } from '../../i18n'
 
 export function BugsView() {
@@ -120,6 +121,17 @@ export function BugsView() {
           <option value="medium">medium</option>
           <option value="low">low</option>
         </select>
+        <ExportButton
+          path="/api/v1/bugs"
+          filename="bugs"
+          params={{
+            product_id: activeProductId ?? undefined,
+            status: filterStatus || undefined,
+            severity: filterSeverity || undefined,
+            q: filterQ || undefined,
+          }}
+          onError={(msg) => notify(msg, 'error')}
+        />
         <button type="button" className="btn btn-primary" onClick={openNew}>
           <Plus size={15} /> {t.bugs.report}
         </button>

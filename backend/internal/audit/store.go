@@ -112,12 +112,25 @@ func scanSQLRows(rows *sql.Rows) ([]Entry, error) {
 	for rows.Next() {
 		var e Entry
 		var oldJSON, newJSON []byte
-		if err := rows.Scan(&e.ID, &e.EntityType, &e.EntityID, &e.Action, &e.ActorID, &e.ActorName, &oldJSON, &newJSON, &e.CreatedAt); err != nil {
+		var createdAt string
+		if err := rows.Scan(&e.ID, &e.EntityType, &e.EntityID, &e.Action, &e.ActorID, &e.ActorName, &oldJSON, &newJSON, &createdAt); err != nil {
 			return nil, err
 		}
 		_ = json.Unmarshal(oldJSON, &e.OldValues)
 		_ = json.Unmarshal(newJSON, &e.NewValues)
+		e.CreatedAt = parseSQLiteTime(createdAt)
 		out = append(out, e)
 	}
 	return out, rows.Err()
+}
+
+// parseSQLiteTime parses the TEXT timestamps sqlite stores
+// (datetime('now') writes "YYYY-MM-DD HH:MM:SS", migrations may use RFC3339).
+func parseSQLiteTime(v string) time.Time {
+	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02 15:04:05", "2006-01-02T15:04:05"} {
+		if t, err := time.Parse(layout, v); err == nil {
+			return t.UTC()
+		}
+	}
+	return time.Time{}
 }
