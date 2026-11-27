@@ -123,6 +123,7 @@ export function BugsView() {
         </select>
         <ExportButton
           path="/api/v1/bugs"
+          formats={['csv', 'json', 'md', 'xlsx']}
           filename="bugs"
           params={{
             product_id: activeProductId ?? undefined,

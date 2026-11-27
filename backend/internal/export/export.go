@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/xuri/excelize/v2"
 )
 
 // Table is the unified export data model: named columns and string rows.
@@ -20,13 +22,18 @@ type Table struct {
 }
 
 // Format returns the canonical format for a query parameter value.
-// Accepted values: "csv" (default), "json", "md" (alias "markdown").
+// Accepted values: "csv" (default), "json", "md" (alias "markdown"),
+// "xlsx" and "feature" (the latter is interpreted by the test case routes).
 func Format(v string) string {
 	switch strings.ToLower(strings.TrimSpace(v)) {
 	case "json":
 		return "json"
 	case "md", "markdown":
 		return "md"
+	case "xlsx":
+		return "xlsx"
+	case "feature":
+		return "feature"
 	default:
 		return "csv"
 	}
@@ -55,6 +62,8 @@ func Render(w http.ResponseWriter, format, name string, t Table) {
 		w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.md"`, name))
 		writeMarkdownTable(w, t)
+	case "xlsx":
+		renderXLSX(w, name, t)
 	default:
 		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.csv"`, name))
@@ -103,6 +112,41 @@ func mdEscape(s string) string {
 	s = strings.ReplaceAll(s, "\r\n", "<br>")
 	s = strings.ReplaceAll(s, "\n", "<br>")
 	return s
+}
+
+// renderXLSX writes the table as a single-sheet Excel workbook.
+func renderXLSX(w http.ResponseWriter, name string, t Table) {
+	f := excelize.NewFile()
+	defer func() { _ = f.Close() }()
+	sheet := "Data"
+	if err := f.SetSheetName("Sheet1", sheet); err != nil {
+		http.Error(w, `{"detail":"failed to build workbook"}`, http.StatusInternalServerError)
+		return
+	}
+	for i, c := range t.Columns {
+		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
+		_ = f.SetCellValue(sheet, cell, c)
+	}
+	if styleID, err := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true}}); err == nil {
+		lastCell, _ := excelize.CoordinatesToCellName(len(t.Columns), 1)
+		_ = f.SetCellStyle(sheet, "A1", lastCell, styleID)
+	}
+	for r, row := range t.Rows {
+		for i := range t.Columns {
+			v := ""
+			if i < len(row) {
+				v = row[i]
+			}
+			cell, _ := excelize.CoordinatesToCellName(i+1, r+2)
+			_ = f.SetCellValue(sheet, cell, v)
+		}
+	}
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.xlsx"`, name))
+	if err := f.Write(w); err != nil {
+		// headers are already sent; nothing more we can do
+		_ = err
+	}
 }
 
 // JUnitCase is a single test result for the JUnit XML renderer.

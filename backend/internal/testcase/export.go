@@ -45,11 +45,14 @@ func RegisterExportRoutes(r chi.Router, repo Repository, guard *auth.AccessGuard
 			return
 		}
 		format := export.Format(req.URL.Query().Get("format"))
-		if format == "md" {
+		switch format {
+		case "md":
 			renderCasesMarkdown(w, "testcases", items)
-			return
+		case "feature":
+			renderCasesFeature(w, "testcases", items)
+		default:
+			export.Render(w, format, "testcases", caseTable(items))
 		}
-		export.Render(w, format, "testcases", caseTable(items))
 	})
 
 	r.Get("/api/v1/testcases/{id}/export", func(w http.ResponseWriter, req *http.Request) {
@@ -67,11 +70,14 @@ func RegisterExportRoutes(r chi.Router, repo Repository, guard *auth.AccessGuard
 			return
 		}
 		format := export.Format(req.URL.Query().Get("format"))
-		if format == "md" {
+		switch format {
+		case "md":
 			renderCasesMarkdown(w, fmt.Sprintf("testcase-%d", id), []TestCase{tc})
-			return
+		case "feature":
+			renderCasesFeature(w, fmt.Sprintf("testcase-%d", id), []TestCase{tc})
+		default:
+			export.Render(w, format, fmt.Sprintf("testcase-%d", id), caseTable([]TestCase{tc}))
 		}
-		export.Render(w, format, fmt.Sprintf("testcase-%d", id), caseTable([]TestCase{tc}))
 	})
 
 	r.Post("/api/v1/testcases/export", func(w http.ResponseWriter, req *http.Request) {
@@ -99,11 +105,14 @@ func RegisterExportRoutes(r chi.Router, repo Repository, guard *auth.AccessGuard
 			items = append(items, tc)
 		}
 		format := export.Format(body.Format)
-		if format == "md" {
+		switch format {
+		case "md":
 			renderCasesMarkdown(w, "testcases", items)
-			return
+		case "feature":
+			renderCasesFeature(w, "testcases", items)
+		default:
+			export.Render(w, format, "testcases", caseTable(items))
 		}
-		export.Render(w, format, "testcases", caseTable(items))
 	})
 }
 
@@ -129,6 +138,30 @@ func caseTable(items []TestCase) export.Table {
 		})
 	}
 	return t
+}
+
+// renderCasesFeature writes a .feature file with the Gherkin bodies of the
+// given cases (non-Gherkin cases are skipped). Cucumber-style tools accept
+// several Feature blocks in one file.
+func renderCasesFeature(w http.ResponseWriter, name string, items []TestCase) {
+	var b strings.Builder
+	for _, tc := range items {
+		if tc.Format != "gherkin" || strings.TrimSpace(tc.GherkinBody) == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteString("\n\n")
+		}
+		b.WriteString(strings.TrimSpace(tc.GherkinBody))
+		b.WriteString("\n")
+	}
+	if b.Len() == 0 {
+		http.Error(w, `{"detail":"no gherkin test cases in selection"}`, http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.feature"`, name))
+	_, _ = w.Write([]byte(b.String()))
 }
 
 // renderCasesMarkdown writes full Markdown documents for the given cases,

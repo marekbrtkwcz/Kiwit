@@ -1,9 +1,12 @@
 package export
 
 import (
+	"bytes"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/xuri/excelize/v2"
 )
 
 func TestRenderCSV(t *testing.T) {
@@ -92,5 +95,34 @@ func TestRenderJUnit(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("JUnit XML missing %q:\n%s", want, body)
 		}
+	}
+}
+
+func TestRenderXLSX(t *testing.T) {
+	rec := httptest.NewRecorder()
+	Render(rec, "xlsx", "cases", Table{
+		Columns: []string{"id", "summary"},
+		Rows:    [][]string{{"1", "Login"}},
+	})
+	if ct := rec.Header().Get("Content-Type"); ct != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" {
+		t.Fatalf("unexpected content type: %s", ct)
+	}
+	if cd := rec.Header().Get("Content-Disposition"); cd != `attachment; filename="cases.xlsx"` {
+		t.Fatalf("unexpected disposition: %s", cd)
+	}
+	body := rec.Body.Bytes()
+	if len(body) < 4 || string(body[:2]) != "PK" {
+		t.Fatal("expected a zip (xlsx) container")
+	}
+	f, err := excelize.OpenReader(bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("workbook not readable: %v", err)
+	}
+	defer func() { _ = f.Close() }()
+	if v, _ := f.GetCellValue("Data", "A1"); v != "id" {
+		t.Fatalf("unexpected A1: %q", v)
+	}
+	if v, _ := f.GetCellValue("Data", "B2"); v != "Login" {
+		t.Fatalf("unexpected B2: %q", v)
 	}
 }

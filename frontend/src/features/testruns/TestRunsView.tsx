@@ -474,6 +474,7 @@ export function TestRunsView() {
         </button>
         <ExportButton
           path="/api/v1/testruns"
+          formats={['csv', 'json', 'md', 'xlsx']}
           filename="testruns"
           params={{
             product_id: activeProductId ?? undefined,

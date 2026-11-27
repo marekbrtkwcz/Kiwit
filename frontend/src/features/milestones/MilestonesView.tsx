@@ -193,6 +193,7 @@ export function MilestonesView() {
         <h1>{t.milestones.title}</h1>
         <ExportButton
           path="/api/v1/milestones"
+          formats={['csv', 'json', 'md', 'xlsx']}
           filename="milestones"
           ids={selectedIds}
           params={{ version_id: versionId || undefined }}

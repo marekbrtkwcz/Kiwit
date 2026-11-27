@@ -14,15 +14,26 @@ interface ExportButtonProps {
   ids?: number[]
   onError?: (message: string) => void
   small?: boolean
+  /** formats offered in the menu; defaults to csv/json/md */
+  formats?: ExportFormat[]
 }
 
-const FORMATS: ExportFormat[] = ['csv', 'json', 'md']
+const DEFAULT_FORMATS: ExportFormat[] = ['csv', 'json', 'md']
+
+const FORMAT_LABEL: Record<ExportFormat, 'exportCsv' | 'exportJson' | 'exportMd' | 'exportXlsx' | 'exportFeature'> = {
+  csv: 'exportCsv',
+  json: 'exportJson',
+  md: 'exportMd',
+  xlsx: 'exportXlsx',
+  feature: 'exportFeature',
+}
 
 /**
  * Unified export control: renders one button that downloads the current
  * list (or the current selection) as CSV, JSON or Markdown.
  */
-export function ExportButton({ path, filename, params, ids, onError, small }: ExportButtonProps) {
+export function ExportButton({ path, filename, params, ids, onError, small, formats }: ExportButtonProps) {
+  const menu = formats && formats.length > 0 ? formats : DEFAULT_FORMATS
   const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -73,7 +84,7 @@ export function ExportButton({ path, filename, params, ids, onError, small }: Ex
               minWidth: 120,
             }}
           >
-            {FORMATS.map((f) => (
+            {menu.map((f) => (
               <button
                 key={f}
                 type="button"
@@ -81,7 +92,7 @@ export function ExportButton({ path, filename, params, ids, onError, small }: Ex
                 style={{ justifyContent: 'flex-start' }}
                 onClick={() => void run(f)}
               >
-                {f === 'csv' ? t.common.exportCsv : f === 'json' ? t.common.exportJson : t.common.exportMd}
+                {t.common[FORMAT_LABEL[f]]}
               </button>
             ))}
           </div>

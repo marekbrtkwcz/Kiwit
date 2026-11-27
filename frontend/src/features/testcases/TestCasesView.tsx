@@ -376,6 +376,7 @@ export function TestCasesView() {
             status: filterStatus || undefined,
             is_automated: filterAutomated || undefined,
           }}
+          formats={['csv', 'json', 'md', 'xlsx', 'feature']}
           onError={(msg) => notify(msg, 'error')}
         />
         <button type="button" className="btn btn-primary" onClick={openNewDrawer}>
@@ -408,6 +409,7 @@ export function TestCasesView() {
             path="/api/v1/testcases"
             filename="testcases"
             ids={selectedIds}
+            formats={['csv', 'json', 'md', 'xlsx', 'feature']}
             small
             onError={(msg) => notify(msg, 'error')}
           />

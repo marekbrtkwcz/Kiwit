@@ -250,6 +250,7 @@ export function DashboardView() {
         </select>
         <ExportButton
           path="/api/v1/telemetry/export"
+          formats={['csv', 'json', 'md', 'xlsx']}
           filename={`telemetry-${dataset}`}
           params={{
             dataset,

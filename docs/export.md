@@ -1,14 +1,16 @@
 # Unified data export
 
 Kiwit exposes a unified export pipeline: every entity maps its rows to a
-shared table model and one renderer serializes it to CSV, JSON or Markdown.
-A JUnit XML renderer is available for test run executions.
+shared table model and one renderer serializes it to CSV, JSON, Markdown or
+XLSX. Test run executions can also be exported as JUnit XML, and Gherkin
+test cases as `.feature` files.
 
 ## API endpoints
 
 All export endpoints require a bearer token and reuse the same filters as the
 corresponding list endpoints. Anonymous users get the same visibility as in the
-list APIs. `format` accepts `csv` (default), `json`, `md` (alias `markdown`).
+list APIs. `format` accepts `csv` (default), `json`, `md` (alias `markdown`),
+`xlsx`; test case routes additionally accept `feature`.
 
 | Endpoint | Scope |
 |---|---|
@@ -37,11 +39,17 @@ list APIs. `format` accepts `csv` (default), `json`, `md` (alias `markdown`).
   Multiple cases in one file are separated by `---`.
 - **JUnit XML**: run executions mapped as `passed`/`failed`/`error`
   (`blocked`)/`skipped` (`idle`), suitable for CI/CD result visualization.
+- **XLSX**: single-sheet Excel workbook with a bold header row
+  (`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`).
+- **Gherkin `.feature`**: the Gherkin bodies of `format=gherkin` cases in one
+  `.feature` file (several Feature blocks are valid for cucumber-style tools);
+  non-Gherkin cases are skipped and a selection without any returns 404.
 
 ## Frontend
 
 The `ExportButton` component (`frontend/src/components/ExportButton.tsx`)
-renders a download menu (CSV / JSON / Markdown) wherever lists are shown:
+renders a download menu (CSV / JSON / Markdown / XLSX; test cases also offer
+Gherkin `.feature`) wherever lists are shown:
 TestCases, TestRuns, TestPlans, Requirements, Milestones, Bugs and the
 Telemetry dashboard (with a dataset selector). When rows are selected, the
 button switches to the selection export (POST) for test cases and milestones.

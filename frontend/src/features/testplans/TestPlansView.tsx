@@ -154,6 +154,7 @@ export function TestPlansView() {
         </button>
               <ExportButton
           path="/api/v1/testplans"
+          formats={['csv', 'json', 'md', 'xlsx']}
           filename="testplans"
           params={{ product_id: productId || undefined, version_id: versionId || undefined }}
           onError={(msg) => notify(msg, 'error')}

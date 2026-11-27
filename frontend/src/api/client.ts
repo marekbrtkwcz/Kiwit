@@ -133,7 +133,7 @@ export async function downloadAuthenticated(url: string, filename: string, openI
   URL.revokeObjectURL(blobUrl)
 }
 
-export type ExportFormat = 'csv' | 'json' | 'md'
+export type ExportFormat = 'csv' | 'json' | 'md' | 'xlsx' | 'feature'
 
 /** Downloads an entity list export (GET /api/v1/<entity>/export?format=...). */
 export async function downloadExport(

@@ -228,6 +228,7 @@ export function RequirementsView() {
         </select>
         <ExportButton
           path="/api/v1/requirements"
+          formats={['csv', 'json', 'md', 'xlsx']}
           filename="requirements"
           params={{ q: q || undefined, product_id: productId || undefined, status: status || undefined }}
           onError={(msg) => notify(msg, 'error')}
