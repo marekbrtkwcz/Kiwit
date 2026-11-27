@@ -335,10 +335,11 @@ func RegisterRoutes(api huma.API, repo Repository, emailSettings *notify.Setting
 		OperationID: "delete-testcase",
 		Method:      http.MethodDelete,
 		Path:        "/api/v1/testcases/{id}",
-		Summary:     "Delete a test case",
+		Summary:     "Soft-delete a test case to the trash (purge=true removes it permanently)",
 		Tags:        []string{"TestCases"},
 	}, func(ctx context.Context, input *struct {
-		ID int64 `path:"id"`
+		ID     int64  `path:"id"`
+		Purge  string `query:"purge" enum:",true,false,1,0" doc:"true/1: permanently delete instead of moving to the trash"`
 	}) (*struct{}, error) {
 		if err := auth.CheckRole(ctx, "tester"); err != nil {
 			return nil, err
@@ -347,14 +348,96 @@ func RegisterRoutes(api huma.API, repo Repository, emailSettings *notify.Setting
 			return nil, err
 		}
 		old, _ := repo.GetByID(ctx, input.ID)
-		if err := repo.Delete(ctx, input.ID); err != nil {
+		var err error
+		var action string
+		if input.Purge == "true" || input.Purge == "1" {
+			err = repo.Purge(ctx, input.ID)
+			action = "purge"
+		} else {
+			err = repo.Delete(ctx, input.ID)
+			action = "delete"
+		}
+		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return nil, huma.Error404NotFound("test case not found")
 			}
 			return nil, huma.Error500InternalServerError("failed to delete test case", err)
 		}
-		audit.RecordChange(ctx, auditStore, "test_case", input.ID, "delete", map[string]any{"summary": old.Summary, "status": old.Status}, nil)
+		if old.ID != 0 {
+			audit.RecordChange(ctx, auditStore, "test_case", input.ID, action, map[string]any{"summary": old.Summary, "status": old.Status}, nil)
+		} else {
+			audit.RecordChange(ctx, auditStore, "test_case", input.ID, action, nil, nil)
+		}
 		return nil, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "restore-testcase",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/testcases/{id}/restore",
+		Summary:     "Restore a soft-deleted test case from the trash",
+		Tags:        []string{"TestCases"},
+	}, func(ctx context.Context, input *struct {
+		ID int64 `path:"id"`
+	}) (*TestCaseOutput, error) {
+		if err := auth.CheckRole(ctx, "tester"); err != nil {
+			return nil, err
+		}
+		if err := guard.EnforceTestCase(ctx, input.ID, true); err != nil {
+			return nil, err
+		}
+		if err := repo.Restore(ctx, input.ID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, huma.Error404NotFound("test case not found in trash")
+			}
+			return nil, huma.Error500InternalServerError("failed to restore test case", err)
+		}
+		tc, err := repo.GetByID(ctx, input.ID)
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to load restored test case", err)
+		}
+		audit.RecordChange(ctx, auditStore, "test_case", input.ID, "restore", nil, map[string]any{"summary": tc.Summary})
+		return &TestCaseOutput{Body: tc}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "list-testcase-trash",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/testcases/trash",
+		Summary:     "List soft-deleted test cases (trash) with filtering and pagination",
+		Tags:        []string{"TestCases"},
+	}, func(ctx context.Context, input *struct {
+		Q         string `query:"q" doc:"Filter by summary substring"`
+		ProductID int64  `query:"product_id" doc:"Filter by product ID"`
+		Priority  string `query:"priority" doc:"Filter by priority"`
+		Status    string `query:"status" doc:"Filter by status"`
+		AuthorID  int64  `query:"author_id" doc:"Filter by author ID"`
+		Limit     int    `query:"limit" default:"50" minimum:"1" maximum:"200"`
+		Offset    int    `query:"offset" default:"0" minimum:"0"`
+	}) (*ListTestCasesOutput, error) {
+		if input.ProductID > 0 {
+			if err := guard.EnforceProduct(ctx, input.ProductID, false); err != nil {
+				return nil, err
+			}
+		}
+		items, total, err := repo.ListWithFilter(ctx, ListFilter{
+			Q:         input.Q,
+			ProductID: input.ProductID,
+			Priority:  input.Priority,
+			Status:    input.Status,
+			AuthorID:  input.AuthorID,
+			UserID:    auth.FilterUserID(ctx),
+			Limit:     input.Limit,
+			Offset:    input.Offset,
+			Trash:     true,
+		})
+		if err != nil {
+			return nil, huma.Error500InternalServerError("failed to list trash", err)
+		}
+		return &ListTestCasesOutput{Body: struct {
+			Items []TestCase `json:"items"`
+			Total int64      `json:"total"`
+		}{Items: items, Total: total}}, nil
 	})
 
 	huma.Register(api, huma.Operation{

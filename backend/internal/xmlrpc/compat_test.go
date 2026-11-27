@@ -81,7 +81,7 @@ func setupFullTestDB(t *testing.T) *sql.DB {
 		`CREATE TABLE components (id INTEGER PRIMARY KEY, name TEXT, product_id INTEGER, description TEXT DEFAULT '')`,
 		`CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT)`,
 		`CREATE TABLE categories (id INTEGER PRIMARY KEY, name TEXT, product_id INTEGER)`,
-		`CREATE TABLE test_cases (id INTEGER PRIMARY KEY, product_id INTEGER, summary TEXT, preconditions TEXT DEFAULT '', format TEXT DEFAULT 'steps', gherkin_body TEXT DEFAULT '', priority TEXT DEFAULT 'medium', status TEXT DEFAULT 'confirmed', author_id INTEGER, category_id INTEGER, is_automated INTEGER DEFAULT 0, script TEXT DEFAULT '', arguments TEXT DEFAULT '', created_at TEXT, updated_at TEXT)`,
+		`CREATE TABLE test_cases (id INTEGER PRIMARY KEY, product_id INTEGER, summary TEXT, preconditions TEXT DEFAULT '', format TEXT DEFAULT 'steps', gherkin_body TEXT DEFAULT '', priority TEXT DEFAULT 'medium', status TEXT DEFAULT 'confirmed', author_id INTEGER, category_id INTEGER, is_automated INTEGER DEFAULT 0, script TEXT DEFAULT '', arguments TEXT DEFAULT '', created_at TEXT, updated_at TEXT, deleted_at DATETIME NULL)`,
 		`CREATE TABLE test_case_steps (id INTEGER PRIMARY KEY, test_case_id INTEGER, position INTEGER, action TEXT, expected_result TEXT DEFAULT '')`,
 		`CREATE TABLE test_plans (id INTEGER PRIMARY KEY, product_id INTEGER, version_id INTEGER, name TEXT, description TEXT DEFAULT '', is_active INTEGER DEFAULT 1, parent_id INTEGER, plan_type_id INTEGER, author_id INTEGER, created_at TEXT, updated_at TEXT)`,
 		`CREATE TABLE test_plan_cases (test_plan_id INTEGER, test_case_id INTEGER, position INTEGER DEFAULT 0, PRIMARY KEY (test_plan_id, test_case_id))`,

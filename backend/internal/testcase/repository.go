@@ -61,6 +61,7 @@ type ListFilter struct {
 	UserID      *int64
 	Limit       int
 	Offset      int
+	Trash       bool // true: soft-deleted cases only; false: live cases only
 }
 
 // Repository defines persistence operations for test cases.
@@ -74,6 +75,8 @@ type Repository interface {
 	ListRevisions(ctx context.Context, testCaseID int64) ([]Revision, error)
 	BulkUpdate(ctx context.Context, ids []int64, status, priority string) (int64, error)
 	Delete(ctx context.Context, id int64) error
+	Restore(ctx context.Context, id int64) error
+	Purge(ctx context.Context, id int64) error
 	Clone(ctx context.Context, id int64, newSummary string) (TestCase, error)
 }
 
@@ -100,6 +103,11 @@ func (r *SQLiteRepository) ListWithFilter(ctx context.Context, f ListFilter) ([]
 	where := make([]string, 0, 10)
 	args := make([]any, 0, 12)
 
+	if f.Trash {
+		where = append(where, "tc.deleted_at IS NOT NULL")
+	} else {
+		where = append(where, "tc.deleted_at IS NULL")
+	}
 	if trimmed := strings.TrimSpace(f.Q); trimmed != "" {
 		where = append(where, "LOWER(tc.summary) LIKE ?")
 		args = append(args, "%"+strings.ToLower(trimmed)+"%")
@@ -159,7 +167,12 @@ func (r *SQLiteRepository) ListWithFilter(ctx context.Context, f ListFilter) ([]
 		       tc.summary, tc.preconditions, tc.requirement, tc.extra_link, tc.notes,
 		       tc.format, tc.gherkin_body, tc.priority, tc.status, tc.is_automated, tc.script, tc.arguments,
 		       tc.created_at, tc.updated_at
-		FROM test_cases tc` + whereClause + ` ORDER BY tc.id ASC`
+		FROM test_cases tc` + whereClause
+	if f.Trash {
+		query += ` ORDER BY tc.deleted_at DESC, tc.id DESC`
+	} else {
+		query += ` ORDER BY tc.id ASC`
+	}
 	queryArgs := append([]any(nil), args...)
 	if f.Limit > 0 {
 		query += " LIMIT ? OFFSET ?"
@@ -196,7 +209,7 @@ func (r *SQLiteRepository) GetByID(ctx context.Context, id int64) (TestCase, err
 		       summary, preconditions, requirement, extra_link, notes,
 		       format, gherkin_body, priority, status, is_automated, script, arguments,
 		       created_at, updated_at
-		FROM test_cases WHERE id = ?`, id)
+		FROM test_cases WHERE id = ? AND deleted_at IS NULL`, id)
 	tc, err := scanSQLiteTestCase(row)
 	if err != nil {
 		return TestCase{}, err
@@ -525,7 +538,7 @@ func (r *SQLiteRepository) BulkUpdate(ctx context.Context, ids []int64, status, 
 	now := time.Now().UTC()
 	for _, id := range ids {
 		if status != "" {
-			res, err := tx.ExecContext(ctx, `UPDATE test_cases SET status = ?, updated_at = ? WHERE id = ?`, status, now, id)
+			res, err := tx.ExecContext(ctx, `UPDATE test_cases SET status = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL`, status, now, id)
 			if err != nil {
 				return 0, err
 			}
@@ -533,7 +546,7 @@ func (r *SQLiteRepository) BulkUpdate(ctx context.Context, ids []int64, status, 
 			updated += n
 		}
 		if priority != "" {
-			res, err := tx.ExecContext(ctx, `UPDATE test_cases SET priority = ?, updated_at = ? WHERE id = ?`, priority, now, id)
+			res, err := tx.ExecContext(ctx, `UPDATE test_cases SET priority = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL`, priority, now, id)
 			if err != nil {
 				return 0, err
 			}
@@ -546,7 +559,34 @@ func (r *SQLiteRepository) BulkUpdate(ctx context.Context, ids []int64, status, 
 	return updated, tx.Commit()
 }
 
+// Delete soft-deletes a test case: it disappears from all live listings but
+// stays in the trash (with steps, attachments and comments) until purged.
 func (r *SQLiteRepository) Delete(ctx context.Context, id int64) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE test_cases SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL`, time.Now().UTC(), id)
+	if err != nil {
+		return fmt.Errorf("soft-delete test case: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// Restore returns a soft-deleted test case to live listings.
+func (r *SQLiteRepository) Restore(ctx context.Context, id int64) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE test_cases SET deleted_at = NULL, updated_at = ? WHERE id = ? AND deleted_at IS NOT NULL`, time.Now().UTC(), id)
+	if err != nil {
+		return fmt.Errorf("restore test case: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// Purge permanently removes a soft-deleted (or live) test case and its
+// dependent records, and deletes the attachment files from disk.
+func (r *SQLiteRepository) Purge(ctx context.Context, id int64) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)

@@ -1167,6 +1167,18 @@ export const api = {
     request<BugItem>(`/api/v1/executions/${executionId}/bugs`, { method: 'POST', body: JSON.stringify(body) }),
   deleteTestCase: (id: number) =>
     request<void>(`/api/v1/testcases/${id}`, { method: 'DELETE' }),
+  purgeTestCase: (id: number) =>
+    request<void>(`/api/v1/testcases/${id}?purge=true`, { method: 'DELETE' }),
+  restoreTestCase: (id: number) =>
+    request<TestCase>(`/api/v1/testcases/${id}/restore`, { method: 'POST' }),
+  listTrashCases: (params?: { q?: string; product_id?: number; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams()
+    if (params?.q) qs.set('q', params.q)
+    if (params?.product_id) qs.set('product_id', String(params.product_id))
+    qs.set('limit', String(params?.limit ?? 50))
+    qs.set('offset', String(params?.offset ?? 0))
+    return request<{ items: TestCase[]; total: number }>(`/api/v1/testcases/trash?${qs.toString()}`)
+  },
   listTestCaseRevisions: (id: number) =>
     request<{ items: RevisionItem[] }>(`/api/v1/testcases/${id}/revisions`),
   listComments: (entityType: 'test_case' | 'test_execution', entityId: number) =>

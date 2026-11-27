@@ -99,7 +99,7 @@ func (s *Store) searchSQLite(ctx context.Context, terms []string, limit int) ([]
 	out := []Result{}
 	// Test cases (summary + preconditions + steps)
 	q, args := likeClauses([]string{"tc.summary", "tc.preconditions", "(SELECT GROUP_CONCAT(action || ' ' || expected_result) FROM test_case_steps st WHERE st.test_case_id = tc.id)"}, terms, func(i int) string { return "?" })
-	rows, err := s.db.QueryContext(ctx, `SELECT 'test_case', tc.id, tc.summary FROM test_cases tc WHERE `+q+` ORDER BY tc.id DESC LIMIT ?`, append(args, limit)...)
+	rows, err := s.db.QueryContext(ctx, `SELECT 'test_case', tc.id, tc.summary FROM test_cases tc WHERE tc.deleted_at IS NULL AND `+q+` ORDER BY tc.id DESC LIMIT ?`, append(args, limit)...)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +150,7 @@ func (s *Store) searchPG(ctx context.Context, terms []string, limit int) ([]Resu
 	// PostgreSQL: use to_tsvector for real full-text search.
 	vector := "to_tsvector('simple', coalesce(tc.summary,'') || ' ' || coalesce(tc.preconditions,'') || ' ' || coalesce((SELECT string_agg(st.action || ' ' || st.expected_result, ' ') FROM test_case_steps st WHERE st.test_case_id = tc.id), ''))"
 	plainq := strings.Join(terms, " & ")
-	rows, err := s.pg.Query(ctx, `SELECT 'test_case', tc.id, tc.summary FROM test_cases tc WHERE `+vector+` @@ plainto_tsquery('simple', $1) ORDER BY tc.id DESC LIMIT $2`, plainq, limit)
+	rows, err := s.pg.Query(ctx, `SELECT 'test_case', tc.id, tc.summary FROM test_cases tc WHERE tc.deleted_at IS NULL AND `+vector+` @@ plainto_tsquery('simple', $1) ORDER BY tc.id DESC LIMIT $2`, plainq, limit)
 	if err != nil {
 		return nil, err
 	}

@@ -259,7 +259,7 @@ func (s *Store) Coverage(ctx context.Context, requirementID int64) ([]CoverageEn
 		(SELECT te.status FROM test_executions te WHERE te.test_case_id = tc.id ORDER BY te.id DESC LIMIT 1) AS latest_exec_status,
 		(SELECT te.test_run_id FROM test_executions te WHERE te.test_case_id = tc.id ORDER BY te.id DESC LIMIT 1) AS latest_run_id
 		FROM requirement_coverage rc JOIN test_cases tc ON tc.id = rc.test_case_id
-		WHERE rc.requirement_id = ? ORDER BY tc.id`
+		WHERE tc.deleted_at IS NULL AND rc.requirement_id = ? ORDER BY tc.id`
 	if s.pg != nil {
 		q = strings.ReplaceAll(q, "?", "$1")
 		rows, err := s.pg.Query(ctx, q, requirementID)

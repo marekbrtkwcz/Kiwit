@@ -12,6 +12,7 @@ import {
   Paperclip,
   Plus,
   Search,
+  RotateCcw,
   Trash2,
   Upload,
   X,
@@ -145,6 +146,12 @@ export function TestCasesView() {
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importBusy, setImportBusy] = useState(false)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
+
+  // Trash (soft-deleted cases)
+  const [showTrash, setShowTrash] = useState(false)
+  const [trashItems, setTrashItems] = useState<TestCase[]>([])
+  const [trashTotal, setTrashTotal] = useState(0)
+  const [purgeTarget, setPurgeTarget] = useState<{ id: number; summary: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const populateForm = (tc: TestCase) => {
@@ -329,6 +336,39 @@ export function TestCasesView() {
     }
   }
 
+  const loadTrash = async () => {
+    try {
+      const res = await api.listTrashCases({ product_id: activeProductId ?? undefined, limit: 50 })
+      setTrashItems(res.items)
+      setTrashTotal(res.total)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.errors.loadTestCases)
+    }
+  }
+
+  const handleRestore = async (id: number) => {
+    try {
+      await api.restoreTestCase(id)
+      notify(t.testcases.restoredToast(id))
+      await Promise.all([load(), loadTrash()])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.errors.saveTestCase)
+    }
+  }
+
+  const handlePurge = async () => {
+    if (!purgeTarget) return
+    const target = purgeTarget
+    setPurgeTarget(null)
+    try {
+      await api.purgeTestCase(target.id)
+      notify(t.testcases.purgedToast(target.id))
+      await loadTrash()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.errors.saveTestCase)
+    }
+  }
+
   const applyTemplate = (tplId: number) => {
     const tpl = templates.find((x) => x.id === tplId)
     if (!tpl) return
@@ -416,6 +456,18 @@ export function TestCasesView() {
           <Upload size={15} />
           {t.testcases.importCases}
         </button>
+        <button
+          type="button"
+          className={`btn ${showTrash ? 'btn-primary' : 'btn-ghost'}`}
+          onClick={() => {
+            setShowTrash((v) => !v)
+            if (!showTrash) void loadTrash()
+          }}
+          aria-expanded={showTrash}
+        >
+          <Trash2 size={15} />
+          {t.testcases.trash}
+        </button>
         <button type="button" className="btn btn-primary" onClick={openNewDrawer}>
           <Plus size={15} />
           {t.testcases.newCase}
@@ -446,6 +498,46 @@ export function TestCasesView() {
             </ul>
           )}
         </form>
+      )}
+
+      {/* Trash (soft-deleted cases) */}
+      {showTrash && (
+        <div className="card" style={{ display: 'grid', gap: '0.6rem' }}>
+          <strong>{t.testcases.trashTitle(trashTotal)}</strong>
+          {trashItems.length === 0 ? (
+            <p className="muted" style={{ margin: 0 }}>{t.testcases.trashEmpty}</p>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>{t.common.summary}</th>
+                  <th>{t.common.status}</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {trashItems.map((tc) => (
+                  <tr key={tc.id}>
+                    <td>#{tc.id}</td>
+                    <td>{tc.summary}</td>
+                    <td>{tc.status}</td>
+                    <td style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+                      <button type="button" className="btn btn-ghost" onClick={() => void handleRestore(tc.id)}>
+                        <RotateCcw size={14} />
+                        {t.testcases.restore}
+                      </button>
+                      <button type="button" className="btn btn-ghost" style={{ color: 'var(--danger, #b00)' }} onClick={() => setPurgeTarget({ id: tc.id, summary: tc.summary })}>
+                        <Trash2 size={14} />
+                        {t.testcases.purge}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       )}
 
       {/* Bulk action bar */}
@@ -932,13 +1024,30 @@ export function TestCasesView() {
           setDeleteTarget(null)
           try {
             await api.deleteTestCase(target.id)
-            notifyAction(t.testcases.deletedToast(target.id), t.common.undo, () => notify(t.common.undoUnavailable, 'error'))
+            notifyAction(t.testcases.deletedToast(target.id), t.common.undo, async () => {
+              try {
+                await api.restoreTestCase(target.id)
+                notify(t.testcases.restoredToast(target.id))
+                await Promise.all([load(), showTrash ? loadTrash() : Promise.resolve()])
+              } catch (err) {
+                setError(err instanceof Error ? err.message : t.errors.saveTestCase)
+              }
+            })
             if (editingId === target.id) closeDrawer()
             await load()
           } catch (err) {
             setError(err instanceof Error ? err.message : t.errors.saveTestCase)
           }
         }}
+      />
+
+      <ConfirmDialog
+        open={purgeTarget !== null}
+        title={t.testcases.purgeConfirmTitle}
+        message={purgeTarget ? t.testcases.purgeConfirmMessage(purgeTarget.id, purgeTarget.summary) : ''}
+        confirmLabel={t.testcases.purge}
+        onCancel={() => setPurgeTarget(null)}
+        onConfirm={() => void handlePurge()}
       />
     </>
   )

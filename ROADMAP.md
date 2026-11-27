@@ -26,6 +26,7 @@ Lista funkcji i etapów rozwoju systemu Kiwit TCMS.
 - [x] **Dashboard użytkownika:** `GET /api/v1/dashboard` z widgetami „Moje uruchomienia” i „Ostatnia aktywność” na stronie głównej.
 - [x] **Testy kontraktowe PostgreSQL w CI:** dodanie serwisu `postgres:16` w `.github/workflows/ci.yml` i uruchamianie wspólnej suity testów repozytoriów na obu silnikach.
 - [x] **Import danych (CSV/JSON):** `POST /api/v1/testcases/import` (multipart: `file` + `product_id`) — CSV z nagłówkiem (kroki jako `akcja => wynik ;; akcja => wynik`) albo tablica obiektów JSON jak w API; zgodny z własnym eksportem JSON (round-trip), walidacja per wiersz, limity 10 MiB / 1000 rekordów, przycisk Import w TestCasesView.
+- [x] **Kosz (soft-delete) test case'ów:** `test_cases.deleted_at` (migracja 00038) — `DELETE /api/v1/testcases/{id}` przenosi do kosza (kroki/załączniki/komentarze zostają), `DELETE ?purge=true` usuwa trwale, `POST .../restore` przywraca, `GET /api/v1/testcases/trash` listuje; Undo w toaście po usunięciu, widok Kosz w TestCasesView; listy/search/telemetria/plany/coverage/XML-RPC filtrują usunięte.
 - [x] **Pełne tłumaczenia i18n (PL/EN):** wszystkie etykiety UI w słowniku `frontend/src/i18n/index.tsx` (brak hardkodowanych tekstów).
 - [x] **Storage obiektowy (S3 / MinIO):** opcjonalny backend załączników obok lokalnego dysku (`KIWIT_STORAGE_TYPE=s3`).
 - [x] **SSO (OIDC / OAuth2):** logowanie przez zewnętrznych dostawców tożsamości (`KIWIT_OIDC_ISSUER` + client ID/secret; state+nonce, JWKS verification).

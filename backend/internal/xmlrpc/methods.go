@@ -22,7 +22,7 @@ func (h *Handler) registerAll() {
 		"build":   {joinSQL: "JOIN builds b ON b.id = t.build_id", alias: "b"},
 		"manager": {joinSQL: "JOIN users u ON u.id = t.manager_id", alias: "u"},
 	}))
-	h.register("TestCase.filter", h.filterRows("test_cases", []string{"t.id", "t.summary", "t.category_id", "t.is_automated", "t.priority", "t.status", "t.product_id"}, map[string]relationJoin{
+	h.register("TestCase.filter", h.filterRowsWhere("test_cases", "t.deleted_at IS NULL", []string{"t.id", "t.summary", "t.category_id", "t.is_automated", "t.priority", "t.status", "t.product_id"}, map[string]relationJoin{
 		"category": {joinSQL: "JOIN categories c ON c.id = t.category_id", alias: "c"},
 		"product":  {joinSQL: "JOIN products p ON p.id = t.product_id", alias: "p"},
 		"author":   {joinSQL: "JOIN users u ON u.id = t.author_id", alias: "u"},
@@ -190,7 +190,8 @@ func (h *Handler) tcRemove(r *http.Request, args []any) (any, error) {
 	if h.db == nil {
 		return nil, errNoDB
 	}
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM test_cases WHERE id = ?`, argInt(args[0]))
+	// Soft-delete: the case moves to the trash (deleted_at) like the REST API.
+	_, err := h.db.ExecContext(r.Context(), `UPDATE test_cases SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL`, time.Now().UTC(), argInt(args[0]))
 	return map[string]any{"ok": err == nil}, err
 }
 

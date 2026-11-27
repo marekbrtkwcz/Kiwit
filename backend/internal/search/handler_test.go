@@ -15,11 +15,11 @@ func setupDB(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	for _, stmt := range []string{
-		`CREATE TABLE test_cases (id INTEGER PRIMARY KEY, summary TEXT, preconditions TEXT)`,
+		`CREATE TABLE test_cases (id INTEGER PRIMARY KEY, summary TEXT, preconditions TEXT, deleted_at DATETIME NULL)`,
 		`CREATE TABLE test_case_steps (id INTEGER PRIMARY KEY, test_case_id INTEGER, position INTEGER, action TEXT, expected_result TEXT)`,
 		`CREATE TABLE test_plans (id INTEGER PRIMARY KEY, name TEXT, description TEXT)`,
 		`CREATE TABLE test_runs (id INTEGER PRIMARY KEY, summary TEXT)`,
-		`INSERT INTO test_cases VALUES (1, 'Login with valid credentials', 'User exists'), (2, 'Logout flow', '')`,
+		`INSERT INTO test_cases VALUES (1, 'Login with valid credentials', 'User exists', NULL), (2, 'Logout flow', '', NULL)`,
 		`INSERT INTO test_case_steps VALUES (1, 1, 0, 'Open login page', 'Form visible')`,
 		`INSERT INTO test_plans VALUES (1, 'Smoke plan', 'Regression smoke')`,
 		`INSERT INTO test_runs VALUES (1, 'Smoke run v1')`,

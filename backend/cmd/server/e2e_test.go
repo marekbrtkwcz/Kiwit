@@ -564,7 +564,23 @@ func runE2ESuite(t *testing.T, sqlDB *sql.DB, pgPool *pgxpool.Pool) {
 	require.Equal(t, http.StatusNoContent, res.StatusCode)
 	_ = res.Body.Close()
 
+	// Soft-deleting the test case moves it to the trash: the attachment stays
+	// accessible (restorable together with the case).
 	res = doJSON(http.MethodDelete, fmt.Sprintf("/api/v1/testcases/%d", tc.ID), testerAJWT, nil)
+	require.Equal(t, http.StatusNoContent, res.StatusCode)
+	_ = res.Body.Close()
+
+	res = doJSON(http.MethodGet, fmt.Sprintf("/api/v1/attachments/%d/download", att.ID), testerAJWT, nil)
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	_ = res.Body.Close()
+
+	// Trash: the case is listed there and can be restored.
+	res = doJSON(http.MethodGet, "/api/v1/testcases/trash", testerAJWT, nil)
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	_ = res.Body.Close()
+
+	// Purging the case from the trash removes the polymorphic attachment.
+	res = doJSON(http.MethodDelete, fmt.Sprintf("/api/v1/testcases/%d?purge=true", tc.ID), testerAJWT, nil)
 	require.Equal(t, http.StatusNoContent, res.StatusCode)
 	_ = res.Body.Close()
 

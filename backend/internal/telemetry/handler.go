@@ -284,6 +284,11 @@ func (b *sqlBuilder) add(expr string, val any) {
 	b.args = append(b.args, val)
 }
 
+// addRaw appends a condition without a bound argument (e.g. IS NULL checks).
+func (b *sqlBuilder) addRaw(cond string) {
+	b.cond = append(b.cond, cond)
+}
+
 func (b *sqlBuilder) addProductScope(prodCol string, userID *int64) {
 	if userID == nil {
 		return
@@ -364,6 +369,7 @@ func querySummary(ctx context.Context, db *sql.DB, pgPool *pgxpool.Pool, f Filte
 	if f.TestPlanID > 0 {
 		cb.add("EXISTS (SELECT 1 FROM test_plan_cases tpc WHERE tpc.test_case_id = tc.id AND tpc.test_plan_id = %s)", f.TestPlanID)
 	}
+	cb.addRaw("tc.deleted_at IS NULL")
 	cb.addProductScope("tc.product_id", f.UserID)
 	s.TestCases, _ = queryCount(ctx, db, pgPool, "SELECT COUNT(*) FROM test_cases tc"+cb.where(), cb.args...)
 
@@ -587,6 +593,7 @@ func queryBreakdown(ctx context.Context, db *sql.DB, pgPool *pgxpool.Pool, f Fil
 	if f.TestPlanID > 0 {
 		cb.add("EXISTS (SELECT 1 FROM test_plan_cases tpc WHERE tpc.test_case_id = tc.id AND tpc.test_plan_id = %s)", f.TestPlanID)
 	}
+	cb.addRaw("tc.deleted_at IS NULL")
 	cb.addProductScope("tc.product_id", f.UserID)
 	where := cb.where()
 

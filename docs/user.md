@@ -55,6 +55,9 @@ Practical features:
   browse its revision history to compare what changed.
 - **Clone** — duplicate a case (with its steps and datasets) instead of
   re-typing.
+- **Trash** — deleting a case moves it to the trash (steps, attachments and
+  comments survive); a toast offers **Undo**, and the Trash view lets you
+  restore cases or delete them permanently.
 - **Bulk edit** — select many cases in the list and change status or
   priority in one action.
 - **Export** — any filtered list or a selection can be exported to CSV,

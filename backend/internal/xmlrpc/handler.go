@@ -137,6 +137,12 @@ func (h *Handler) kiwiVersion(_ *http.Request, _ []any) (any, error) {
 }
 
 func (h *Handler) filterRows(table string, cols []string, relations ...map[string]relationJoin) func(r *http.Request, args []any) (any, error) {
+	return h.filterRowsWhere(table, "", cols, relations...)
+}
+
+// filterRowsWhere is filterRows with an extra base condition appended to the
+// where clause (used to exclude soft-deleted rows, e.g. test cases in trash).
+func (h *Handler) filterRowsWhere(table, baseCond string, cols []string, relations ...map[string]relationJoin) func(r *http.Request, args []any) (any, error) {
 	relMap := map[string]relationJoin{}
 	if len(relations) > 0 {
 		relMap = relations[0]
@@ -153,13 +159,21 @@ func (h *Handler) filterRows(table string, cols []string, relations ...map[strin
 			}
 		}
 		lw := buildWhere(query, "t", relMap)
+		where := lw.where
+		if baseCond != "" {
+			if where == "1=1" {
+				where = baseCond
+			} else {
+				where = baseCond + " AND (" + where + ")"
+			}
+		}
 		joins := joinsForQuery(query, relMap)
 		joinClause := ""
 		if len(joins) > 0 {
 			joinClause = strings.Join(joins, " ") + " "
 		}
 		q := fmt.Sprintf("SELECT %s FROM %s t %sWHERE %s ORDER BY t.id DESC LIMIT 100",
-			strings.Join(cols, ", "), table, joinClause, lw.where)
+			strings.Join(cols, ", "), table, joinClause, where)
 		rows, err := h.db.QueryContext(r.Context(), q, lw.args...)
 		if err != nil {
 			return nil, err

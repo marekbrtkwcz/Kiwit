@@ -186,7 +186,7 @@ func (r *PostgresRepository) ListCases(ctx context.Context, planID int64) ([]Pla
 		SELECT tpc.test_case_id, tpc.position, tc.summary, tc.priority, tc.status
 		FROM test_plan_cases tpc
 		JOIN test_cases tc ON tc.id = tpc.test_case_id
-		WHERE tpc.test_plan_id = $1
+		WHERE tpc.test_plan_id = $1 AND tc.deleted_at IS NULL
 		ORDER BY tpc.position ASC, tpc.test_case_id ASC`, planID)
 	if err != nil {
 		return nil, fmt.Errorf("query plan cases: %w", err)

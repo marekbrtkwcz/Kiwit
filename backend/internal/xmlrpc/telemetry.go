@@ -13,7 +13,7 @@ func (h *Handler) telemetryBreakdown(r *http.Request, _ []any) (any, error) {
 		return nil, errNoDB
 	}
 	var total, automated int64
-	_ = h.db.QueryRowContext(r.Context(), `SELECT COUNT(*), COALESCE(SUM(is_automated),0) FROM test_cases`).Scan(&total, &automated)
+	_ = h.db.QueryRowContext(r.Context(), `SELECT COUNT(*), COALESCE(SUM(is_automated),0) FROM test_cases WHERE deleted_at IS NULL`).Scan(&total, &automated)
 	var passed, failed, blocked, skipped int64
 	rows, err := h.db.QueryContext(r.Context(), `
 		SELECT es.name, COUNT(*) FROM test_executions te
@@ -61,6 +61,7 @@ func (h *Handler) telemetryMatrix(r *http.Request, _ []any) (any, error) {
 		SELECT tc.id, tc.summary, es.name, COUNT(te.id)
 		FROM test_cases tc
 		LEFT JOIN test_executions te ON te.case_id = tc.id
+		WHERE tc.deleted_at IS NULL
 		LEFT JOIN execution_statuses es ON es.name = te.status
 		GROUP BY tc.id, tc.summary, es.name ORDER BY tc.id`)
 	if err != nil {
@@ -161,6 +162,7 @@ func (h *Handler) telemetryHealth(r *http.Request, args []any) (any, error) {
 			COALESCE(SUM(CASE WHEN es.name IN ('failed','fail') THEN 1 ELSE 0 END),0) AS failed,
 			COALESCE(SUM(CASE WHEN es.name IN ('passed','pass') THEN 1 ELSE 0 END),0) AS passed
 		FROM test_cases tc LEFT JOIN test_executions te ON te.case_id = tc.id
+		WHERE tc.deleted_at IS NULL
 		LEFT JOIN execution_statuses es ON es.name = te.status
 		GROUP BY tc.id, tc.summary HAVING total > 0 ORDER BY failed DESC, total DESC LIMIT ?`, limit)
 	if err != nil {

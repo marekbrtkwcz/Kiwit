@@ -175,7 +175,7 @@ func (h *Handler) xmlSearch(r *http.Request, args []any) (any, error) {
 	terms := strings.Fields(q)
 	out := []map[string]any{}
 	for _, t := range terms {
-		rows, err := h.db.QueryContext(r.Context(), `SELECT 'test_case', id, summary FROM test_cases WHERE LOWER(summary) LIKE ? LIMIT 10`, "%"+t+"%")
+		rows, err := h.db.QueryContext(r.Context(), `SELECT 'test_case', id, summary FROM test_cases WHERE deleted_at IS NULL AND LOWER(summary) LIKE ? LIMIT 10`, "%"+t+"%")
 		if err != nil {
 			continue
 		}

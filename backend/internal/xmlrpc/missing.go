@@ -627,7 +627,7 @@ func (h *Handler) reqGetCases(r *http.Request, args []any) (any, error) {
 		return nil, errNoDB
 	}
 	reqID := argInt(args[0])
-	rows, err := h.db.QueryContext(r.Context(), `SELECT tc.id, tc.summary, tc.status FROM requirement_coverage rc JOIN test_cases tc ON tc.id = rc.test_case_id WHERE rc.requirement_id = ? ORDER BY tc.id`, reqID)
+	rows, err := h.db.QueryContext(r.Context(), `SELECT tc.id, tc.summary, tc.status FROM requirement_coverage rc JOIN test_cases tc ON tc.id = rc.test_case_id WHERE tc.deleted_at IS NULL AND rc.requirement_id = ? ORDER BY tc.id`, reqID)
 	if err != nil {
 		return nil, err
 	}
