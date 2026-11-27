@@ -69,10 +69,10 @@ function ExecutionBugsPanel({ executionId, trackers }: { executionId: number; tr
       setTitle('')
       setMode('none')
       setErr(null)
-      notify('Bug linked')
+      notify(t.testruns.bugLinked)
       await load()
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Failed to link bug')
+      setErr(e instanceof Error ? e.message : t.testruns.linkBugFailed)
     }
   }
 
@@ -92,10 +92,10 @@ function ExecutionBugsPanel({ executionId, trackers }: { executionId: number; tr
       setApiToken('')
       setMode('none')
       setErr(null)
-      notify('Issue created in tracker')
+      notify(t.testruns.issueCreated)
       await load()
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Failed to report bug')
+      setErr(e instanceof Error ? e.message : t.testruns.reportBugFailed)
     }
   }
 
@@ -114,14 +114,14 @@ function ExecutionBugsPanel({ executionId, trackers }: { executionId: number; tr
             {b.tracker_id && (
               <button
                 type="button"
-                title="Sync live status"
+                title={t.testruns.syncStatus}
                 onClick={async () => {
                   try {
                     const updated = await api.syncExecutionBug(executionId, b.id)
                     setBugs((prev) => prev.map((x) => (x.id === updated.id ? updated : x)))
-                    notify(`Synced ${updated.external_key}: ${updated.status}`)
+                    notify(t.testruns.synced(updated.external_key, updated.status))
                   } catch (e) {
-                    setErr(e instanceof Error ? e.message : 'Sync failed')
+                    setErr(e instanceof Error ? e.message : t.testruns.syncFailed)
                   }
                 }}
                 style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--primary-text)', padding: 0, display: 'inline-flex' }}
@@ -143,10 +143,10 @@ function ExecutionBugsPanel({ executionId, trackers }: { executionId: number; tr
       {err && <div className="alert-error" style={{ margin: 0 }}>{err}</div>}
       {mode === 'link' && (
         <form onSubmit={handleLink} style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-          <input className="input" placeholder="Key (e.g. PROJ-12)" value={key} onChange={(e) => setKey(e.target.value)} required style={{ width: 120 }} />
+          <input className="input" placeholder={t.testruns.bugKeyPlaceholder} value={key} onChange={(e) => setKey(e.target.value)} required style={{ width: 120 }} />
           <input className="input" placeholder="https://..." value={url} onChange={(e) => setUrl(e.target.value)} required style={{ flex: 1, minWidth: 180 }} />
-          <input className="input" placeholder="Title (optional)" value={title} onChange={(e) => setTitle(e.target.value)} style={{ width: 160 }} />
-          <button type="submit" className="btn btn-primary btn-sm">Link</button>
+          <input className="input" placeholder={t.testruns.bugTitleOptionalPlaceholder} value={title} onChange={(e) => setTitle(e.target.value)} style={{ width: 160 }} />
+          <button type="submit" className="btn btn-primary btn-sm">{t.testruns.link}</button>
         </form>
       )}
       {mode === 'report' && (
@@ -157,13 +157,13 @@ function ExecutionBugsPanel({ executionId, trackers }: { executionId: number; tr
                 <option key={tr.id} value={tr.id}>{tr.name} ({tr.provider})</option>
               ))}
             </select>
-            <input className="input" placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} required style={{ flex: 1, minWidth: 160 }} />
-            <input className="input" placeholder="Project key (Jira)" value={projectKey} onChange={(e) => setProjectKey(e.target.value)} style={{ width: 130 }} />
-            <input className="input" type="password" placeholder="API token (optional)" value={apiToken} onChange={(e) => setApiToken(e.target.value)} style={{ width: 150 }} />
+            <input className="input" placeholder={t.testruns.issueTitlePlaceholder} value={title} onChange={(e) => setTitle(e.target.value)} required style={{ flex: 1, minWidth: 160 }} />
+            <input className="input" placeholder={t.testruns.projectKeyPlaceholder} value={projectKey} onChange={(e) => setProjectKey(e.target.value)} style={{ width: 130 }} />
+            <input className="input" type="password" placeholder={t.testruns.apiTokenPlaceholder} value={apiToken} onChange={(e) => setApiToken(e.target.value)} style={{ width: 150 }} />
           </div>
           <div style={{ display: 'flex', gap: '0.35rem' }}>
-            <input className="input" placeholder="Description (optional)" value={reportBody} onChange={(e) => setReportBody(e.target.value)} style={{ flex: 1 }} />
-            <button type="submit" className="btn btn-primary btn-sm">Create issue</button>
+            <input className="input" placeholder={t.testruns.descOptionalPlaceholder} value={reportBody} onChange={(e) => setReportBody(e.target.value)} style={{ flex: 1 }} />
+            <button type="submit" className="btn btn-primary btn-sm">{t.testruns.createIssue}</button>
           </div>
         </form>
       )}
@@ -208,7 +208,7 @@ function ExecutionLinksPanel({ executionId }: { executionId: number }) {
                 await load()
               }}
               style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--muted)', padding: 0 }}
-              title="Remove link"
+              title={t.testruns.removeLinkTitle}
             >
               ×
             </button>
@@ -227,14 +227,14 @@ function ExecutionLinksPanel({ executionId }: { executionId: number }) {
             setName('')
             setUrl('')
             setOpen(false)
-            notify('Link attached')
+            notify(t.testruns.linkAttached)
             await load()
           }}
           style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}
         >
-          <input className="input" placeholder="Label (e.g. CI Log)" value={name} onChange={(e) => setName(e.target.value)} required style={{ width: 150 }} />
+          <input className="input" placeholder={t.testruns.linkLabelPlaceholder} value={name} onChange={(e) => setName(e.target.value)} required style={{ width: 150 }} />
           <input className="input" placeholder="https://..." value={url} onChange={(e) => setUrl(e.target.value)} required style={{ flex: 1, minWidth: 180 }} />
-          <button type="submit" className="btn btn-primary btn-sm">Add</button>
+          <button type="submit" className="btn btn-primary btn-sm">{t.common.add}</button>
         </form>
       )}
     </div>
@@ -352,7 +352,7 @@ export function TestRunsView() {
     try {
       await api.updateExecution(execId, { status })
       setExecutions((prev) => prev.map((ex) => (ex.id === execId ? { ...ex, status } : ex)))
-      notify(`Execution #${execId} → ${status}`)
+      notify(t.testruns.statusChanged(execId, status))
     } catch (err) {
       setError(err instanceof Error ? err.message : t.errors.updateStatus)
     }
@@ -406,7 +406,7 @@ export function TestRunsView() {
       setShowCreate(false)
       setSelectedRunId(created.id)
       navigate(`/runs/${created.id}`, { replace: true })
-      notify(`Started TestRun #${created.id}`)
+      notify(t.testruns.startedToast(created.id))
       await loadRuns()
     } catch (err) {
       setError(err instanceof Error ? err.message : t.errors.createTestRun)
@@ -420,14 +420,14 @@ export function TestRunsView() {
       const res = await api.importJUnitXML({
         test_plan_id: planId,
         build_id: buildId,
-        summary: summary.trim() || `JUnit Import (${new Date().toLocaleDateString()})`,
+        summary: summary.trim() || t.testruns.junitImportName(new Date().toLocaleDateString()),
         xml: junitXML,
       })
       setJunitXML('')
       setShowJUnit(false)
       setSelectedRunId(res.test_run.id)
       navigate(`/runs/${res.test_run.id}`, { replace: true })
-      notify(`Imported ${res.results.length} JUnit result(s) into Run #${res.test_run.id}`)
+      notify(t.testruns.importedToast(res.results.length, res.test_run.id))
       await loadRuns()
     } catch (err) {
       setError(err instanceof Error ? err.message : t.errors.createTestRun)
@@ -496,7 +496,7 @@ export function TestRunsView() {
           )}
           <input className="input" placeholder={t.testruns.summaryPlaceholder} value={summary} onChange={(e) => setSummary(e.target.value)} style={{ flex: 1, minWidth: 200 }} required />
           <button type="submit" disabled={!planId || !buildId} className="btn btn-primary">
-            <Play size={14} /> Start
+            <Play size={14} /> {t.testruns.start}
           </button>
         </form>
       )}
@@ -534,7 +534,7 @@ export function TestRunsView() {
           />
           <div>
             <button type="submit" disabled={!planId || !buildId || !junitXML.trim()} className="btn btn-primary btn-sm">
-              Import XML
+              {t.testruns.importXmlBtn}
             </button>
           </div>
         </form>
@@ -544,7 +544,7 @@ export function TestRunsView() {
       <div className="runs-layout">
         <div className="card" style={{ padding: '0.75rem', display: 'grid', gap: '0.45rem' }}>
           <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', padding: '0 0.25rem' }}>
-            Test Runs ({runs.length})
+            {t.testruns.runsCount(runs.length)}
           </div>
           {runs.map((r) => (
             <div
@@ -564,7 +564,7 @@ export function TestRunsView() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.4rem' }}>
                 <strong style={{ fontSize: '0.86rem' }}>{r.summary}</strong>
                 <span className={`badge ${r.stopped_at ? 'pill-skipped' : 'pill-running'}`}>
-                  {r.stopped_at ? 'Stopped' : 'Running'}
+                  {r.stopped_at ? t.testruns.stoppedRuns : t.testruns.runningRuns}
                 </span>
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: 3 }}>
@@ -585,8 +585,8 @@ export function TestRunsView() {
                     #{selectedRun.id} {selectedRun.summary}
                   </h3>
                   <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: 2 }}>
-                    Started {new Date(selectedRun.started_at).toLocaleString()}
-                    {selectedRun.stopped_at ? ` · Stopped ${new Date(selectedRun.stopped_at).toLocaleString()}` : ''}
+                    {t.testruns.startedLabel} {new Date(selectedRun.started_at).toLocaleString()}
+                    {selectedRun.stopped_at ? ` · ${t.testruns.stoppedLabel} ${new Date(selectedRun.stopped_at).toLocaleString()}` : ''}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
@@ -602,7 +602,7 @@ export function TestRunsView() {
                       className="btn btn-sm"
                       onClick={async () => {
                         await api.stopTestRun(selectedRun.id)
-                        notify(`Stopped TestRun #${selectedRun.id}`)
+                        notify(t.testruns.stoppedToast(selectedRun.id))
                         await loadRuns()
                       }}
                     >
@@ -613,11 +613,11 @@ export function TestRunsView() {
                     type="button"
                     className="btn btn-danger btn-sm"
                     onClick={async () => {
-                      if (!window.confirm(`Delete TestRun #${selectedRun.id}?`)) return
+                      if (!window.confirm(t.testruns.confirmDeleteRun(selectedRun.id))) return
                       await api.deleteTestRun(selectedRun.id)
                       setSelectedRunId(null)
                       navigate('/runs', { replace: true })
-                      notify(`Deleted TestRun #${selectedRun.id}`)
+                      notify(t.testruns.deletedToast(selectedRun.id))
                       await loadRuns()
                     }}
                   >
@@ -642,7 +642,7 @@ export function TestRunsView() {
                       className={`btn btn-sm ${execFilter === st ? 'btn-primary' : ''}`}
                       onClick={() => setExecFilter(st)}
                     >
-                      {st ? `${st} (${counts[st] ?? 0})` : `All (${executions.length})`}
+                      {st ? `${st} (${counts[st] ?? 0})` : `${t.common.all} (${executions.length})`}
                     </button>
                   ))}
                 </div>
@@ -654,17 +654,17 @@ export function TestRunsView() {
               <button
                 type="button"
                 className="btn btn-sm"
-                title="LLM summary of this run"
+                title={t.testruns.aiSummaryHint}
                 onClick={async () => {
                   try {
                     const res = await api.aiSummarizeRun(selectedRun.id)
                     notify(res.summary.length > 220 ? res.summary.slice(0, 220) + '…' : res.summary)
                   } catch (err) {
-                    notify(err instanceof Error ? err.message : 'AI summary failed', 'error')
+                    notify(err instanceof Error ? err.message : t.testruns.aiSummaryFailed, 'error')
                   }
                 }}
               >
-                <Bot size={13} /> AI summary
+                <Bot size={13} /> {t.testruns.aiSummary}
               </button>
               <EntityTagsBar entity="testruns" entityId={selectedRun.id} />
             </div>
@@ -675,7 +675,7 @@ export function TestRunsView() {
               <>
               {selectedExecIds.length > 0 && (
                 <div className="card" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', padding: '0.45rem 0.6rem', marginBottom: '0.5rem' }}>
-                  <strong style={{ fontSize: '0.82rem' }}>{selectedExecIds.length} selected</strong>
+                  <strong style={{ fontSize: '0.82rem' }}>{selectedExecIds.length} {t.common.selected}</strong>
                   <select className="select" value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)} style={{ fontSize: '0.8rem' }}>
                     {['passed', 'failed', 'blocked', 'skipped', 'running', 'idle'].map((s) => (
                       <option key={s} value={s}>{s}</option>
@@ -687,17 +687,17 @@ export function TestRunsView() {
                     onClick={async () => {
                       try {
                         const res = await api.bulkUpdateExecutions({ ids: selectedExecIds, status: bulkStatus })
-                        notify(`Updated ${res.updated} execution(s)`)
+                        notify(t.testruns.bulkUpdatedToast(res.updated))
                         setSelectedExecIds([])
                         await loadRuns()
                       } catch {
-                        notify('Bulk update failed', 'error')
+                        notify(t.testruns.bulkFailed, 'error')
                       }
                     }}
                   >
-                    Apply status
+                    {t.testruns.applyStatus}
                   </button>
-                  <button type="button" className="btn btn-sm" onClick={() => setSelectedExecIds([])}>Clear</button>
+                  <button type="button" className="btn btn-sm" onClick={() => setSelectedExecIds([])}>{t.common.clear}</button>
                 </div>
               )}
               <div className="runner-split">
@@ -711,7 +711,7 @@ export function TestRunsView() {
                         type="checkbox"
                         checked={selectedExecIds.includes(ex.id)}
                         onChange={() => setSelectedExecIds((prev) => prev.includes(ex.id) ? prev.filter((x) => x !== ex.id) : [...prev, ex.id])}
-                        aria-label={`Select execution ${ex.id}`}
+                        aria-label={t.testruns.selectExecAria(ex.id)}
                       />
                     <button
                       type="button"
@@ -736,7 +736,7 @@ export function TestRunsView() {
                         {ex.summary}
                       </span>
                       <span style={{ display: 'inline-flex', gap: '0.3rem', alignItems: 'center' }}>
-                        {ex.dataset_name && <span className="badge" title="Dataset">DS: {ex.dataset_name}</span>}
+                        {ex.dataset_name && <span className="badge" title={t.testruns.datasetLabel}>DS: {ex.dataset_name}</span>}
                         <span className={`badge pill-${ex.status}`}>{ex.status}</span>
                       </span>
                     </button>
@@ -749,12 +749,12 @@ export function TestRunsView() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
                       <div>
                         <div style={{ fontSize: '0.76rem', color: 'var(--muted)', fontFamily: 'var(--font-mono)' }}>
-                          Execution #{activeExec.id} · TestCase #{activeExec.test_case_id}
+                          {t.testruns.execHeader(activeExec.id, activeExec.test_case_id)}
                         </div>
                         <h4 style={{ margin: '0.2rem 0 0', fontSize: '1rem' }}>{activeExec.summary}</h4>
                         {activeExec.dataset_name && (
                           <div style={{ fontSize: '0.75rem', marginTop: '0.2rem' }}>
-                            <span className="badge">Dataset: {activeExec.dataset_name}</span>
+                            <span className="badge">{t.testruns.datasetLabel}: {activeExec.dataset_name}</span>
                           </div>
                         )}
                       </div>
@@ -767,10 +767,10 @@ export function TestRunsView() {
                             onClick={async () => {
                               const synced = await api.syncExecutionCase(activeExec.id)
                               setExecutions((prev) => prev.map((x) => (x.id === synced.id ? synced : x)))
-                              notify(`Synced snapshot to v${synced.case_text_version}`)
+                              notify(t.testruns.snapshotSynced(synced.case_text_version))
                             }}
                           >
-                            <RefreshCw size={12} /> Sync v{activeExec.case_text_version} → v{activeExec.latest_case_version}
+                            <RefreshCw size={12} /> {t.testruns.syncVersion(activeExec.case_text_version, activeExec.latest_case_version)}
                           </button>
                         )}
                         <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate(`/cases/${activeExec.test_case_id}`)}>
@@ -804,40 +804,40 @@ export function TestRunsView() {
                       <button
                         type="button"
                         className="btn btn-sm"
-                        title="Compare first screenshot of this execution against the latest visual baseline"
+                        title={t.testruns.visualCompareHint}
                         onClick={async () => {
                           try {
                             const shots = await api.listExecutionScreenshots(activeExec.id)
                             if ((shots.items ?? []).length === 0) {
-                              notify('No screenshots on this execution', 'error')
+                              notify(t.testruns.noScreenshots, 'error')
                               return
                             }
                             const res = await api.visualCompare(activeExec.id, shots.items[0].id)
-                            notify(`Visual: ${res.verdict} (${res.diff_percent.toFixed(2)}% diff)`)
+                            notify(t.testruns.visualResultToast(res.verdict, res.diff_percent.toFixed(2)))
                             const list = await api.listVisualComparisons(activeExec.id)
                             setVisualResults((prev) => ({ ...prev, [activeExec.id]: list.items ?? [] }))
                           } catch (err) {
-                            notify(err instanceof Error ? err.message : 'Visual compare failed', 'error')
+                            notify(err instanceof Error ? err.message : t.testruns.visualFailed, 'error')
                           }
                         }}
                       >
-                        Visual compare
+                        {t.testruns.visualCompare}
                       </button>
                       <button
                         type="button"
                         className="btn btn-sm"
-                        title="Create one execution per dataset of this test case"
+                        title={t.testruns.expandDatasetsHint}
                         onClick={async () => {
                           try {
                             const res = await api.expandDatasets(selectedRun.id, activeExec.test_case_id)
-                            notify(`Created ${res.created} execution(s) from datasets`)
+                            notify(t.testruns.expandToast(res.created))
                             await loadRuns()
                           } catch {
-                            notify('Failed to expand datasets', 'error')
+                            notify(t.testruns.expandFailed, 'error')
                           }
                         }}
                       >
-                        Expand datasets
+                        {t.testruns.expandDatasets}
                       </button>
                     </div>
                     <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
@@ -848,7 +848,7 @@ export function TestRunsView() {
                     </div>
                     {visualResults[activeExec.id] && visualResults[activeExec.id].length > 0 && (
                       <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem', display: 'grid', gap: '0.3rem' }}>
-                        <strong style={{ fontSize: '0.85rem' }}>Visual comparisons</strong>
+                        <strong style={{ fontSize: '0.85rem' }}>{t.testruns.visualComparisons}</strong>
                         {visualResults[activeExec.id].map((c) => {
                           const av = aiVerdicts[c.id]
                           let stored: { verdict: string; confidence: number; explanation: string } | null = null
@@ -857,14 +857,14 @@ export function TestRunsView() {
                           return (
                           <div key={c.id} style={{ fontSize: '0.82rem', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                             <span className={`badge badge-${c.verdict === 'match' ? 'passed' : c.verdict === 'mismatch' ? 'failed' : 'idle'}`}>{c.verdict}</span>
-                            <span>{c.diff_percent.toFixed(2)}% diff</span>
+                            <span>{t.testruns.diffLabel(c.diff_percent.toFixed(2))}</span>
                             <span style={{ color: 'var(--muted)' }}>{new Date(c.created_at).toLocaleTimeString()}</span>
                             {c.verdict === 'mismatch' && (
                               <button
                                 type="button"
                                 className="btn btn-sm"
                                 disabled={av === 'busy'}
-                                title="AI judges whether this diff is a real defect or acceptable change"
+                                title={t.testruns.aiVerdictHint}
                                 onClick={async () => {
                                   setAiVerdicts((prev) => ({ ...prev, [c.id]: 'busy' }))
                                   try {
@@ -874,14 +874,14 @@ export function TestRunsView() {
                                     setVisualResults((prev) => ({ ...prev, [activeExec.id]: list.items ?? [] }))
                                   } catch (err) {
                                     setAiVerdicts((prev) => { const n = { ...prev }; delete n[c.id]; return n })
-                                    notify(err instanceof Error ? err.message : 'AI verdict failed', 'error')
+                                    notify(err instanceof Error ? err.message : t.testruns.aiVerdictFailed, 'error')
                                   }
                                 }}
                               >
-                                {av === 'busy' ? 'AI…' : 'AI ocena'}
+                                {av === 'busy' ? t.testruns.aiVerdictBusy : t.testruns.aiVerdictBtn}
                               </button>
                             )}
-                            {av === 'busy' && <span style={{ color: 'var(--muted)' }}>AI analizuje diff…</span>}
+                            {av === 'busy' && <span style={{ color: 'var(--muted)' }}>{t.testruns.aiAnalyzing}</span>}
                             {verdict && (
                               <span style={{ display: 'inline-flex', gap: '0.4rem', alignItems: 'center' }}>
                                 <span className={`badge badge-${verdict.verdict === 'real-defect' ? 'failed' : verdict.verdict === 'acceptable-change' ? 'passed' : 'idle'}`}>AI: {verdict.verdict}</span>

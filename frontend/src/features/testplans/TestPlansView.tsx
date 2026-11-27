@@ -92,7 +92,7 @@ export function TestPlansView() {
       setParentId(undefined)
       setSelectedPlanId(created.id)
       navigate(`/plans/${created.id}`, { replace: true })
-      notify(`Created TestPlan #${created.id}`)
+      notify(t.testplans.createdToast(created.id))
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : t.errors.createTestPlan)
@@ -108,7 +108,7 @@ export function TestPlansView() {
     try {
       const res = await api.addTestPlanCases(selectedPlanId, selectedCaseIds)
       setSelectedCaseIds([])
-      notify(`Attached ${res.added} case(s) to Plan #${selectedPlanId}`)
+      notify(t.testplans.attachedToast(res.added, selectedPlanId))
       await loadAttached(selectedPlanId)
     } catch (err) {
       setError(err instanceof Error ? err.message : t.errors.createTestPlan)
@@ -138,7 +138,7 @@ export function TestPlansView() {
         <select className="select" value={parentId ?? ''} onChange={(e) => setParentId(e.target.value ? Number(e.target.value) : undefined)}>
           <option value="">{t.testplans.rootPlan}</option>
           {plans.map((p) => (
-            <option key={p.id} value={p.id}>Parent: {p.name}</option>
+            <option key={p.id} value={p.id}>{t.testplans.parentLabel(p.name)}</option>
           ))}
         </select>
         <select className="select" value={planType} onChange={(e) => setPlanType(e.target.value)}>
@@ -184,17 +184,17 @@ export function TestPlansView() {
                   <FolderKanban size={14} /> {tp.name}
                 </div>
                 <div style={{ fontSize: '0.74rem', color: 'var(--muted)' }}>
-                  #{tp.id} · v#{tp.version_id}{tp.parent_id ? ` · parent #${tp.parent_id}` : ''}
+                  #{tp.id} · v#{tp.version_id}{tp.parent_id ? ` · ${t.testplans.parentShort(tp.parent_id)}` : ''}
                 </div>
               </div>
               <div style={{ display: 'inline-flex', gap: '0.2rem' }} onClick={(e) => e.stopPropagation()}>
                 <button
                   type="button"
                   className="btn btn-ghost btn-sm"
-                  title="Clone"
+                  title={t.common.clone}
                   onClick={async () => {
                     await api.cloneTestPlan(tp.id, `${tp.name} (copy)`)
-                    notify(`Cloned plan #${tp.id}`)
+                    notify(t.testplans.clonedToast(tp.id))
                     await load()
                   }}
                 >
@@ -204,7 +204,7 @@ export function TestPlansView() {
                   type="button"
                   className="btn btn-ghost btn-sm"
                   style={{ color: 'var(--danger)' }}
-                  title="Delete"
+                  title={t.common.delete}
                   onClick={() => setDeleteTarget({ id: tp.id, name: tp.name })}
                 >
                   <Trash2 size={13} />
@@ -249,7 +249,7 @@ export function TestPlansView() {
                                 type="button"
                                 className="btn btn-ghost btn-sm"
                                 disabled={idx === 0}
-                                title="Move up"
+                                title={t.testplans.moveUp}
                                 onClick={async () => {
                                   const next = [...attachedCases]
                                   ;[next[idx - 1], next[idx]] = [next[idx], next[idx - 1]]
@@ -263,7 +263,7 @@ export function TestPlansView() {
                                 type="button"
                                 className="btn btn-ghost btn-sm"
                                 disabled={idx === attachedCases.length - 1}
-                                title="Move down"
+                                title={t.testplans.moveDown}
                                 onClick={async () => {
                                   const next = [...attachedCases]
                                   ;[next[idx + 1], next[idx]] = [next[idx], next[idx + 1]]
@@ -277,10 +277,10 @@ export function TestPlansView() {
                                 type="button"
                                 className="btn btn-ghost btn-sm"
                                 style={{ color: 'var(--danger)' }}
-                                title="Detach from plan"
+                                title={t.testplans.detach}
                                 onClick={async () => {
                                   await api.removeTestPlanCase(selectedPlan.id, ac.test_case_id)
-                                  notify(`Detached #${ac.test_case_id}`)
+                                  notify(t.testplans.detachedToast(ac.test_case_id))
                                   await loadAttached(selectedPlan.id)
                                 }}
                               >
@@ -306,7 +306,7 @@ export function TestPlansView() {
                       <input type="checkbox" checked={selectedCaseIds.includes(tc.id)} disabled={attachedSet.has(tc.id)} onChange={() => toggleCase(tc.id)} />
                       <span style={{ color: attachedSet.has(tc.id) ? 'var(--muted)' : undefined }}>
                         <span style={{ fontFamily: 'var(--font-mono)', marginRight: 5 }}>#{tc.id}</span>
-                        {tc.summary} {attachedSet.has(tc.id) ? '(attached)' : ''}
+                        {tc.summary} {attachedSet.has(tc.id) ? `(${t.testplans.attached})` : ''}
                       </span>
                     </label>
                   ))}
@@ -325,9 +325,9 @@ export function TestPlansView() {
 
       <ConfirmDialog
         open={deleteTarget !== null}
-        title="Delete test plan?"
-        message={deleteTarget ? `TestPlan #${deleteTarget.id} "${deleteTarget.name}" will be permanently deleted.` : ''}
-        confirmLabel="Delete"
+        title={t.testplans.confirmDelete}
+        message={deleteTarget ? t.testplans.confirmDeleteMessage(deleteTarget.id, deleteTarget.name) : ''}
+        confirmLabel={t.common.delete}
         onCancel={() => setDeleteTarget(null)}
         onConfirm={async () => {
           if (!deleteTarget) return
@@ -335,7 +335,7 @@ export function TestPlansView() {
           setDeleteTarget(null)
           await api.deleteTestPlan(target.id)
           if (selectedPlanId === target.id) setSelectedPlanId(0)
-          notifyAction(`Deleted plan #${target.id}`, 'Undo', () => notify('Undo not available for deletes yet', 'error'))
+          notifyAction(t.testplans.deletedToast(target.id), t.common.undo, () => notify(t.common.undoUnavailable, 'error'))
           await load()
         }}
       />

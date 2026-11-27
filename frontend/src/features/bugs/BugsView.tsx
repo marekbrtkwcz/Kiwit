@@ -148,7 +148,7 @@ export function BugsView() {
                     {b.summary}
                   </div>
                   {b.test_execution_id && (
-                    <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Execution #{b.test_execution_id}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{t.bugs.executionLabel(b.test_execution_id)}</div>
                   )}
                 </td>
                 <td style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{productMap.get(b.product_id) ?? `#${b.product_id}`}</td>
@@ -163,7 +163,7 @@ export function BugsView() {
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
-                    title="AI triage: possible duplicates and severity proposal"
+                    title={t.bugs.aiTriageHint}
                     onClick={async () => {
                       setTriage('busy')
                       try {
@@ -171,7 +171,7 @@ export function BugsView() {
                         setTriage(res)
                       } catch (err) {
                         setTriage(null)
-                        notify(err instanceof Error ? err.message : 'AI triage failed', 'error')
+                        notify(err instanceof Error ? err.message : t.bugs.aiTriageFailed, 'error')
                       }
                     }}
                   >
@@ -208,26 +208,26 @@ export function BugsView() {
       {triage === 'busy' && (
         <div className="modal-backdrop">
           <div className="modal" role="dialog" aria-modal="true">
-            <p style={{ margin: 0 }}>AI triage…</p>
+            <p style={{ margin: 0 }}>{t.bugs.aiTriageBusy}</p>
           </div>
         </div>
       )}
 
       {triage && triage !== 'busy' && (
         <div className="modal-backdrop" onClick={() => setTriage(null)}>
-          <div className="modal" style={{ maxWidth: 640, maxHeight: '80vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="AI triage result">
-            <h2 style={{ marginTop: 0 }}>AI triage</h2>
+          <div className="modal" style={{ maxWidth: 640, maxHeight: '80vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t.bugs.aiTriageResultAria}>
+            <h2 style={{ marginTop: 0 }}>{t.bugs.aiTriageTitle}</h2>
             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', margin: '0.5rem 0', flexWrap: 'wrap' }}>
-              <span className="badge">suggested severity: {triage.suggested_severity}</span>
-              <span className="badge">suggested status: {triage.suggested_status}</span>
+              <span className="badge">{t.bugs.suggestedSeverity(triage.suggested_severity)}</span>
+              <span className="badge">{t.bugs.suggestedStatus(triage.suggested_status)}</span>
               <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>{triage.model}</span>
             </div>
             <p style={{ fontSize: '0.9rem' }}>{triage.triage_note}</p>
             {triage.duplicates.length > 0 ? (
               <div>
-                <strong style={{ fontSize: '0.85rem' }}>Możliwe duplikaty</strong>
+                <strong style={{ fontSize: '0.85rem' }}>{t.bugs.possibleDuplicates}</strong>
                 <table className="table" style={{ margin: '0.4rem 0' }}>
-                  <thead><tr><th>Bug</th><th>Pewność</th><th>Powód</th></tr></thead>
+                  <thead><tr><th>{t.bugs.duplicatesBug}</th><th>{t.bugs.duplicatesConfidence}</th><th>{t.bugs.duplicatesReason}</th></tr></thead>
                   <tbody>
                     {triage.duplicates.map((d) => (
                       <tr key={d.bug_id}>
@@ -240,10 +240,10 @@ export function BugsView() {
                 </table>
               </div>
             ) : (
-              <div style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>Brak duplikatów wśród otwartych bugów tego produktu.</div>
+              <div style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>{t.bugs.noDuplicates}</div>
             )}
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
-              <button type="button" className="btn" onClick={() => setTriage(null)}>Zamknij</button>
+              <button type="button" className="btn" onClick={() => setTriage(null)}>{t.common.close}</button>
             </div>
           </div>
         </div>
@@ -270,16 +270,16 @@ export function BugsView() {
                 <button
               type="button"
               className="btn btn-sm"
-              title="AI suggests severity and title"
+              title={t.bugs.aiSuggestHint}
               onClick={async () => {
                 if (!summary.trim()) return
                 try {
                   const res = await api.aiSuggestBug({ summary, description: '' })
                   setSeverity(res.severity as InternalBug['severity'])
                   if (res.title && !summary.trim()) setSummary(res.title)
-                  notify(`AI: severity=${res.severity}`)
+                  notify(t.bugs.aiSuggestToast(res.severity))
                 } catch (err) {
-                  notify(err instanceof Error ? err.message : 'AI suggest failed', 'error')
+                  notify(err instanceof Error ? err.message : t.bugs.aiSuggestFailed, 'error')
                 }
               }}
             >

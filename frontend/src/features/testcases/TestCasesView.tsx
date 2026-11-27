@@ -34,6 +34,7 @@ import { CommentsPanel } from '../comments/CommentsPanel'
 import { EntityTagsBar } from '../management/EntityTagsBar'
 
 function TestCaseComponentsBar({ caseId, productId }: { caseId: number; productId: number }) {
+  const { t } = useI18n()
   const [attached, setAttached] = useState<ComponentItem[]>([])
   const [allComps, setAllComps] = useState<ComponentItem[]>([])
   const [compId, setCompId] = useState<number>(0)
@@ -55,7 +56,7 @@ function TestCaseComponentsBar({ caseId, productId }: { caseId: number; productI
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', fontSize: '0.82rem' }}>
-      <span style={{ color: 'var(--muted)' }}>Components:</span>
+      <span style={{ color: 'var(--muted)' }}>{t.common.components}:</span>
       {attached.map((c) => (
         <span key={c.id} className="badge">{c.name}</span>
       ))}
@@ -76,7 +77,7 @@ function TestCaseComponentsBar({ caseId, productId }: { caseId: number; productI
               await load()
             }}
           >
-            + Component
+            {t.products.addComponent}
           </button>
         </>
       )}
@@ -266,11 +267,11 @@ export function TestCasesView() {
       }
       if (editingId !== null) {
         const updated = await api.updateTestCase(editingId, payload)
-        notify(`TestCase #${updated.id} saved`)
+        notify(t.testcases.savedToast(updated.id))
         void api.listTestCaseRevisions(updated.id).then((r) => setRevisions(r.items)).catch(() => {})
       } else {
         const created = await api.createTestCase(payload)
-        notify(`TestCase #${created.id} created`)
+        notify(t.testcases.createdToast(created.id))
         closeDrawer()
       }
       await load()
@@ -287,7 +288,7 @@ export function TestCasesView() {
         status: bulkStatus || undefined,
         priority: bulkPriority || undefined,
       })
-      notify(`Updated ${res.updated} test case(s)`)
+      notify(t.testcases.bulkUpdatedToast(res.updated))
       setSelectedIds([])
       setBulkStatus('')
       setBulkPriority('')
@@ -447,10 +448,10 @@ export function TestCasesView() {
                 <td>
                   {tc.is_automated ? (
                     <span className="badge pill-running">
-                      <Bot size={12} /> Auto
+                      <Bot size={12} /> {t.common.automated}
                     </span>
                   ) : (
-                    <span className="badge">Manual</span>
+                    <span className="badge">{t.common.manual}</span>
                   )}
                 </td>
                 <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
@@ -458,11 +459,11 @@ export function TestCasesView() {
                     <button
                       type="button"
                       className="btn btn-ghost btn-sm"
-                      title="Clone"
+                      title={t.common.clone}
                       onClick={async () => {
                         try {
                           await api.cloneTestCase(tc.id)
-                          notify(`Cloned #${tc.id}`)
+                          notify(t.testcases.clonedToast(tc.id))
                           await load()
                         } catch (err) {
                           setError(err instanceof Error ? err.message : t.errors.saveTestCase)
@@ -475,7 +476,7 @@ export function TestCasesView() {
                       type="button"
                       className="btn btn-ghost btn-sm"
                       style={{ color: 'var(--danger)' }}
-                      title="Delete"
+                      title={t.common.delete}
                       onClick={() => setDeleteTarget({ id: tc.id, summary: tc.summary })}
                     >
                       <Trash2 size={14} />
@@ -489,8 +490,8 @@ export function TestCasesView() {
                 <td colSpan={8} style={{ padding: 0, border: 'none' }}>
                   <EmptyState
                     title={t.testcases.empty}
-                    description="Create your first test case to start testing."
-                    actionLabel="+ New Test Case"
+                    description={t.testcases.emptyHint}
+                    actionLabel={t.testcases.newCaseAction}
                     onAction={openNewDrawer}
                   />
                 </td>
@@ -510,15 +511,13 @@ export function TestCasesView() {
       {/* Pagination */}
       {total > PAGE_SIZE && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.85rem', fontSize: '0.82rem', color: 'var(--muted)' }}>
-          <span>
-            Showing {offset + 1}–{Math.min(offset + PAGE_SIZE, total)} of {total}
-          </span>
+          <span>{t.testcases.showingRange(offset + 1, Math.min(offset + PAGE_SIZE, total), total)}</span>
           <div style={{ display: 'flex', gap: '0.4rem' }}>
             <button type="button" className="btn btn-sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>
-              Prev
+              {t.common.prev}
             </button>
             <button type="button" className="btn btn-sm" disabled={offset + PAGE_SIZE >= total} onClick={() => setOffset(offset + PAGE_SIZE)}>
-              Next
+              {t.common.next}
             </button>
           </div>
         </div>
@@ -547,7 +546,7 @@ export function TestCasesView() {
                   </button>
                 )}
               </div>
-              <button type="button" className="btn btn-ghost btn-icon" onClick={closeDrawer} aria-label="Close">
+              <button type="button" className="btn btn-ghost btn-icon" onClick={closeDrawer} aria-label={t.common.close}>
                 <X size={17} />
               </button>
             </div>
@@ -579,7 +578,7 @@ export function TestCasesView() {
                       ))}
                     </select>
                     <select className="select" value={categoryId ?? ''} onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : undefined)}>
-                      <option value="">No category</option>
+                      <option value="">{t.testcases.noCategory}</option>
                       {categories.map((c) => (
                         <option key={c.id} value={c.id}>{c.name}</option>
                       ))}
@@ -607,10 +606,10 @@ export function TestCasesView() {
                       <option value="disabled">disabled</option>
                     </select>
                     <select className="select" value={format} onChange={(e) => setFormat(e.target.value as 'steps' | 'gherkin' | 'markdown' | 'checklist')}>
-                      <option value="steps">Steps</option>
-                      <option value="gherkin">Gherkin</option>
-                      <option value="markdown">Markdown</option>
-                      <option value="checklist">Checklist</option>
+                      <option value="steps">{t.testcases.formatSteps}</option>
+                      <option value="gherkin">{t.testcases.formatGherkin}</option>
+                      <option value="markdown">{t.testcases.formatMarkdown}</option>
+                      <option value="checklist">{t.testcases.formatChecklist}</option>
                     </select>
                     {templates.length > 0 && (
                       <select
@@ -632,7 +631,7 @@ export function TestCasesView() {
                   <textarea
                     className="textarea"
                     rows={2}
-                    placeholder="Preconditions (optional)"
+                    placeholder={t.testcases.preconditionsPlaceholder}
                     value={preconditions}
                     onChange={(e) => setPreconditions(e.target.value)}
                   />
@@ -640,12 +639,12 @@ export function TestCasesView() {
                   <div style={{ display: 'grid', gap: '0.45rem' }}>
                     <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.84rem' }}>
                       <input type="checkbox" checked={isAutomated} onChange={(e) => setIsAutomated(e.target.checked)} />
-                      Automated test
+                      {t.testcases.automatedTest}
                     </label>
                     {isAutomated && (
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.45rem' }}>
-                        <input className="input" placeholder="Script path (e.g. tests/login.spec.ts)" value={script} onChange={(e) => setScript(e.target.value)} />
-                        <input className="input" placeholder="Arguments (optional)" value={scriptArgs} onChange={(e) => setScriptArgs(e.target.value)} />
+                        <input className="input" placeholder={t.testcases.scriptPlaceholder} value={script} onChange={(e) => setScript(e.target.value)} />
+                        <input className="input" placeholder={t.testcases.argsPlaceholder} value={scriptArgs} onChange={(e) => setScriptArgs(e.target.value)} />
                       </div>
                     )}
                   </div>
@@ -655,7 +654,7 @@ export function TestCasesView() {
                       <textarea
                         className="textarea"
                         rows={7}
-                        placeholder="Markdown body — use Preview to render"
+                        placeholder={t.testcases.mdBodyPlaceholder}
                         value={gherkinBody}
                         onChange={(e) => setGherkinBody(e.target.value)}
                       />
@@ -672,7 +671,7 @@ export function TestCasesView() {
                             }
                           }}
                         >
-                          Preview
+                          {t.testcases.preview}
                         </button>
                       </div>
                       {mdPreview && (
@@ -687,7 +686,7 @@ export function TestCasesView() {
                     <textarea
                       className="textarea"
                       rows={7}
-                      placeholder={"One check per line"}
+                      placeholder={t.testcases.checklistPlaceholder}
                       value={gherkinBody}
                       onChange={(e) => setGherkinBody(e.target.value)}
                     />
@@ -695,7 +694,7 @@ export function TestCasesView() {
                     <textarea
                       className="textarea"
                       rows={7}
-                      placeholder={"Feature: Login\n  Scenario: Valid credentials\n    Given user is on /login\n    When user submits valid credentials\n    Then user sees dashboard"}
+                      placeholder={t.testcases.gherkinPlaceholder}
                       value={gherkinBody}
                       onChange={(e) => setGherkinBody(e.target.value)}
                     />
@@ -782,7 +781,7 @@ export function TestCasesView() {
               {editingId !== null && drawerTab === 'revisions' && (
                 <div style={{ display: 'grid', gap: '0.6rem' }}>
                   {revisions.length === 0 ? (
-                    <p style={{ color: 'var(--muted)', margin: 0 }}>No revision history yet.</p>
+                    <p style={{ color: 'var(--muted)', margin: 0 }}>{t.testcases.noRevisions}</p>
                   ) : (
                     revisions.map((rev, idx) => {
                       const prev = revisions[idx + 1]
@@ -801,9 +800,9 @@ export function TestCasesView() {
                           <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
                             <span className={`badge pill-${rev.priority}`}>{rev.priority}</span>
                             <span className={`badge pill-${rev.status}`}>{rev.status}</span>
-                            {changedSummary && <span className="badge pill-blocked">summary changed</span>}
-                            {changedPriority && <span className="badge pill-blocked">priority: {prev.priority} → {rev.priority}</span>}
-                            {changedStatus && <span className="badge pill-blocked">status: {prev.status} → {rev.status}</span>}
+                            {changedSummary && <span className="badge pill-blocked">{t.testcases.summaryChanged}</span>}
+                            {changedPriority && <span className="badge pill-blocked">{t.testcases.priorityChanged(prev.priority, rev.priority)}</span>}
+                            {changedStatus && <span className="badge pill-blocked">{t.testcases.statusChanged(prev.status, rev.status)}</span>}
                           </div>
                         </div>
                       )
@@ -819,9 +818,9 @@ export function TestCasesView() {
 
       <ConfirmDialog
         open={deleteTarget !== null}
-        title="Delete test case?"
-        message={deleteTarget ? `TestCase #${deleteTarget.id} "${deleteTarget.summary}" will be permanently deleted.` : ''}
-        confirmLabel="Delete"
+        title={t.testcases.confirmDelete}
+        message={deleteTarget ? t.testcases.confirmDeleteMessage(deleteTarget.id, deleteTarget.summary) : ''}
+        confirmLabel={t.common.delete}
         onCancel={() => setDeleteTarget(null)}
         onConfirm={async () => {
           if (!deleteTarget) return
@@ -829,7 +828,7 @@ export function TestCasesView() {
           setDeleteTarget(null)
           try {
             await api.deleteTestCase(target.id)
-            notifyAction(`Deleted #${target.id}`, 'Undo', () => notify('Undo not available for deletes yet', 'error'))
+            notifyAction(t.testcases.deletedToast(target.id), t.common.undo, () => notify(t.common.undoUnavailable, 'error'))
             if (editingId === target.id) closeDrawer()
             await load()
           } catch (err) {

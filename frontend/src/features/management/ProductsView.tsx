@@ -82,7 +82,7 @@ export function ProductsView() {
       setName('')
       setDescription('')
       setSelectedId(created.id)
-      notify(`Product "${created.name}" created`)
+      notify(t.products.createdToast(created.name))
       await Promise.all([load(), refreshProducts()])
     } catch (err) {
       setError(err instanceof Error ? err.message : t.errors.createProduct)
@@ -162,7 +162,7 @@ export function ProductsView() {
                     try {
                       await api.createVersion(selectedProduct.id, newVersion.trim())
                       setNewVersion('')
-                      notify('Version added')
+                      notify(t.products.versionAddedToast)
                       await loadProductDetails(selectedProduct.id)
                     } catch (err) {
                       setError(err instanceof Error ? err.message : t.errors.createProduct)
@@ -196,7 +196,7 @@ export function ProductsView() {
                             setNewBuild((prev) => ({ ...prev, [v.id]: '' }))
                             const b = await api.listBuilds(v.id)
                             setBuilds((prev) => ({ ...prev, [v.id]: b.items }))
-                            notify(`Build "${val}" added`)
+                            notify(t.products.buildAddedToast(val))
                           }}
                         >
                           {t.products.addBuild}
@@ -223,20 +223,20 @@ export function ProductsView() {
                     await api.createComponent(selectedProduct.id, newCompName.trim(), newCompDesc.trim())
                     setNewCompName('')
                     setNewCompDesc('')
-                    notify('Component added')
+                    notify(t.products.componentAddedToast)
                     await loadProductDetails(selectedProduct.id)
                   }}
                   style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}
                 >
-                  <input className="input" placeholder="Component name (e.g. Auth API)" value={newCompName} onChange={(e) => setNewCompName(e.target.value)} required />
-                  <input className="input" placeholder="Description (optional)" value={newCompDesc} onChange={(e) => setNewCompDesc(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
-                  <button type="submit" className="btn btn-primary btn-sm">+ Component</button>
+                  <input className="input" placeholder={t.products.compNamePlaceholder} value={newCompName} onChange={(e) => setNewCompName(e.target.value)} required />
+                  <input className="input" placeholder={t.products.descPlaceholder} value={newCompDesc} onChange={(e) => setNewCompDesc(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
+                  <button type="submit" className="btn btn-primary btn-sm">{t.products.addComponent}</button>
                 </form>
                 <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                   {components.map((c) => (
                     <span key={c.id} className="badge" title={c.description}>{c.name}</span>
                   ))}
-                  {components.length === 0 && <span style={{ color: 'var(--muted)', fontSize: '0.84rem' }}>No components yet.</span>}
+                  {components.length === 0 && <span style={{ color: 'var(--muted)', fontSize: '0.84rem' }}>{t.products.noComponents}</span>}
                 </div>
               </div>
             )}
@@ -247,7 +247,7 @@ export function ProductsView() {
                   e.preventDefault()
                   if (!memberUserId) return
                   await api.addProductMember(selectedProduct.id, { user_id: memberUserId, role: memberRole })
-                  notify(`Assigned user #${memberUserId} (${memberRole})`)
+                  notify(t.products.memberAssignedToast(memberUserId, memberRole))
                 }}
                 style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}
               >
@@ -261,14 +261,14 @@ export function ProductsView() {
                   <option value="tester">tester</option>
                   <option value="maintainer">maintainer</option>
                 </select>
-                <button type="submit" className="btn btn-primary btn-sm">Assign member</button>
+                <button type="submit" className="btn btn-primary btn-sm">{t.products.assignMember}</button>
               </form>
             )}
 
             {tab === 'tags' && (
               <div style={{ display: 'grid', gap: '0.75rem' }}>
                 <div style={{ display: 'flex', gap: '0.45rem' }}>
-                  <input className="input" placeholder="New tag" value={newTag} onChange={(e) => setNewTag(e.target.value)} />
+                  <input className="input" placeholder={t.products.newTagPlaceholder} value={newTag} onChange={(e) => setNewTag(e.target.value)} />
                   <button
                     type="button"
                     className="btn btn-primary btn-sm"
@@ -276,11 +276,11 @@ export function ProductsView() {
                       if (!newTag.trim()) return
                       await api.createTag(newTag.trim())
                       setNewTag('')
-                      notify('Tag created')
+                      notify(t.products.tagCreatedToast)
                       await load()
                     }}
                   >
-                    + Tag
+                    {t.tags.add}
                   </button>
                 </div>
                 <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>

@@ -74,7 +74,7 @@ export function AuthView() {
       setAuthToken(res.access_token)
       setUserRole(res.user.role)
       setJwt(res.access_token)
-      notify(`Signed in as ${res.user.username}`)
+      notify(t.auth.signedInAs(res.user.username))
     } catch (err) {
       setError(err instanceof Error ? err.message : t.errors.authFailed)
     }
@@ -237,7 +237,7 @@ export function AuthView() {
   }
 
   const handleRevokeToken = async (id: number) => {
-    if (!window.confirm('Revoke this API token?')) return
+    if (!window.confirm(t.auth.confirmRevoke)) return
     setError(null)
     try {
       await api.revokeApiToken(id)
@@ -255,7 +255,7 @@ export function AuthView() {
       await api.changePassword({ current_password: currentPassword, new_password: newPassword })
       setCurrentPassword('')
       setNewPassword('')
-      setNotice('Password updated.')
+      setNotice(t.auth.passwordUpdated)
     } catch (err) {
       setError(err instanceof Error ? err.message : t.errors.authFailed)
     }
@@ -267,7 +267,7 @@ export function AuthView() {
     try {
       await api.updateUser(u.id, { role, is_active: isActive })
       await loadAccountData()
-      setNotice(`Updated user ${u.email}.`)
+      setNotice(t.auth.userUpdatedToast(u.email))
     } catch (err) {
       setError(err instanceof Error ? err.message : t.errors.authFailed)
     }
@@ -379,7 +379,7 @@ export function AuthView() {
                 onClick={() => setShowConfirmPassword((v) => !v)}
                 aria-pressed={showConfirmPassword}
               >
-                {showConfirmPassword ? 'Hide' : 'Show'}
+                {showConfirmPassword ? t.common.hide : t.common.show}
               </button>
               <button type="submit" className="btn btn-primary">{t.auth.resetConfirmSubmit}</button>
               <button
@@ -423,7 +423,7 @@ export function AuthView() {
             </button>
           </div>
           <label htmlFor="auth-email" style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
-            <span>Email</span>
+            <span>{t.common.email}</span>
             <input
               id="auth-email"
               name="email"
@@ -432,7 +432,7 @@ export function AuthView() {
               autoComplete="username"
               spellCheck={false}
               enterKeyHint="next"
-              placeholder="Email"
+              placeholder={t.common.email}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -490,7 +490,7 @@ export function AuthView() {
                 onClick={() => setShowPassword((v) => !v)}
                 aria-pressed={showPassword}
               >
-                {showPassword ? 'Hide' : 'Show'}
+                {showPassword ? t.common.hide : t.common.show}
               </button>
             </div>
           </label>
@@ -621,7 +621,7 @@ export function AuthView() {
                 <thead>
                   <tr>
                     <th>{t.common.id}</th>
-                    <th>Email</th>
+                    <th>{t.common.email}</th>
                     <th>{t.auth.usernamePlaceholder}</th>
                     <th>{t.auth.role}</th>
                     <th>{t.auth.active}</th>
@@ -650,7 +650,7 @@ export function AuthView() {
                           className={u.is_active ? 'btn btn-sm' : 'btn btn-danger btn-sm'}
                           onClick={() => void handleUpdateUser(u, u.role as 'viewer' | 'tester' | 'admin', !(u.is_active ?? true))}
                         >
-                          {u.is_active ? 'Active' : 'Disabled'}
+                          {u.is_active ? t.auth.active : t.auth.disabled}
                         </button>
                       </td>
                     </tr>
