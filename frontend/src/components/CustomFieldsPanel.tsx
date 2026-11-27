@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { Settings2 } from 'lucide-react'
 import { api, CustomFieldWithValue } from '../api/client'
 import { useWorkspace } from '../context/WorkspaceContext'
+import { useI18n } from '../i18n'
 
 // CustomFieldsPanel renders and edits custom field values for one entity.
 export function CustomFieldsPanel({ entityType, entityId }: { entityType: string; entityId: number }) {
   const { notify } = useWorkspace()
+  const { t } = useI18n()
   const [fields, setFields] = useState<CustomFieldWithValue[]>([])
   const [values, setValues] = useState<Record<number, string>>({})
 
@@ -30,9 +32,9 @@ export function CustomFieldsPanel({ entityType, entityId }: { entityType: string
   const save = async (fieldId: number) => {
     try {
       await api.setEntityCustomField(entityType, entityId, fieldId, values[fieldId] ?? '')
-      notify('Field saved')
+      notify(t.customFields.saved)
     } catch (err) {
-      notify(err instanceof Error ? err.message : 'Failed to save field', 'error')
+      notify(err instanceof Error ? err.message : t.customFields.saveFailed, 'error')
     }
   }
 

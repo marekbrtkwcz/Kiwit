@@ -629,11 +629,11 @@ export function DashboardView() {
       {uxMetrics.length > 0 && uxMetrics.some((u) => u.sessions > 0) && (
         <div className="card">
           <div className="card-header">
-            <h3 className="card-title">UX metrics (SUS)</h3>
+            <h3 className="card-title">{t.dashboard.uxMetrics}</h3>
           </div>
           <table className="table">
             <thead>
-              <tr><th>Product</th><th>Sessions</th><th>Avg SUS</th><th>Avg task time (s)</th><th>Avg errors</th></tr>
+              <tr><th>{t.dashboard.products}</th><th>{t.dashboard.sessions}</th><th>{t.dashboard.avgSus}</th><th>{t.dashboard.avgTaskTime}</th><th>{t.dashboard.avgErrors}</th></tr>
             </thead>
             <tbody>
               {uxMetrics.filter((u) => u.sessions > 0).map((u) => (

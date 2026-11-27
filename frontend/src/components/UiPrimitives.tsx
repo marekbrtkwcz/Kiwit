@@ -1,5 +1,6 @@
 import { ReactNode, useEffect, useRef } from 'react'
 import { AlertTriangle, X } from 'lucide-react'
+import { useI18n } from '../i18n'
 
 interface ConfirmDialogProps {
   open: boolean
@@ -23,6 +24,7 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const { t } = useI18n()
   const dialogRef = useRef<HTMLDivElement>(null)
 
   // Focus trap: keep Tab cycling inside the dialog, focus first button on open
@@ -80,7 +82,7 @@ export function ConfirmDialog({
             <h3 style={{ margin: '0 0 0.4rem', fontSize: '1rem' }}>{title}</h3>
             <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.875rem' }}>{message}</p>
           </div>
-          <button type="button" className="btn btn-ghost btn-icon" onClick={onCancel} aria-label="Close">
+          <button type="button" className="btn btn-ghost btn-icon" onClick={onCancel} aria-label={t.common.close}>
             <X size={16} />
           </button>
         </div>
@@ -140,8 +142,9 @@ export function EmptyState({ icon, title, description, actionLabel, onAction }: 
 
 // LoadingSkeleton — simple shimmer placeholder for list loading.
 export function LoadingSkeleton({ rows = 5 }: { rows?: number }) {
+  const { t } = useI18n()
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }} aria-label="Loading">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }} aria-label={t.common.loading}>
       {Array.from({ length: rows }).map((_, i) => (
         <div
           key={i}

@@ -781,16 +781,16 @@ export function TestRunsView() {
 
                     <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
                       <button type="button" className={`btn btn-sm ${activeExec.status === 'passed' ? 'btn-primary' : ''}`} onClick={() => void handleStatus(activeExec.id, 'passed')}>
-                        <CheckCircle2 size={14} color="#16a34a" /> Passed <span className="kbd">P</span>
+                        <CheckCircle2 size={14} color="#16a34a" /> {t.dashboard.passed} <span className="kbd">P</span>
                       </button>
                       <button type="button" className={`btn btn-sm ${activeExec.status === 'failed' ? 'btn-primary' : ''}`} onClick={() => void handleStatus(activeExec.id, 'failed')}>
-                        <XCircle size={14} color="#dc2626" /> Failed <span className="kbd">F</span>
+                        <XCircle size={14} color="#dc2626" /> {t.dashboard.failed} <span className="kbd">F</span>
                       </button>
                       <button type="button" className={`btn btn-sm ${activeExec.status === 'blocked' ? 'btn-primary' : ''}`} onClick={() => void handleStatus(activeExec.id, 'blocked')}>
-                        <Ban size={14} color="#d97706" /> Blocked <span className="kbd">B</span>
+                        <Ban size={14} color="#d97706" /> {t.dashboard.blocked} <span className="kbd">B</span>
                       </button>
                       <button type="button" className={`btn btn-sm ${activeExec.status === 'skipped' ? 'btn-primary' : ''}`} onClick={() => void handleStatus(activeExec.id, 'skipped')}>
-                        <SkipForward size={14} color="#64748b" /> Skipped <span className="kbd">S</span>
+                        <SkipForward size={14} color="#64748b" /> {t.dashboard.skipped} <span className="kbd">S</span>
                       </button>
                     </div>
 
