@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { KeyRound, LogIn, LogOut, Mail, Plus } from 'lucide-react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, ApiTokenInfo, getAuthToken, setAuthToken, setUserRole, User, UserGroup } from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
@@ -313,7 +314,7 @@ export function AuthView() {
                 required
               />
             </label>
-            <button type="submit" className="btn btn-primary">{t.auth.resetRequestSubmit}</button>
+            <button type="submit" className="btn btn-primary"><Mail size={14} /> {t.auth.resetRequestSubmit}</button>
             <button
               type="button"
               className="btn btn-sm"
@@ -381,7 +382,7 @@ export function AuthView() {
               >
                 {showConfirmPassword ? t.common.hide : t.common.show}
               </button>
-              <button type="submit" className="btn btn-primary">{t.auth.resetConfirmSubmit}</button>
+              <button type="submit" className="btn btn-primary"><KeyRound size={14} /> {t.auth.resetConfirmSubmit}</button>
               <button
                 type="button"
                 className="btn btn-sm"
@@ -518,7 +519,7 @@ export function AuthView() {
               <strong>{t.auth.ldapLogin}</strong>
               <input className="input" placeholder={t.auth.usernamePlaceholder} value={ldapUsername} onChange={(e) => setLdapUsername(e.target.value)} required />
               <input className="input" type="password" placeholder={t.auth.passwordPlaceholder} value={ldapPassword} onChange={(e) => setLdapPassword(e.target.value)} required />
-              <button type="submit" className="btn btn-primary btn-sm">{t.auth.submitLogin}</button>
+              <button type="submit" className="btn btn-primary btn-sm"><LogIn size={13} /> {t.auth.submitLogin}</button>
             </form>
           )}
           </form>
@@ -527,7 +528,7 @@ export function AuthView() {
         <div style={{ display: 'grid', gap: '1rem' }}>
           <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>{t.auth.loggedIn}</span>
-            <button type="button" onClick={handleLogout} className="btn btn-sm">{t.auth.logout}</button>
+            <button type="button" onClick={handleLogout} className="btn btn-sm"><LogOut size={13} /> {t.auth.logout}</button>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem' }}>
@@ -535,7 +536,7 @@ export function AuthView() {
               <strong>{t.auth.tokenTitle}</strong>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <input className="input" placeholder={t.auth.tokenPlaceholder} value={tokenName} onChange={(e) => setTokenName(e.target.value)} style={{ flex: 1 }} />
-                <button type="submit" className="btn btn-primary btn-sm">{t.auth.generate}</button>
+                <button type="submit" className="btn btn-primary btn-sm"><KeyRound size={13} /> {t.auth.generate}</button>
               </div>
               {generatedToken && (
                 <div style={{ padding: '0.55rem', background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: '0.8rem', wordBreak: 'break-all' }}>
@@ -610,7 +611,7 @@ export function AuthView() {
                   {t.auth.generatePassword}
                 </button>
               </label>
-              <button type="submit" className="btn btn-primary btn-sm">{t.auth.updatePassword}</button>
+              <button type="submit" className="btn btn-primary btn-sm"><KeyRound size={13} /> {t.auth.updatePassword}</button>
             </form>
           </div>
 
@@ -664,7 +665,7 @@ export function AuthView() {
               <strong>{t.auth.adminGroups} ({groups.length})</strong>
               <form onSubmit={handleCreateGroup} style={{ display: 'flex', gap: '0.5rem' }}>
                 <input className="input" placeholder={t.auth.groupNamePlaceholder} value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} style={{ flex: 1 }} />
-                <button type="submit" className="btn btn-primary btn-sm">{t.auth.addGroup}</button>
+                <button type="submit" className="btn btn-primary btn-sm"><Plus size={13} /> {t.auth.addGroup}</button>
               </form>
               {groups.map((g) => (
                 <div key={g.id} style={{ display: 'grid', gap: '0.4rem', borderTop: '1px solid var(--border)', paddingTop: '0.5rem' }}>

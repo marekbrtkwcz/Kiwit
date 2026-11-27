@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bot, Bug, Plus, ScanSearch, Search, Trash2, X } from 'lucide-react'
+import { Bot, Bug, Plus, Save, ScanSearch, Search, Trash2, X } from 'lucide-react'
 import { api, InternalBug } from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
@@ -304,7 +304,7 @@ export function BugsView() {
                 </div>
                 <textarea className="textarea" rows={6} placeholder={t.bugs.descPlaceholder} value={description} onChange={(e) => setDescription(e.target.value)} />
                 <div>
-                  <button type="submit" className="btn btn-primary">{editing ? t.common.saveChanges : t.bugs.create}</button>
+                  <button type="submit" className="btn btn-primary">{editing ? <><Save size={14} /> {t.common.saveChanges}</> : <><Plus size={14} /> {t.bugs.create}</>}</button>
                 </div>
               </form>
             </div>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bell, Bug, Layers, ScrollText, Sliders, Webhook as WebhookIcon } from 'lucide-react'
+import { AtSign, Bell, Boxes, Bug, CircleDot, FileCode2, Flag, Layers, Mail, Plus, Save, ScrollText, Send, Sliders, Webhook as WebhookIcon } from 'lucide-react'
 import {
   api,
   EmailSettingsItem,
@@ -161,7 +161,7 @@ export function SettingsView() {
 
       {tab === 'trackers' && (
         <div className="card" style={{ display: 'grid', gap: '0.85rem' }}>
-          <h3 className="card-title">{t.settings.trackersTitle}</h3>
+          <h3 className="card-title"><Bug size={15} /> {t.settings.trackersTitle}</h3>
           <form
             onSubmit={(e) => {
               e.preventDefault()
@@ -190,7 +190,7 @@ export function SettingsView() {
             </select>
             <input className="input" placeholder="https://api.github.com/repos/org/repo" value={trackerURL} onChange={(e) => setTrackerURL(e.target.value)} required style={{ flex: 1, minWidth: 220 }} />
             <input className="input" placeholder={t.settings.trackerUserPlaceholder} value={trackerUsername} onChange={(e) => setTrackerUsername(e.target.value)} style={{ minWidth: 200 }} />
-            <button type="submit" className="btn btn-primary btn-sm">{t.settings.addTracker}</button>
+            <button type="submit" className="btn btn-primary btn-sm"><Plus size={13} /> {t.settings.addTracker}</button>
           </form>
           {trackers.length > 0 && (
             <div className="table-wrap">
@@ -222,7 +222,7 @@ export function SettingsView() {
       {tab === 'env' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1rem' }}>
           <div className="card" style={{ display: 'grid', gap: '0.7rem', alignContent: 'start' }}>
-            <h3 className="card-title">{t.settings.environmentsTitle}</h3>
+            <h3 className="card-title"><Boxes size={15} /> {t.settings.environmentsTitle}</h3>
             <form
               onSubmit={(e) => {
                 e.preventDefault()
@@ -239,7 +239,7 @@ export function SettingsView() {
               <input className="input" placeholder={t.settings.envDescPlaceholder} value={envDesc} onChange={(e) => setEnvDesc(e.target.value)} />
               <textarea className="textarea" rows={3} placeholder={t.settings.envPropsPlaceholder} value={envProps} onChange={(e) => setEnvProps(e.target.value)} />
               <div>
-                <button type="submit" className="btn btn-primary btn-sm">{t.settings.addEnvironment}</button>
+                <button type="submit" className="btn btn-primary btn-sm"><Plus size={13} /> {t.settings.addEnvironment}</button>
               </div>
             </form>
             {environments.map((env) => (
@@ -256,7 +256,7 @@ export function SettingsView() {
           </div>
 
           <div className="card" style={{ display: 'grid', gap: '0.7rem', alignContent: 'start' }}>
-            <h3 className="card-title">{t.settings.templatesTitle}</h3>
+            <h3 className="card-title"><FileCode2 size={15} /> {t.settings.templatesTitle}</h3>
             <form
               onSubmit={(e) => {
                 e.preventDefault()
@@ -272,7 +272,7 @@ export function SettingsView() {
               <input className="input" placeholder={t.settings.tplNamePlaceholder} value={tplName} onChange={(e) => setTplName(e.target.value)} required />
               <textarea className="textarea" rows={4} placeholder={t.settings.tplBodyPlaceholder} value={tplBody} onChange={(e) => setTplBody(e.target.value)} required />
               <div>
-                <button type="submit" className="btn btn-primary btn-sm">{t.settings.addTemplate}</button>
+                <button type="submit" className="btn btn-primary btn-sm"><Plus size={13} /> {t.settings.addTemplate}</button>
               </div>
             </form>
             {templates.map((tpl) => (
@@ -288,7 +288,7 @@ export function SettingsView() {
       {tab === 'dicts' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1rem' }}>
           <div className="card" style={{ display: 'grid', gap: '0.65rem', alignContent: 'start' }}>
-            <h3 className="card-title">{t.settings.prioritiesTitle}</h3>
+            <h3 className="card-title"><Flag size={15} /> {t.settings.prioritiesTitle}</h3>
             <form
               onSubmit={(e) => {
                 e.preventDefault()
@@ -311,7 +311,7 @@ export function SettingsView() {
           </div>
 
           <div className="card" style={{ display: 'grid', gap: '0.65rem', alignContent: 'start' }}>
-            <h3 className="card-title">{t.settings.statusesTitle}</h3>
+            <h3 className="card-title"><CircleDot size={15} /> {t.settings.statusesTitle}</h3>
             <form
               onSubmit={(e) => {
                 e.preventDefault()
@@ -357,7 +357,7 @@ export function SettingsView() {
             className="card"
             style={{ display: 'grid', gap: '0.6rem', alignContent: 'start' }}
           >
-            <h3 className="card-title">{t.settings.ccListTitle}</h3>
+            <h3 className="card-title"><AtSign size={15} /> {t.settings.ccListTitle}</h3>
             <div style={{ display: 'flex', gap: '0.4rem' }}>
               <select className="select" value={emailEntityType} onChange={(e) => setEmailEntityType(e.target.value as 'test_case' | 'test_plan')}>
                 <option value="test_case">test_case</option>
@@ -387,7 +387,7 @@ export function SettingsView() {
             </label>
             <input className="input" placeholder="qa@example.com, lead@example.com" value={emailCC} onChange={(e) => setEmailCC(e.target.value)} />
             <div>
-              <button type="submit" className="btn btn-primary btn-sm">{t.settings.saveEmailSettings}</button>
+              <button type="submit" className="btn btn-primary btn-sm"><Save size={13} /> {t.settings.saveEmailSettings}</button>
             </div>
           </form>
 
@@ -401,10 +401,10 @@ export function SettingsView() {
             className="card"
             style={{ display: 'grid', gap: '0.6rem', alignContent: 'start' }}
           >
-            <h3 className="card-title">{t.settings.webhookTitle}</h3>
+            <h3 className="card-title"><Send size={15} /> {t.settings.webhookTitle}</h3>
             <input className="input" value={webhookMsg} onChange={(e) => setWebhookMsg(e.target.value)} required />
             <div>
-              <button type="submit" className="btn btn-sm">{t.settings.sendWebhook}</button>
+              <button type="submit" className="btn btn-sm"><Send size={13} /> {t.settings.sendWebhook}</button>
             </div>
           </form>
 
@@ -420,12 +420,12 @@ export function SettingsView() {
             className="card"
             style={{ display: 'grid', gap: '0.6rem', alignContent: 'start' }}
           >
-            <h3 className="card-title">{t.settings.smtpTitle}</h3>
+            <h3 className="card-title"><Mail size={15} /> {t.settings.smtpTitle}</h3>
             <input className="input" placeholder={t.settings.smtpRecipientsPlaceholder} value={testEmailTo} onChange={(e) => setTestEmailTo(e.target.value)} required />
             <input className="input" placeholder={t.settings.smtpSubjectPlaceholder} value={testEmailSubject} onChange={(e) => setTestEmailSubject(e.target.value)} required />
             <input className="input" placeholder={t.settings.smtpBodyPlaceholder} value={testEmailBody} onChange={(e) => setTestEmailBody(e.target.value)} required />
             <div>
-              <button type="submit" className="btn btn-sm">{t.settings.sendEmail}</button>
+              <button type="submit" className="btn btn-sm"><Send size={13} /> {t.settings.sendEmail}</button>
             </div>
           </form>
 
@@ -439,7 +439,7 @@ export function SettingsView() {
             className="card"
             style={{ display: 'grid', gap: '0.6rem', alignContent: 'start' }}
           >
-            <h3 className="card-title">{t.notifications.eventsTitle}</h3>
+            <h3 className="card-title"><Bell size={15} /> {t.notifications.eventsTitle}</h3>
             <p style={{ color: 'var(--muted)', fontSize: '0.8rem', margin: 0 }}>{t.notifications.eventsHint}</p>
             <div className="table-wrap">
               <table className="data-table">
@@ -476,7 +476,7 @@ export function SettingsView() {
               </table>
             </div>
             <div>
-              <button type="submit" className="btn btn-primary btn-sm">{t.notifications.savePrefs}</button>
+              <button type="submit" className="btn btn-primary btn-sm"><Save size={13} /> {t.notifications.savePrefs}</button>
             </div>
           </form>
         </div>
@@ -486,7 +486,7 @@ export function SettingsView() {
 
       {isAdmin && tab === 'webhooks' && (
         <div className="card" style={{ display: 'grid', gap: '0.85rem' }}>
-          <h3 className="card-title">{t.settings.webhooksTitle}</h3>
+          <h3 className="card-title"><WebhookIcon size={15} /> {t.settings.webhooksTitle}</h3>
           <p style={{ color: 'var(--muted)', fontSize: '0.8rem', margin: 0 }}>{t.settings.webhooksHint}</p>
 
           <form
@@ -529,7 +529,7 @@ export function SettingsView() {
                 {t.settings.webhookActive}
               </label>
             </div>
-            <button type="submit" className="btn btn-primary btn-sm">{t.settings.addWebhook}</button>
+            <button type="submit" className="btn btn-primary btn-sm"><Plus size={13} /> {t.settings.addWebhook}</button>
           </form>
 
           {webhooks.length > 0 && (

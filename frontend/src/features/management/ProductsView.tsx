@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Boxes, GitBranch, Package, Plus, Shield, Tag } from 'lucide-react'
+import { Boxes, GitBranch, Package, Plus, Shield, Tag, UserPlus } from 'lucide-react'
 import { api, Build, Classification, ComponentItem, Product, User, Version } from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
@@ -171,7 +171,7 @@ export function ProductsView() {
                   style={{ display: 'flex', gap: '0.45rem' }}
                 >
                   <input className="input" placeholder={t.products.versionPlaceholder} value={newVersion} onChange={(e) => setNewVersion(e.target.value)} />
-                  <button type="submit" className="btn btn-primary btn-sm">{t.products.addVersion}</button>
+                  <button type="submit" className="btn btn-primary btn-sm"><Plus size={13} /> {t.products.addVersion}</button>
                 </form>
 
                 {versions.map((v) => (
@@ -230,7 +230,7 @@ export function ProductsView() {
                 >
                   <input className="input" placeholder={t.products.compNamePlaceholder} value={newCompName} onChange={(e) => setNewCompName(e.target.value)} required />
                   <input className="input" placeholder={t.products.descPlaceholder} value={newCompDesc} onChange={(e) => setNewCompDesc(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
-                  <button type="submit" className="btn btn-primary btn-sm">{t.products.addComponent}</button>
+                  <button type="submit" className="btn btn-primary btn-sm"><Plus size={13} /> {t.products.addComponent}</button>
                 </form>
                 <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                   {components.map((c) => (
@@ -261,7 +261,7 @@ export function ProductsView() {
                   <option value="tester">tester</option>
                   <option value="maintainer">maintainer</option>
                 </select>
-                <button type="submit" className="btn btn-primary btn-sm">{t.products.assignMember}</button>
+                <button type="submit" className="btn btn-primary btn-sm"><UserPlus size={13} /> {t.products.assignMember}</button>
               </form>
             )}
 

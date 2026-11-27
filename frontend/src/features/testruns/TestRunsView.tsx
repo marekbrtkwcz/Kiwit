@@ -146,7 +146,7 @@ function ExecutionBugsPanel({ executionId, trackers }: { executionId: number; tr
           <input className="input" placeholder={t.testruns.bugKeyPlaceholder} value={key} onChange={(e) => setKey(e.target.value)} required style={{ width: 120 }} />
           <input className="input" placeholder="https://..." value={url} onChange={(e) => setUrl(e.target.value)} required style={{ flex: 1, minWidth: 180 }} />
           <input className="input" placeholder={t.testruns.bugTitleOptionalPlaceholder} value={title} onChange={(e) => setTitle(e.target.value)} style={{ width: 160 }} />
-          <button type="submit" className="btn btn-primary btn-sm">{t.testruns.link}</button>
+          <button type="submit" className="btn btn-primary btn-sm"><Link2 size={13} /> {t.testruns.link}</button>
         </form>
       )}
       {mode === 'report' && (
@@ -163,7 +163,7 @@ function ExecutionBugsPanel({ executionId, trackers }: { executionId: number; tr
           </div>
           <div style={{ display: 'flex', gap: '0.35rem' }}>
             <input className="input" placeholder={t.testruns.descOptionalPlaceholder} value={reportBody} onChange={(e) => setReportBody(e.target.value)} style={{ flex: 1 }} />
-            <button type="submit" className="btn btn-primary btn-sm">{t.testruns.createIssue}</button>
+            <button type="submit" className="btn btn-primary btn-sm"><ExternalLink size={13} /> {t.testruns.createIssue}</button>
           </div>
         </form>
       )}

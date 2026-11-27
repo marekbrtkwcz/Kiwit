@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { ListPlus, Plus, Trash2 } from 'lucide-react'
 import { api, CustomFieldDef } from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
@@ -63,7 +63,7 @@ export function CustomFieldDefsSection() {
   return (
     <div className="card">
       <div className="card-header">
-        <h3 className="card-title">{t.customFields.title}</h3>
+        <h3 className="card-title"><ListPlus size={15} /> {t.customFields.title}</h3>
       </div>
       <div style={{ display: 'grid', gap: '0.5rem' }}>
         {defs.length === 0 && <p style={{ color: 'var(--muted)', fontSize: '0.85rem', margin: 0 }}>{t.customFields.empty}</p>}
