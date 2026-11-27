@@ -30,6 +30,7 @@ import (
 	"github.com/kiwit/kiwit/internal/campaign"
 	"github.com/kiwit/kiwit/internal/captcha"
 	"github.com/kiwit/kiwit/internal/classification"
+	"github.com/kiwit/kiwit/internal/docs"
 	"github.com/kiwit/kiwit/internal/comment"
 	"github.com/kiwit/kiwit/internal/customfield"
 	"github.com/kiwit/kiwit/internal/dashboard"
@@ -349,6 +350,7 @@ func main() {
 	xmlrpc.NewHandlerWithWebhooks(authSvc, sqlDBConn, version.VERSION, cfg.UploadDir, webhookStore).Register(router)
 	initdb.Register(router, initdb.NewStore(sqlDBConn, pgPoolConn))
 	menu.Register(router)
+	docs.Register(router)
 	permissions.Register(router, permissions.NewStore(sqlDBConn, pgPoolConn))
 	settings.Register(router, settingsStore)
 	version.Register(router)

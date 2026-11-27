@@ -24,7 +24,7 @@ Lista funkcji i etapów rozwoju systemu Kiwit TCMS.
 - [x] **Audit log (historia zmian):** tabela `audit_log` (migracja 00026) zapisująca kto/co zmienił dla `test_case`/`test_plan`/`test_run` (create/update/delete/stop), endpointy `GET /api/v1/audit` i `/api/v1/audit/all`, unified diff pól tekstowych oraz e-mail z diffem przy edycji.
 - [x] **Bugzilla i Azure Boards:** providery `bugzilla` i `azure` w `issuetracker` (report/status/comment) obok GitHub/GitLab/Jira.
 - [x] **Dashboard użytkownika:** `GET /api/v1/dashboard` z widgetami „Moje uruchomienia” i „Ostatnia aktywność” na stronie głównej.
-- [ ] **Testy kontraktowe PostgreSQL w CI:** dodanie serwisu `postgres:16` w `.github/workflows/ci.yml` i uruchamianie wspólnej suity testów repozytoriów na obu silnikach.
+- [x] **Testy kontraktowe PostgreSQL w CI:** dodanie serwisu `postgres:16` w `.github/workflows/ci.yml` i uruchamianie wspólnej suity testów repozytoriów na obu silnikach.
 - [x] **Pełne tłumaczenia i18n (PL/EN):** wszystkie etykiety UI w słowniku `frontend/src/i18n/index.tsx` (brak hardkodowanych tekstów).
 - [x] **Storage obiektowy (S3 / MinIO):** opcjonalny backend załączników obok lokalnego dysku (`KIWIT_STORAGE_TYPE=s3`).
 - [x] **SSO (OIDC / OAuth2):** logowanie przez zewnętrznych dostawców tożsamości (`KIWIT_OIDC_ISSUER` + client ID/secret; state+nonce, JWKS verification).
