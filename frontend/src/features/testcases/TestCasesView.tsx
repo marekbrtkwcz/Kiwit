@@ -13,6 +13,7 @@ import {
   Plus,
   Search,
   Trash2,
+  Upload,
   X,
 } from 'lucide-react'
 import {
@@ -20,6 +21,7 @@ import {
   Category,
   ComponentItem,
   downloadExport,
+  ImportResult,
   RevisionItem,
   TemplateItem,
   TestCase,
@@ -137,6 +139,12 @@ export function TestCasesView() {
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [bulkStatus, setBulkStatus] = useState('')
   const [bulkPriority, setBulkPriority] = useState('')
+
+  // Import (CSV/JSON)
+  const [showImport, setShowImport] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importBusy, setImportBusy] = useState(false)
+  const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const populateForm = (tc: TestCase) => {
@@ -301,6 +309,26 @@ export function TestCasesView() {
     }
   }
 
+  const handleImport = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!importFile || !activeProductId || importBusy) return
+    setImportBusy(true)
+    try {
+      const res = await api.importTestCases(importFile, activeProductId)
+      setImportResult(res)
+      if (res.failed > 0) {
+        notify(t.testcases.importPartial(res.imported, res.failed), 'error')
+      } else {
+        notify(t.testcases.importToast(res.imported))
+      }
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.testcases.importFailed)
+    } finally {
+      setImportBusy(false)
+    }
+  }
+
   const applyTemplate = (tplId: number) => {
     const tpl = templates.find((x) => x.id === tplId)
     if (!tpl) return
@@ -379,11 +407,46 @@ export function TestCasesView() {
           formats={['csv', 'json', 'md', 'xlsx', 'feature']}
           onError={(msg) => notify(msg, 'error')}
         />
+        <button
+          type="button"
+          className={`btn ${showImport ? 'btn-primary' : 'btn-ghost'}`}
+          onClick={() => { setShowImport((v) => !v); setImportResult(null) }}
+          aria-expanded={showImport}
+        >
+          <Upload size={15} />
+          {t.testcases.importCases}
+        </button>
         <button type="button" className="btn btn-primary" onClick={openNewDrawer}>
           <Plus size={15} />
           {t.testcases.newCase}
         </button>
       </div>
+
+      {/* Import form */}
+      {showImport && (
+        <form onSubmit={handleImport} className="card" style={{ display: 'grid', gap: '0.6rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <input
+              type="file"
+              accept=".csv,.json,text/csv,application/json"
+              required
+              onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+            />
+            <button type="submit" className="btn btn-primary" disabled={!importFile || importBusy}>
+              <Upload size={15} />
+              {t.testcases.importCases}
+            </button>
+          </div>
+          <p className="muted" style={{ margin: 0 }}>{t.testcases.importHint}</p>
+          {importResult && importResult.errors && importResult.errors.length > 0 && (
+            <ul style={{ margin: 0, paddingLeft: '1.2rem', color: 'var(--danger, #b00)' }}>
+              {importResult.errors.map((rowErr) => (
+                <li key={rowErr.row}>{t.testcases.importRowError(rowErr.row, rowErr.error)}</li>
+              ))}
+            </ul>
+          )}
+        </form>
+      )}
 
       {/* Bulk action bar */}
       {selectedIds.length > 0 && (

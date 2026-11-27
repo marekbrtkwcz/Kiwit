@@ -495,6 +495,12 @@ export interface AttachmentItem {
   size_bytes: number
 }
 
+export interface ImportResult {
+  imported: number
+  failed: number
+  errors: { row: number; error: string }[] | null
+}
+
 export interface TelemetrySummary {
   products: number
   test_cases: number
@@ -1137,6 +1143,22 @@ export const api = {
       throw new Error((await res.text()) || `HTTP ${res.status}`)
     }
     return res.json() as Promise<AttachmentItem>
+  },
+
+  importTestCases: async (file: File, productId: number): Promise<ImportResult> => {
+    const form = new FormData()
+    form.append('product_id', String(productId))
+    form.append('file', file)
+    const token = getAuthToken()
+    const res = await fetch('/api/v1/testcases/import', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: form,
+    })
+    if (!res.ok) {
+      throw new Error((await res.text()) || `HTTP ${res.status}`)
+    }
+    return res.json() as Promise<ImportResult>
   },
 
   listExecutionBugs: (executionId: number) =>
