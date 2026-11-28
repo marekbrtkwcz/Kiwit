@@ -178,12 +178,14 @@ func main() {
 		logger.Info("anonymous read-only access enabled (KIWIT_ANONYMOUS_ACCESS=true)")
 	}
 
-	// Self-hosted captcha store (routes mounted after api is created below)
-	captchaEnabled := strings.EqualFold(os.Getenv("KIWIT_CAPTCHA_ENABLED"), "true") ||
-		(os.Getenv("KIWIT_CAPTCHA_ENABLED") == "" && cfg.AllowRegistration)
-	var captchaStore *captcha.Store
-	if captchaEnabled && cfg.AllowRegistration {
-		captchaStore = captcha.NewStore(10*time.Minute, 2*time.Second)
+	// Self-hosted captcha: the store and its GET /api/v1/auth/captcha route
+	// always exist (so the flag can be toggled at runtime in the admin UI);
+	// only authSvc.SetCaptcha decides whether registration verifies captchas.
+	// Default is false (see README), enabled via KIWIT_CAPTCHA_ENABLED=true
+	// or the captcha_enabled DB setting.
+	captchaEnabled := strings.EqualFold(os.Getenv("KIWIT_CAPTCHA_ENABLED"), "true")
+	captchaStore := captcha.NewStore(10*time.Minute, 2*time.Second)
+	if captchaEnabled {
 		authSvc.SetCaptcha(captchaStore)
 	}
 
@@ -227,6 +229,13 @@ func main() {
 
 	// Instance settings store — load domain from DB if set (overrides env)
 	settingsStore := settings.NewStore(sqlDBConn, pgPoolConn)
+	// Effective-value fallbacks for GET /api/v1/settings: DB value wins,
+	// otherwise the env/config default is reported.
+	settings.SetEnvDefaults(map[string]string{
+		settings.KeyAllowRegistration: fmt.Sprintf("%t", cfg.AllowRegistration),
+		settings.KeyCaptchaEnabled:    fmt.Sprintf("%t", captchaEnabled),
+		settings.KeyAnonymousAccess:   fmt.Sprintf("%t", anonymousAccess),
+	})
 	if dbDomain, err := settingsStore.Get(context.Background(), settings.KeyDomain); err == nil && dbDomain != "" {
 		authSvc.SetBaseURL(dbDomain)
 		logger.Info("using domain from database", "domain", dbDomain)
@@ -272,9 +281,8 @@ func main() {
 	humaConfig.Transformers = append(humaConfig.Transformers, web.ErrorRequestIDTransformer)
 	api := humachi.New(router, humaConfig)
 	auth.RegisterRoutes(api, authSvc)
-	if captchaStore != nil {
-		captcha.RegisterRoutes(api, captchaStore)
-	}
+	// Always mounted — the enabled flag only controls verification.
+	captcha.RegisterRoutes(api, captchaStore)
 	group.RegisterRoutes(api, group.NewStore(sqlDBConn, pgPoolConn))
 	property.RegisterRoutes(api, property.NewStore(sqlDBConn, pgPoolConn), guard)
 	plantype.RegisterRoutes(api, plantype.NewStore(sqlDBConn, pgPoolConn))
@@ -398,7 +406,7 @@ func main() {
 		logger.Info("allow_registration updated at runtime", "value", v)
 	})
 	settings.OnChange(settings.KeyCaptchaEnabled, func(v string) {
-		if settings.BoolVal(v) && captchaStore != nil {
+		if settings.BoolVal(v) {
 			authSvc.SetCaptcha(captchaStore)
 		} else {
 			authSvc.SetCaptcha(nil)
@@ -420,7 +428,7 @@ func main() {
 			authSvc.SetAllowRegistration(settings.BoolVal(v))
 		}
 		if v, err := settingsStore.Get(ctx, settings.KeyCaptchaEnabled); err == nil && v != "" {
-			if settings.BoolVal(v) && captchaStore != nil {
+			if settings.BoolVal(v) {
 				authSvc.SetCaptcha(captchaStore)
 			} else {
 				authSvc.SetCaptcha(nil)

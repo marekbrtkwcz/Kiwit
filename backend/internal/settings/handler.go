@@ -90,6 +90,33 @@ func NormalizeBool(s string) string {
 	return "false"
 }
 
+// envDefaults holds fallback values (seeded from env/config at startup via
+// SetEnvDefaults) used when a key has no value in the database yet, so the
+// API always reports the *effective* value.
+var envDefaults = map[string]string{}
+
+var defaultsMu sync.RWMutex
+
+// SetEnvDefaults registers fallback values for keys with no DB row.
+func SetEnvDefaults(d map[string]string) {
+	defaultsMu.Lock()
+	defer defaultsMu.Unlock()
+	for k, v := range d {
+		envDefaults[k] = v
+	}
+}
+
+// GetEffective returns the DB value, falling back to the env default.
+func (s *Store) GetEffective(ctx context.Context, key string) string {
+	v, err := s.Get(ctx, key)
+	if err == nil && v != "" {
+		return v
+	}
+	defaultsMu.RLock()
+	defer defaultsMu.RUnlock()
+	return envDefaults[key]
+}
+
 // Get returns the value for key, or "" if not set.
 func (s *Store) Get(ctx context.Context, key string) (string, error) {
 	var val string
@@ -176,13 +203,12 @@ func OnChange(key string, fn func(string)) {
 //   PUT  /api/v1/admin/settings/{key} — admin: update one setting
 //   POST /api/v1/admin/settings       — admin: bulk update {"settings": {"key": "val"}}
 func Register(r chi.Router, s *Store) {
-	// Public list
+	// Public list — returns effective values (DB value, else env default)
 	r.Get("/api/v1/settings", func(w http.ResponseWriter, req *http.Request) {
-		all, _ := s.GetAll(req.Context())
 		out := map[string]string{}
 		for _, def := range Defs {
 			if def.Public {
-				out[def.Key] = all[def.Key]
+				out[def.Key] = s.GetEffective(req.Context(), def.Key)
 			}
 		}
 		writeJSON(w, http.StatusOK, out)
@@ -200,7 +226,7 @@ func Register(r chi.Router, s *Store) {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "admin role required"})
 			return
 		}
-		val, _ := s.Get(req.Context(), key)
+		val := s.GetEffective(req.Context(), key)
 		writeJSON(w, http.StatusOK, map[string]string{"key": key, "value": maskIfNeeded(key, val)})
 	})
 
@@ -210,11 +236,9 @@ func Register(r chi.Router, s *Store) {
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": "admin role required"})
 			return
 		}
-		all, _ := s.GetAll(req.Context())
 		out := map[string]string{}
 		for _, def := range Defs {
-			v := all[def.Key]
-			out[def.Key] = maskIfNeeded(def.Key, v)
+			out[def.Key] = maskIfNeeded(def.Key, s.GetEffective(req.Context(), def.Key))
 		}
 		writeJSON(w, http.StatusOK, out)
 	})
@@ -246,6 +270,11 @@ func Register(r chi.Router, s *Store) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "domain required"})
 			return
 		}
+		if isMaskedOrEmptyPassword(key, val) {
+			// Client echoed back the masked placeholder — keep the stored secret.
+			writeJSON(w, http.StatusOK, map[string]string{"key": key, "value": maskIfNeeded(key, s.GetEffective(req.Context(), key)), "message": "unchanged"})
+			return
+		}
 		if err := s.Set(req.Context(), key, val); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
@@ -272,6 +301,9 @@ func Register(r chi.Router, s *Store) {
 			def := findDef(key)
 			if def == nil {
 				continue // skip unknown keys silently
+			}
+			if isMaskedOrEmptyPassword(key, val) {
+				continue // never overwrite the stored SMTP secret with ""/********
 			}
 			if def.Normalize != nil {
 				val = def.Normalize(val)
@@ -340,6 +372,13 @@ func maskIfNeeded(key, val string) string {
 		return "********"
 	}
 	return val
+}
+
+// isMaskedOrEmptyPassword reports whether a submitted value for a password
+// key is empty or the masked placeholder — such values must never overwrite
+// the stored secret.
+func isMaskedOrEmptyPassword(key, val string) bool {
+	return key == KeySMTPPass && (val == "" || val == "********")
 }
 
 func fireOnChange(key, val string) {

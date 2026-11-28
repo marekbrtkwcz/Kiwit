@@ -198,11 +198,11 @@ export function AuthView() {
       await refreshProducts()
     } catch (err) {
       setError(err instanceof Error ? err.message : t.errors.authFailed)
-      // A failed captcha is single-use — fetch a fresh challenge.
+      // A failed captcha is single-use — clearing it triggers the effect
+      // above to fetch a fresh challenge.
       if (mode === 'register' && captchaRequired) {
         setCaptcha(null)
         setCaptchaAnswer('')
-        api.getCaptcha().then(setCaptcha).catch(() => setCaptcha(null))
       }
     }
   }

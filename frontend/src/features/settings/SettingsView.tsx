@@ -39,7 +39,10 @@ export function SettingsView() {
   const loadInstance = async () => {
     if (!isAdmin) return
     try {
-      setInst(await api.getAdminSettings())
+      const s = await api.getAdminSettings()
+      // smtp_pass comes back masked ("********") — clear it so saving the
+      // form never writes the placeholder back as the real password.
+      setInst({ ...s, smtp_pass: '' })
     } catch {
       setInst({})
     }
@@ -125,7 +128,11 @@ export function SettingsView() {
   const setInstField = (key: string, value: string) => setInst((prev) => ({ ...prev, [key]: value }))
   const saveInstance = () =>
     void runAction(async () => {
-      await api.bulkUpdateSettings(inst)
+      const payload = { ...inst }
+      // Only send smtp_pass when the admin actually typed a new one.
+      if (!payload.smtp_pass) delete payload.smtp_pass
+      await api.bulkUpdateSettings(payload)
+      await loadInstance()
     }, t.settings.instanceSaved)
 
   const runAction = async (fn: () => Promise<void>, okMessage: string) => {

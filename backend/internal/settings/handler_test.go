@@ -206,3 +206,87 @@ func TestMaskedPassword(t *testing.T) {
 		t.Errorf("expected masked password, got %q", resp[KeySMTPPass])
 	}
 }
+
+// Regression: the admin UI echoes the masked smtp_pass ("********") back in
+// bulk updates — that must never overwrite the stored secret.
+func TestBulkUpdateSkipsMaskedSMTPPass(t *testing.T) {
+	db := setupTestDB(t)
+	s := NewStore(db, nil)
+	if err := s.Set(context.Background(), KeySMTPPass, "real-secret"); err != nil {
+		t.Fatal(err)
+	}
+	r := chi.NewRouter()
+	Register(r, s)
+
+	body := `{"settings": {"smtp_pass": "********", "allow_registration": "true"}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/settings", strings.NewReader(body))
+	req = req.WithContext(auth.WithUser(req.Context(), auth.User{Role: "admin"}))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	stored, _ := s.Get(context.Background(), KeySMTPPass)
+	if stored != "real-secret" {
+		t.Errorf("masked placeholder overwrote the secret: %q", stored)
+	}
+	reg, _ := s.Get(context.Background(), KeyAllowRegistration)
+	if reg != "true" {
+		t.Errorf("allow_registration should have been updated, got %q", reg)
+	}
+}
+
+// Empty smtp_pass must also be ignored (not stored as empty string).
+func TestBulkUpdateSkipsEmptySMTPPass(t *testing.T) {
+	db := setupTestDB(t)
+	s := NewStore(db, nil)
+	_ = s.Set(context.Background(), KeySMTPPass, "real-secret")
+	r := chi.NewRouter()
+	Register(r, s)
+
+	body := `{"settings": {"smtp_pass": ""}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/settings", strings.NewReader(body))
+	req = req.WithContext(auth.WithUser(req.Context(), auth.User{Role: "admin"}))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	stored, _ := s.Get(context.Background(), KeySMTPPass)
+	if stored != "real-secret" {
+		t.Errorf("empty value overwrote the secret: %q", stored)
+	}
+}
+
+// GET /api/v1/settings must report effective values: DB value if set,
+// otherwise the env default registered via SetEnvDefaults.
+func TestPublicSettingsEffectiveDefaults(t *testing.T) {
+	db := setupTestDB(t)
+	s := NewStore(db, nil)
+	SetEnvDefaults(map[string]string{KeyAllowRegistration: "true", KeyCaptchaEnabled: "false", KeyAnonymousAccess: "false"})
+	r := chi.NewRouter()
+	Register(r, s)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/settings", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	var resp map[string]string
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp[KeyAllowRegistration] != "true" {
+		t.Errorf("effective allow_registration should default to true, got %q", resp[KeyAllowRegistration])
+	}
+	if resp[KeyCaptchaEnabled] != "false" {
+		t.Errorf("effective captcha_enabled should default to false, got %q", resp[KeyCaptchaEnabled])
+	}
+	// DB value wins over the env default
+	_ = s.Set(context.Background(), KeyCaptchaEnabled, "true")
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/settings", nil))
+	_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+	if resp[KeyCaptchaEnabled] != "true" {
+		t.Errorf("DB value should win over env default, got %q", resp[KeyCaptchaEnabled])
+	}
+}
