@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -64,6 +65,78 @@ var publicRPCMethods = map[string]bool{
 	"KiwiTCMS.version": true,
 }
 
+// errRPCAuthRequired is returned by authorize when no user is authenticated.
+var errRPCAuthRequired = errors.New("authentication required")
+
+// methodClass is the authorization level of an RPC method.
+type methodClass int
+
+const (
+	methodPublic methodClass = iota // no authentication required
+	methodRead                       // any authenticated user
+	methodWrite                      // write role (tester/admin)
+	methodAdmin                      // admin only
+)
+
+// classifyMethod maps a method name to its authorization class.
+// Anything not explicitly read-only or public is treated as a write —
+// fail-closed.
+func classifyMethod(name string) methodClass {
+	if publicRPCMethods[name] {
+		return methodPublic
+	}
+	// Admin-only: user/group administration and issue-tracker configuration.
+	if strings.HasPrefix(name, "User.") && name != "User.filter" {
+		return methodAdmin
+	}
+	if name == "Group.create" ||
+		(strings.HasPrefix(name, "BugTracker.") && name != "BugTracker.filter") {
+		return methodAdmin
+	}
+	// Read-only: filters, getters, comments/history, telemetry, misc reads.
+	if strings.HasSuffix(name, ".filter") ||
+		strings.Contains(name, ".get_") ||
+		strings.HasSuffix(name, ".comments") ||
+		strings.HasSuffix(name, ".history") ||
+		strings.HasSuffix(name, ".sortkeys") ||
+		strings.HasSuffix(name, ".properties") ||
+		strings.HasSuffix(name, ".details") ||
+		strings.HasSuffix(name, ".count_attachments") ||
+		strings.HasSuffix(name, ".list_attachments") ||
+		strings.HasPrefix(name, "Telemetry.") ||
+		name == "Markdown.render" ||
+		name == "Auth.logout" ||
+		name == "Group.users" ||
+		name == "Group.permissions" {
+		return methodRead
+	}
+	return methodWrite
+}
+
+// authorize enforces authentication (who) and role-based authorization
+// (what may be done) for an RPC method call.
+func (h *Handler) authorize(req *http.Request, method string) error {
+	switch classifyMethod(method) {
+	case methodPublic:
+		return nil
+	case methodRead:
+		if _, ok := auth.UserFromContext(req.Context()); !ok {
+			return errRPCAuthRequired
+		}
+		return nil
+	case methodAdmin:
+		if _, ok := auth.UserFromContext(req.Context()); !ok {
+			return errRPCAuthRequired
+		}
+		return auth.CheckRole(req.Context(), "admin")
+	default: // methodWrite
+		if _, ok := auth.UserFromContext(req.Context()); !ok {
+			return errRPCAuthRequired
+		}
+		return auth.CheckWriteRole(req.Context(), "admin", "tester")
+	}
+}
+
 // authenticate resolves the caller from the Authorization bearer token or
 // the session cookie and stores the user in the request context. Requests
 // with an invalid credential are left unauthenticated (fail-closed below).
@@ -100,11 +173,13 @@ func (h *Handler) serveHTTP(w http.ResponseWriter, req *http.Request) {
 		writeFault(w, 2, "method not found: "+call.MethodName)
 		return
 	}
-	if !publicRPCMethods[call.MethodName] {
-		if _, ok := auth.UserFromContext(req.Context()); !ok {
-			writeFault(w, 401, "authentication required")
-			return
+	if err := h.authorize(req, call.MethodName); err != nil {
+		if errors.Is(err, errRPCAuthRequired) {
+			writeFault(w, 401, err.Error())
+		} else {
+			writeFault(w, 403, err.Error())
 		}
+		return
 	}
 	args := make([]any, len(call.Params))
 	for i, p := range call.Params {
@@ -164,6 +239,35 @@ func (h *Handler) kiwiVersion(_ *http.Request, _ []any) (any, error) {
 	return map[string]any{"version": h.version, "name": "Kiwit TCMS"}, nil
 }
 
+// productScopedTables maps filterable tables to a SQL expression yielding the
+// row's product_id, used to enforce product_members isolation on .filter for
+// non-admin users.
+var productScopedTables = map[string]string{
+	"test_cases":         "t.product_id",
+	"test_plans":         "t.product_id",
+	"products":           "t.id",
+	"versions":           "t.product_id",
+	"components":         "t.product_id",
+	"requirements":       "t.product_id",
+	"campaigns":          "t.product_id",
+	"test_runs":          "(SELECT tp.product_id FROM test_plans tp WHERE tp.id = t.test_plan_id)",
+	"test_executions":    "(SELECT tp.product_id FROM test_runs tr JOIN test_plans tp ON tp.id = tr.test_plan_id WHERE tr.id = t.test_run_id)",
+	"milestones":         "(SELECT v.product_id FROM versions v WHERE v.id = t.version_id)",
+	"test_case_datasets": "(SELECT tc.product_id FROM test_cases tc WHERE tc.id = t.test_case_id)",
+}
+
+// productAccessCond returns a SQL condition (mirroring AccessGuard semantics:
+// a product with no members is public, otherwise membership or a group
+// permission is required) plus its bound args.
+func productAccessCond(productExpr string, userID int64) (string, []any) {
+	cond := `(NOT EXISTS (SELECT 1 FROM product_members pm WHERE pm.product_id = ` + productExpr + `)` +
+		` OR EXISTS (SELECT 1 FROM product_members pm WHERE pm.product_id = ` + productExpr + ` AND pm.user_id = ?)` +
+		` OR EXISTS (SELECT 1 FROM group_product_permissions gpp` +
+		` JOIN user_group_members ugm ON ugm.group_id = gpp.group_id` +
+		` WHERE gpp.product_id = ` + productExpr + ` AND ugm.user_id = ?))`
+	return cond, []any{userID, userID}
+}
+
 func (h *Handler) filterRows(table string, cols []string, relations ...map[string]relationJoin) func(r *http.Request, args []any) (any, error) {
 	return h.filterRowsWhere(table, "", cols, relations...)
 }
@@ -190,13 +294,26 @@ func (h *Handler) filterRowsWhere(table, baseCond string, cols []string, relatio
 		if err != nil {
 			return nil, err
 		}
-		where := lw.where
-		if baseCond != "" {
-			if where == "1=1" {
-				where = baseCond
-			} else {
-				where = baseCond + " AND (" + where + ")"
+		// Assemble the WHERE clause in argument order: product-members
+		// isolation first, then the base condition, then the lookup clause.
+		parts := make([]string, 0, 3)
+		qargs := lw.args
+		if uid := auth.FilterUserID(r.Context()); uid != nil {
+			if expr, ok := productScopedTables[table]; ok {
+				cond, condArgs := productAccessCond(expr, *uid)
+				parts = append(parts, cond)
+				qargs = append(condArgs, qargs...)
 			}
+		}
+		if baseCond != "" {
+			parts = append(parts, baseCond)
+		}
+		if lw.where != "1=1" {
+			parts = append(parts, "("+lw.where+")")
+		}
+		where := "1=1"
+		if len(parts) > 0 {
+			where = strings.Join(parts, " AND ")
 		}
 		joins := joinsForQuery(query, relMap)
 		joinClause := ""
@@ -205,7 +322,7 @@ func (h *Handler) filterRowsWhere(table, baseCond string, cols []string, relatio
 		}
 		q := fmt.Sprintf("SELECT %s FROM %s t %sWHERE %s ORDER BY t.id DESC LIMIT 100",
 			strings.Join(cols, ", "), table, joinClause, where)
-		rows, err := h.db.QueryContext(r.Context(), q, lw.args...)
+		rows, err := h.db.QueryContext(r.Context(), q, qargs...)
 		if err != nil {
 			return nil, err
 		}
@@ -434,11 +551,13 @@ func (h *Handler) serveJSONRPC(w http.ResponseWriter, req *http.Request) {
 		writeJSONFault(w, call.ID, -32601, "method not found: "+call.Method)
 		return
 	}
-	if !publicRPCMethods[call.Method] {
-		if _, ok := auth.UserFromContext(req.Context()); !ok {
-			writeJSONFault(w, call.ID, -32001, "authentication required")
-			return
+	if err := h.authorize(req, call.Method); err != nil {
+		if errors.Is(err, errRPCAuthRequired) {
+			writeJSONFault(w, call.ID, -32001, err.Error())
+		} else {
+			writeJSONFault(w, call.ID, -32003, err.Error())
 		}
+		return
 	}
 	args := call.Params
 	if args == nil {

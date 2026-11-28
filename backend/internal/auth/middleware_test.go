@@ -97,6 +97,34 @@ func TestRequireAuthProtectedPaths(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 }
 
+func TestRequireAuthSettingsWithBearer(t *testing.T) {
+	svc := newTestService(t)
+	u, err := svc.Register(context.Background(), "a@kiwit.local", "admin", "supersecret123")
+	require.NoError(t, err)
+	tok, err := svc.IssueJWT(u)
+	require.NoError(t, err)
+
+	// A request WITH a bearer token must go through normal auth, so the
+	// handler sees the admin user even on a public settings path (otherwise
+	// GET /api/v1/settings/{non-public} would 403 for a real admin).
+	var role string
+	var code int
+	h := svc.RequireAuth(recorder(&role, &code))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/settings/smtp_host", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, u.Role, role)
+
+	// Without a token the same path is still public (handler decides).
+	role, code = "", 0
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/settings/smtp_host", nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+}
+
 func TestRequireAuthAnonymousAccess(t *testing.T) {
 	svc := newTestService(t)
 	svc.SetAnonymousAccess(true)

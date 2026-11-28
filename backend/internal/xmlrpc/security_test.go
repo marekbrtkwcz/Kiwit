@@ -118,6 +118,101 @@ func TestBuildWhereRejectsInjection(t *testing.T) {
 	}
 }
 
+// Role-based authorization: a viewer may read but not mutate; admin-only
+// methods reject testers; writes require a write role.
+func TestRPCRoleAuthorization(t *testing.T) {
+	db := setupTestDB(t)
+	svc := auth.NewService(db, "test-secret")
+	h := NewHandler(svc, db, "0.1.0")
+	r := chi.NewRouter()
+	h.Register(r)
+
+	call := func(token, method, params string) string {
+		body := `<?xml version="1.0"?><methodCall><methodName>` + method + `</methodName><params>` + params + `</params></methodCall>`
+		req := httptest.NewRequest(http.MethodPost, "/xml-rpc/", strings.NewReader(body))
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		return rec.Body.String()
+	}
+
+	viewer := userToken(t, svc, 3, "viewer")
+	tester := userToken(t, svc, 2, "tester")
+	admin := adminToken(t, svc)
+
+	// viewer: read allowed, write forbidden
+	if out := call(viewer, "TestCase.filter", ""); strings.Contains(out, "fault") {
+		t.Errorf("viewer must be allowed to filter, got: %s", out)
+	}
+	if out := call(viewer, "TestCase.create", `<param><value><struct><member><name>summary</name><value><string>x</string></value></member></struct></value></param>`); !strings.Contains(out, "fault") {
+		t.Errorf("viewer must NOT create test cases, got: %s", out)
+	}
+	if out := call(viewer, "TestCase.remove", `<param><value><int>1</int></value></param>`); !strings.Contains(out, "fault") {
+		t.Errorf("viewer must NOT remove test cases, got: %s", out)
+	}
+	// tester: write allowed, admin-only forbidden
+	if out := call(tester, "TestCase.create", `<param><value><struct><member><name>summary</name><value><string>x</string></value></member></struct></value></param>`); strings.Contains(out, "fault") {
+		t.Errorf("tester must be allowed to create, got: %s", out)
+	}
+	if out := call(tester, "User.join_group", `<param><value><string>tester</string></value></param><param><value><string>Administrators</string></value></param>`); !strings.Contains(out, "fault") {
+		t.Errorf("tester must NOT call admin-only User.join_group, got: %s", out)
+	}
+	// admin: admin-only allowed (reaches the handler; may fault on data, not on authz)
+	if out := call(admin, "User.join_group", `<param><value><string>tester</string></value></param><param><value><string>x</string></value></param>`); strings.Contains(out, "insufficient role") {
+		t.Errorf("admin must pass admin-only methods, got: %s", out)
+	}
+	// JSON-RPC: viewer write rejected with -32003
+	body := `{"jsonrpc":"2.0","method":"TestCase.create","params":[{"summary":"x"}],"id":1}`
+	req := httptest.NewRequest(http.MethodPost, "/json-rpc/", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+viewer)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	var resp jsonRPCResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Error == nil || resp.Error.Code != -32003 {
+		t.Fatalf("expected -32003 forbidden for viewer write, got %+v", resp.Error)
+	}
+}
+
+// product_members isolation: a non-admin user only sees products that are
+// public (no members) or where they are a member / have a group permission.
+func TestRPCFilterProductIsolation(t *testing.T) {
+	db := setupTestDB(t)
+	db.Exec(`INSERT INTO products (id, name, description) VALUES (2, 'Secret', 'restricted')`)
+	// Product 2 is restricted to user 99; tester (id 2) is not a member.
+	db.Exec(`INSERT INTO product_members (product_id, user_id, role) VALUES (2, 99, 'tester')`)
+
+	svc := auth.NewService(db, "test-secret")
+	h := NewHandler(svc, db, "0.1.0")
+	r := chi.NewRouter()
+	h.Register(r)
+
+	call := func(token string) string {
+		body := `<?xml version="1.0"?><methodCall><methodName>Product.filter</methodName><params></params></methodCall>`
+		req := httptest.NewRequest(http.MethodPost, "/xml-rpc/", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		return rec.Body.String()
+	}
+
+	testerOut := call(userToken(t, svc, 2, "tester"))
+	if strings.Contains(testerOut, "Secret") {
+		t.Errorf("tester must not see restricted product, got: %s", testerOut)
+	}
+	if !strings.Contains(testerOut, "Demo") {
+		t.Errorf("tester must see public product, got: %s", testerOut)
+	}
+	adminOut := call(adminToken(t, svc))
+	if !strings.Contains(adminOut, "Secret") || !strings.Contains(adminOut, "Demo") {
+		t.Errorf("admin must see all products, got: %s", adminOut)
+	}
+}
+
 // End-to-end: a malicious struct member name in TestCase.filter must produce
 // a fault, not dump rows.
 func TestRPCFilterInjectionEndToEnd(t *testing.T) {

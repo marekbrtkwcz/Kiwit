@@ -107,7 +107,9 @@ var publicAuthPaths = map[string]bool{
 // isPublicSettingsPath reports whether a GET on a settings route is public.
 // GET /api/v1/settings and GET /api/v1/settings/{key} are public — the
 // handler itself only exposes keys marked Public and enforces admin for the
-// rest (fail-closed via UserFromContext).
+// rest (fail-closed via UserFromContext). Only applies when no bearer token
+// is sent, so an authenticated admin still gets the admin view of
+// non-public keys.
 func isPublicSettingsPath(method, path string) bool {
 	if method != http.MethodGet {
 		return false
@@ -129,7 +131,7 @@ func (s *Service) RequireAuth(next http.Handler) http.Handler {
 		header := r.Header.Get("Authorization")
 		if !strings.HasPrefix(r.URL.Path, "/api/v1/") ||
 			publicAuthPaths[r.URL.Path] ||
-			isPublicSettingsPath(r.Method, r.URL.Path) ||
+			(header == "" && isPublicSettingsPath(r.Method, r.URL.Path)) ||
 			((r.URL.Path == "/api/v1/auth/password-reset" ||
 				r.URL.Path == "/api/v1/auth/password-reset/confirm") && header == "") {
 			next.ServeHTTP(w, r)

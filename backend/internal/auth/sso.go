@@ -170,10 +170,10 @@ func (h *SSOHandler) handleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Redirect to the frontend callback route (BrowserRouter path, not a
-	// hash fragment, so the route actually matches). The token is consumed
-	// immediately by AuthView and removed from the URL via navigate().
-	redirect := fmt.Sprintf("%s/auth/callback?token=%s", h.cfg.FrontendURL, url.QueryEscape(jwtToken))
+	// Redirect to the frontend callback route. The token goes into the URL
+	// fragment (never sent to servers/proxies, so it stays out of HTTP logs);
+	// AuthView reads it from location.hash and navigates away, removing it.
+	redirect := fmt.Sprintf("%s/auth/callback#token=%s", h.cfg.FrontendURL, url.QueryEscape(jwtToken))
 	http.Redirect(w, r, redirect, http.StatusFound)
 }
 

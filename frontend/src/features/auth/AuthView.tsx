@@ -40,9 +40,11 @@ export function AuthView() {
   const [ldapUsername, setLdapUsername] = useState('')
   const [ldapPassword, setLdapPassword] = useState('')
 
-  // Handle SSO callback: backend redirects to /#/auth/callback?token=...
+  // Handle SSO callback: backend redirects to /auth/callback#token=...
+  // Only the pathname triggers this — a ?token= on /reset-password is a
+  // password-reset token and must NOT be stored as a session JWT.
   useEffect(() => {
-    if (location.pathname === '/auth/callback' || searchParams.get('token')) {
+    if (location.pathname === '/auth/callback') {
       const tok = new URLSearchParams(location.hash.replace(/^#\/?/, '?')).get('token') || searchParams.get('token')
       if (tok) {
         setAuthToken(tok)

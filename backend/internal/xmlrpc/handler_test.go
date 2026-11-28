@@ -21,8 +21,14 @@ func setupTestDB(t *testing.T) *sql.DB {
 	for _, stmt := range []string{
 		`CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT, username TEXT, password_hash TEXT, role TEXT, is_active INTEGER, created_at TEXT, updated_at TEXT)`,
 		`INSERT INTO users (id, email, username, password_hash, role, is_active) VALUES (1, 'admin@example.com', 'admin', 'x', 'admin', 1)`,
+		`INSERT INTO users (id, email, username, password_hash, role, is_active) VALUES (2, 'tester@example.com', 'tester', 'x', 'tester', 1)`,
+		`INSERT INTO users (id, email, username, password_hash, role, is_active) VALUES (3, 'viewer@example.com', 'viewer', 'x', 'viewer', 1)`,
+		`CREATE TABLE product_members (product_id INTEGER, user_id INTEGER, role TEXT, PRIMARY KEY (product_id, user_id))`,
+		`CREATE TABLE user_groups (id INTEGER PRIMARY KEY, name TEXT)`,
+		`CREATE TABLE user_group_members (group_id INTEGER, user_id INTEGER, PRIMARY KEY (group_id, user_id))`,
+		`CREATE TABLE group_product_permissions (group_id INTEGER, product_id INTEGER, role TEXT, PRIMARY KEY (group_id, product_id))`,
 		`CREATE TABLE test_runs (id INTEGER PRIMARY KEY, summary TEXT, plan_id INTEGER, build_id INTEGER, stopped_at TEXT)`,
-		`CREATE TABLE test_cases (id INTEGER PRIMARY KEY, summary TEXT, category_id INTEGER, is_automated INTEGER, deleted_at DATETIME NULL)`,
+		`CREATE TABLE test_cases (id INTEGER PRIMARY KEY, summary TEXT, category_id INTEGER, is_automated INTEGER, deleted_at DATETIME NULL, product_id INTEGER, priority TEXT, status TEXT, preconditions TEXT, created_at TEXT, updated_at TEXT)`,
 		`CREATE TABLE test_plans (id INTEGER PRIMARY KEY, name TEXT, product_id INTEGER, version_id INTEGER, description TEXT DEFAULT '', is_active INTEGER DEFAULT 1, created_at TEXT, updated_at TEXT)`,
 		`CREATE TABLE test_plan_cases (test_plan_id INTEGER, test_case_id INTEGER, position INTEGER DEFAULT 0, PRIMARY KEY (test_plan_id, test_case_id))`,
 		`CREATE TABLE versions (id INTEGER PRIMARY KEY, value TEXT, product_id INTEGER)`,
@@ -38,11 +44,17 @@ func setupTestDB(t *testing.T) *sql.DB {
 	return db
 }
 
-// adminToken issues a JWT for a synthetic admin user (no DB row needed —
-// AuthenticateBearer only verifies the signature and reads the claims).
+// adminToken issues a JWT for the seeded admin user (id 1).
 func adminToken(t *testing.T, svc *auth.Service) string {
 	t.Helper()
-	tok, err := svc.IssueJWT(auth.User{ID: 1, Username: "admin", Email: "admin@example.com", Role: "admin"})
+	return userToken(t, svc, 1, "admin")
+}
+
+// userToken issues a JWT for a seeded test user (AuthenticateBearer reloads
+// the user from the DB by sub, so the row must exist in setupTestDB).
+func userToken(t *testing.T, svc *auth.Service, id int64, role string) string {
+	t.Helper()
+	tok, err := svc.IssueJWT(auth.User{ID: id, Username: role, Email: role + "@example.com", Role: role})
 	if err != nil {
 		t.Fatal(err)
 	}
