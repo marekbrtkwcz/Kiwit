@@ -112,7 +112,7 @@ func (h *Handler) registerMissingMethods() {
 
 func (h *Handler) simpleUpdate(table string, cols []string) func(r *http.Request, args []any) (any, error) {
 	return func(r *http.Request, args []any) (any, error) {
-		if h.db == nil {
+		if !h.available() {
 			return nil, errNoDB
 		}
 		id := argInt(args[0])
@@ -129,7 +129,7 @@ func (h *Handler) simpleUpdate(table string, cols []string) func(r *http.Request
 			return map[string]any{"id": id}, nil
 		}
 		vals = append(vals, id)
-		_, err := h.db.ExecContext(r.Context(),
+		_, err := h.exec(r.Context(),
 			fmt.Sprintf("UPDATE %s SET %s WHERE id = ?", table, strings.Join(setClauses, ", ")), vals...)
 		if err != nil {
 			return nil, err
@@ -141,12 +141,12 @@ func (h *Handler) simpleUpdate(table string, cols []string) func(r *http.Request
 // --- Environment properties (JSONB column on environments table) ---
 
 func (h *Handler) envProperties(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	envID := argInt(args[0])
 	var props string
-	if err := h.db.QueryRowContext(r.Context(), `SELECT COALESCE(properties,'{}') FROM environments WHERE id = ?`, envID).Scan(&props); err != nil {
+	if err := h.queryRow(r.Context(), `SELECT COALESCE(properties,'{}') FROM environments WHERE id = ?`, envID).Scan(&props); err != nil {
 		return nil, fmt.Errorf("environment %d not found", envID)
 	}
 	// Return as list of {name, value} dicts like kiwitcms
@@ -159,7 +159,7 @@ func (h *Handler) envProperties(r *http.Request, args []any) (any, error) {
 }
 
 func (h *Handler) envAddProperty(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	envID := argInt(args[0])
@@ -167,30 +167,30 @@ func (h *Handler) envAddProperty(r *http.Request, args []any) (any, error) {
 	value := argStr(args[2])
 	// Read current, merge, write back
 	var props string
-	err := h.db.QueryRowContext(r.Context(), `SELECT COALESCE(properties,'{}') FROM environments WHERE id = ?`, envID).Scan(&props)
+	err := h.queryRow(r.Context(), `SELECT COALESCE(properties,'{}') FROM environments WHERE id = ?`, envID).Scan(&props)
 	if err != nil {
 		return nil, fmt.Errorf("environment %d not found", envID)
 	}
 	merged := mergeJSONProp(props, name, value)
-	if _, err := h.db.ExecContext(r.Context(), `UPDATE environments SET properties = ? WHERE id = ?`, merged, envID); err != nil {
+	if _, err := h.exec(r.Context(), `UPDATE environments SET properties = ? WHERE id = ?`, merged, envID); err != nil {
 		return nil, err
 	}
 	return map[string]any{"name": name, "value": value}, nil
 }
 
 func (h *Handler) envRemoveProperty(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	envID := argInt(args[0])
 	name := argStr(args[1])
 	var props string
-	err := h.db.QueryRowContext(r.Context(), `SELECT COALESCE(properties,'{}') FROM environments WHERE id = ?`, envID).Scan(&props)
+	err := h.queryRow(r.Context(), `SELECT COALESCE(properties,'{}') FROM environments WHERE id = ?`, envID).Scan(&props)
 	if err != nil {
 		return nil, fmt.Errorf("environment %d not found", envID)
 	}
 	merged := removeJSONProp(props, name)
-	if _, err := h.db.ExecContext(r.Context(), `UPDATE environments SET properties = ? WHERE id = ?`, merged, envID); err != nil {
+	if _, err := h.exec(r.Context(), `UPDATE environments SET properties = ? WHERE id = ?`, merged, envID); err != nil {
 		return nil, err
 	}
 	return true, nil
@@ -199,11 +199,11 @@ func (h *Handler) envRemoveProperty(r *http.Request, args []any) (any, error) {
 // --- Group permissions ---
 
 func (h *Handler) groupPermissions(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	gid := argInt(args[0])
-	rows, err := h.db.QueryContext(r.Context(), `
+	rows, err := h.query(r.Context(), `
 		SELECT p.id, p.name, g.role FROM group_product_permissions g
 		JOIN products p ON p.id = g.product_id WHERE g.group_id = ? ORDER BY p.name`, gid)
 	if err != nil {
@@ -224,16 +224,16 @@ func (h *Handler) groupPermissions(r *http.Request, args []any) (any, error) {
 // --- TestCase: components ---
 
 func (h *Handler) tcAddComponent(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	caseID := argInt(args[0])
 	compName := argStr(args[1])
 	var compID int64
-	if err := h.db.QueryRowContext(r.Context(), `SELECT id FROM components WHERE name = ?`, compName).Scan(&compID); err != nil {
+	if err := h.queryRow(r.Context(), `SELECT id FROM components WHERE name = ?`, compName).Scan(&compID); err != nil {
 		return nil, fmt.Errorf("component %q not found", compName)
 	}
-	_, err := h.db.ExecContext(r.Context(), `INSERT OR IGNORE INTO test_case_components (test_case_id, component_id) VALUES (?, ?)`, caseID, compID)
+	err := h.execIgnore(r.Context(), `INSERT OR IGNORE INTO test_case_components (test_case_id, component_id) VALUES (?, ?)`, caseID, compID)
 	if err != nil {
 		return nil, err
 	}
@@ -241,24 +241,24 @@ func (h *Handler) tcAddComponent(r *http.Request, args []any) (any, error) {
 }
 
 func (h *Handler) tcRemoveComponent(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	caseID := argInt(args[0])
 	compID := argInt(args[1])
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM test_case_components WHERE test_case_id = ? AND component_id = ?`, caseID, compID)
+	_, err := h.exec(r.Context(), `DELETE FROM test_case_components WHERE test_case_id = ? AND component_id = ?`, caseID, compID)
 	return map[string]any{"ok": err == nil}, err
 }
 
 // --- TestCase: sortkeys ---
 
 func (h *Handler) tcSortkeys(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	caseID := argInt(args[0])
 	var sk int64
-	err := h.db.QueryRowContext(r.Context(), `SELECT COALESCE(sortkey, id) FROM test_cases WHERE id = ?`, caseID).Scan(&sk)
+	err := h.queryRow(r.Context(), `SELECT COALESCE(sortkey, id) FROM test_cases WHERE id = ?`, caseID).Scan(&sk)
 	if err != nil {
 		return int64(0), nil
 	}
@@ -268,7 +268,7 @@ func (h *Handler) tcSortkeys(r *http.Request, args []any) (any, error) {
 // --- TestCase: remove_comment ---
 
 func (h *Handler) tcRemoveComment(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	caseID := argInt(args[0])
@@ -277,10 +277,10 @@ func (h *Handler) tcRemoveComment(r *http.Request, args []any) (any, error) {
 		commentID = argInt(args[1])
 	}
 	if commentID > 0 {
-		_, err := h.db.ExecContext(r.Context(), `DELETE FROM comments WHERE id = ? AND entity_type = 'test_case' AND entity_id = ?`, commentID, caseID)
+		_, err := h.exec(r.Context(), `DELETE FROM comments WHERE id = ? AND entity_type = 'test_case' AND entity_id = ?`, commentID, caseID)
 		return map[string]any{"ok": err == nil}, err
 	}
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM comments WHERE entity_type = 'test_case' AND entity_id = ?`, caseID)
+	_, err := h.exec(r.Context(), `DELETE FROM comments WHERE entity_type = 'test_case' AND entity_id = ?`, caseID)
 	return map[string]any{"ok": err == nil}, err
 }
 
@@ -288,7 +288,7 @@ func (h *Handler) tcRemoveComment(r *http.Request, args []any) (any, error) {
 
 func (h *Handler) entityProperties(entityType string) func(r *http.Request, args []any) (any, error) {
 	return func(r *http.Request, args []any) (any, error) {
-		if h.db == nil {
+		if !h.available() {
 			return nil, errNoDB
 		}
 		query := map[string]any{}
@@ -306,7 +306,7 @@ func (h *Handler) entityProperties(entityType string) func(r *http.Request, args
 			where += " AND entity_id = ?"
 			vals = append(vals, argInt(id))
 		}
-		rows, err := h.db.QueryContext(r.Context(),
+		rows, err := h.query(r.Context(),
 			`SELECT id, entity_id, name, value FROM entity_properties WHERE `+where+` ORDER BY entity_id, name`, vals...)
 		if err != nil {
 			return nil, err
@@ -326,27 +326,26 @@ func (h *Handler) entityProperties(entityType string) func(r *http.Request, args
 
 func (h *Handler) entityAddProperty(entityType string) func(r *http.Request, args []any) (any, error) {
 	return func(r *http.Request, args []any) (any, error) {
-		if h.db == nil {
+		if !h.available() {
 			return nil, errNoDB
 		}
 		entityID := argInt(args[0])
 		name := argStr(args[1])
 		value := argStr(args[2])
-		res, err := h.db.ExecContext(r.Context(),
+		id, err := h.insertID(r.Context(),
 			`INSERT INTO entity_properties (entity_type, entity_id, name, value) VALUES (?, ?, ?, ?)
 			 ON CONFLICT (entity_type, entity_id, name) DO UPDATE SET value = excluded.value`,
 			entityType, entityID, name, value)
 		if err != nil {
 			return nil, err
 		}
-		id, _ := res.LastInsertId()
 		return map[string]any{"id": id, "name": name, "value": value}, nil
 	}
 }
 
 func (h *Handler) entityRemoveProperty(entityType string) func(r *http.Request, args []any) (any, error) {
 	return func(r *http.Request, args []any) (any, error) {
-		if h.db == nil {
+		if !h.available() {
 			return nil, errNoDB
 		}
 		m := argMap(args, "query")
@@ -364,7 +363,7 @@ func (h *Handler) entityRemoveProperty(entityType string) func(r *http.Request, 
 			where += " AND name = ?"
 			vals = append(vals, argStr(n))
 		}
-		_, err := h.db.ExecContext(r.Context(), `DELETE FROM entity_properties WHERE `+where, vals...)
+		_, err := h.exec(r.Context(), `DELETE FROM entity_properties WHERE `+where, vals...)
 		return map[string]any{"ok": err == nil}, err
 	}
 }
@@ -372,13 +371,13 @@ func (h *Handler) entityRemoveProperty(entityType string) func(r *http.Request, 
 // --- TestCase: notification CC (stored as entity_properties with prefix) ---
 
 func (h *Handler) tcAddNotificationCC(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	caseID := argInt(args[0])
 	email := argStr(args[1])
 	// Store as property with special name prefix
-	_, err := h.db.ExecContext(r.Context(),
+	_, err := h.exec(r.Context(),
 		`INSERT INTO entity_properties (entity_type, entity_id, name, value) VALUES ('test_case', ?, ?, ?)
 		 ON CONFLICT (entity_type, entity_id, name) DO NOTHING`,
 		caseID, "notification_cc:"+email, email)
@@ -389,23 +388,23 @@ func (h *Handler) tcAddNotificationCC(r *http.Request, args []any) (any, error) 
 }
 
 func (h *Handler) tcRemoveNotificationCC(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	caseID := argInt(args[0])
 	email := argStr(args[1])
-	_, err := h.db.ExecContext(r.Context(),
+	_, err := h.exec(r.Context(),
 		`DELETE FROM entity_properties WHERE entity_type = 'test_case' AND entity_id = ? AND name = ?`,
 		caseID, "notification_cc:"+email)
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) tcGetNotificationCC(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	caseID := argInt(args[0])
-	rows, err := h.db.QueryContext(r.Context(),
+	rows, err := h.query(r.Context(),
 		`SELECT value FROM entity_properties WHERE entity_type = 'test_case' AND entity_id = ? AND name LIKE 'notification_cc:%' ORDER BY value`, caseID)
 	if err != nil {
 		return nil, err
@@ -424,7 +423,7 @@ func (h *Handler) tcGetNotificationCC(r *http.Request, args []any) (any, error) 
 // --- TestPlan: clone ---
 
 func (h *Handler) tpClone(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	srcID := argInt(args[0])
@@ -432,25 +431,24 @@ func (h *Handler) tpClone(r *http.Request, args []any) (any, error) {
 	var productID, versionID, authorID int64
 	var name, desc string
 	var active bool
-	err := h.db.QueryRowContext(r.Context(),
+	err := h.queryRow(r.Context(),
 		`SELECT product_id, version_id, COALESCE(author_id,0), name, description, is_active FROM test_plans WHERE id = ?`, srcID).
 		Scan(&productID, &versionID, &authorID, &name, &desc, &active)
 	if err != nil {
 		return nil, fmt.Errorf("source plan %d not found", srcID)
 	}
-	res, err := h.db.ExecContext(r.Context(),
+	newID, err := h.insertID(r.Context(),
 		`INSERT INTO test_plans (product_id, version_id, name, description, is_active, author_id) VALUES (?, ?, ?, ?, ?, ?)`,
 		productID, versionID, name+" (clone)", desc, active, authorID)
 	if err != nil {
 		return nil, err
 	}
-	newID, _ := res.LastInsertId()
 	// Copy case associations with positions
-	_, _ = h.db.ExecContext(r.Context(),
+	_, _ = h.exec(r.Context(),
 		`INSERT INTO test_plan_cases (test_plan_id, test_case_id, position) SELECT ?, test_case_id, position FROM test_plan_cases WHERE test_plan_id = ?`,
 		newID, srcID)
 	// Copy tags
-	_, _ = h.db.ExecContext(r.Context(),
+	_ = h.execIgnore(r.Context(),
 		`INSERT OR IGNORE INTO test_plan_tags (test_plan_id, tag_id) SELECT ?, tag_id FROM test_plan_tags WHERE test_plan_id = ?`,
 		newID, srcID)
 	return map[string]any{"id": newID, "name": name + " (clone)"}, nil
@@ -459,13 +457,13 @@ func (h *Handler) tpClone(r *http.Request, args []any) (any, error) {
 // --- TestPlan: update_case_order ---
 
 func (h *Handler) tpUpdateCaseOrder(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	planID := argInt(args[0])
 	caseID := argInt(args[1])
 	sortkey := argInt(args[2])
-	_, err := h.db.ExecContext(r.Context(),
+	_, err := h.exec(r.Context(),
 		`UPDATE test_plan_cases SET position = ? WHERE test_plan_id = ? AND test_case_id = ?`, sortkey, planID, caseID)
 	return map[string]any{"ok": err == nil}, err
 }
@@ -473,7 +471,7 @@ func (h *Handler) tpUpdateCaseOrder(r *http.Request, args []any) (any, error) {
 // --- TestRun: remove ---
 
 func (h *Handler) trRemove(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	m := argMap(args, "query")
@@ -484,14 +482,14 @@ func (h *Handler) trRemove(r *http.Request, args []any) (any, error) {
 	if id == 0 {
 		return nil, fmt.Errorf("id required")
 	}
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM test_runs WHERE id = ?`, id)
+	_, err := h.exec(r.Context(), `DELETE FROM test_runs WHERE id = ?`, id)
 	return map[string]any{"ok": err == nil}, err
 }
 
 // --- TestExecution: create / remove / count_attachments ---
 
 func (h *Handler) execCreate(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	m := argMap(args, "values")
@@ -504,17 +502,16 @@ func (h *Handler) execCreate(r *http.Request, args []any) (any, error) {
 	if status == "" {
 		status = "idle"
 	}
-	res, err := h.db.ExecContext(r.Context(),
+	id, err := h.insertID(r.Context(),
 		`INSERT INTO test_executions (test_run_id, test_case_id, status) VALUES (?, ?, ?)`, runID, caseID, status)
 	if err != nil {
 		return nil, err
 	}
-	id, _ := res.LastInsertId()
 	return map[string]any{"id": id, "run_id": runID, "case_id": caseID, "status": status}, nil
 }
 
 func (h *Handler) execRemove(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	m := argMap(args, "query")
@@ -525,18 +522,18 @@ func (h *Handler) execRemove(r *http.Request, args []any) (any, error) {
 	if id == 0 {
 		return nil, fmt.Errorf("id required")
 	}
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM test_executions WHERE id = ?`, id)
+	_, err := h.exec(r.Context(), `DELETE FROM test_executions WHERE id = ?`, id)
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) countAttachments(entityType string) func(r *http.Request, args []any) (any, error) {
 	return func(r *http.Request, args []any) (any, error) {
-		if h.db == nil {
+		if !h.available() {
 			return nil, errNoDB
 		}
 		entityID := argInt(args[0])
 		var cnt int64
-		err := h.db.QueryRowContext(r.Context(),
+		err := h.queryRow(r.Context(),
 			`SELECT COUNT(*) FROM attachments WHERE entity_type = ? AND entity_id = ?`, entityType, entityID).Scan(&cnt)
 		if err != nil {
 			return int64(0), nil
@@ -548,13 +545,13 @@ func (h *Handler) countAttachments(entityType string) func(r *http.Request, args
 // --- Bug.details ---
 
 func (h *Handler) bugDetails(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	bugID := argInt(args[0])
 	var id, execID, trackerID int64
 	var extKey, url, title, status string
-	err := h.db.QueryRowContext(r.Context(),
+	err := h.queryRow(r.Context(),
 		`SELECT id, test_execution_id, COALESCE(tracker_id,0), external_key, url, title, status FROM bugs WHERE id = ?`, bugID).
 		Scan(&id, &execID, &trackerID, &extKey, &url, &title, &status)
 	if err != nil {
@@ -569,22 +566,22 @@ func (h *Handler) bugDetails(r *http.Request, args []any) (any, error) {
 // --- TestRun tags ---
 
 func (h *Handler) runAddTag(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	runID := argInt(args[0])
 	tagName := argStr(args[1])
 	var tagID int64
 	// get or create tag
-	err := h.db.QueryRowContext(r.Context(), `SELECT id FROM tags WHERE name = ?`, tagName).Scan(&tagID)
+	err := h.queryRow(r.Context(), `SELECT id FROM tags WHERE name = ?`, tagName).Scan(&tagID)
 	if err != nil {
-		res, err2 := h.db.ExecContext(r.Context(), `INSERT INTO tags (name) VALUES (?)`, tagName)
+		var err2 error
+		tagID, err2 = h.insertID(r.Context(), `INSERT INTO tags (name) VALUES (?)`, tagName)
 		if err2 != nil {
 			return nil, err2
 		}
-		tagID, _ = res.LastInsertId()
 	}
-	_, err = h.db.ExecContext(r.Context(), `INSERT OR IGNORE INTO test_run_tags (test_run_id, tag_id) VALUES (?, ?)`, runID, tagID)
+	err = h.execIgnore(r.Context(), `INSERT OR IGNORE INTO test_run_tags (test_run_id, tag_id) VALUES (?, ?)`, runID, tagID)
 	if err != nil {
 		return nil, err
 	}
@@ -592,42 +589,42 @@ func (h *Handler) runAddTag(r *http.Request, args []any) (any, error) {
 }
 
 func (h *Handler) runRemoveTag(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	runID := argInt(args[0])
 	tagName := argStr(args[1])
-	_, err := h.db.ExecContext(r.Context(),
+	_, err := h.exec(r.Context(),
 		`DELETE FROM test_run_tags WHERE test_run_id = ? AND tag_id IN (SELECT id FROM tags WHERE name = ?)`, runID, tagName)
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) reqLinkCase(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	reqID := argInt(args[0])
 	caseID := argInt(args[1])
-	_, err := h.db.ExecContext(r.Context(), `INSERT OR IGNORE INTO requirement_coverage (requirement_id, test_case_id) VALUES (?, ?)`, reqID, caseID)
+	err := h.execIgnore(r.Context(), `INSERT OR IGNORE INTO requirement_coverage (requirement_id, test_case_id) VALUES (?, ?)`, reqID, caseID)
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) reqUnlinkCase(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	reqID := argInt(args[0])
 	caseID := argInt(args[1])
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM requirement_coverage WHERE requirement_id = ? AND test_case_id = ?`, reqID, caseID)
+	_, err := h.exec(r.Context(), `DELETE FROM requirement_coverage WHERE requirement_id = ? AND test_case_id = ?`, reqID, caseID)
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) reqGetCases(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	reqID := argInt(args[0])
-	rows, err := h.db.QueryContext(r.Context(), `SELECT tc.id, tc.summary, tc.status FROM requirement_coverage rc JOIN test_cases tc ON tc.id = rc.test_case_id WHERE tc.deleted_at IS NULL AND rc.requirement_id = ? ORDER BY tc.id`, reqID)
+	rows, err := h.query(r.Context(), `SELECT tc.id, tc.summary, tc.status FROM requirement_coverage rc JOIN test_cases tc ON tc.id = rc.test_case_id WHERE tc.deleted_at IS NULL AND rc.requirement_id = ? ORDER BY tc.id`, reqID)
 	if err != nil {
 		return nil, err
 	}
@@ -645,67 +642,67 @@ func (h *Handler) reqGetCases(r *http.Request, args []any) (any, error) {
 }
 
 func (h *Handler) reqRemove(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	id := argInt(args[0])
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM requirements WHERE id = ?`, id)
+	_, err := h.exec(r.Context(), `DELETE FROM requirements WHERE id = ?`, id)
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) msRemove(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	id := argInt(args[0])
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM milestones WHERE id = ?`, id)
+	_, err := h.exec(r.Context(), `DELETE FROM milestones WHERE id = ?`, id)
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) msLinkRun(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	_, err := h.db.ExecContext(r.Context(), `INSERT OR IGNORE INTO milestone_runs (milestone_id, test_run_id) VALUES (?, ?)`, argInt(args[0]), argInt(args[1]))
+	err := h.execIgnore(r.Context(), `INSERT OR IGNORE INTO milestone_runs (milestone_id, test_run_id) VALUES (?, ?)`, argInt(args[0]), argInt(args[1]))
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) msUnlinkRun(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM milestone_runs WHERE milestone_id = ? AND test_run_id = ?`, argInt(args[0]), argInt(args[1]))
+	_, err := h.exec(r.Context(), `DELETE FROM milestone_runs WHERE milestone_id = ? AND test_run_id = ?`, argInt(args[0]), argInt(args[1]))
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) dsRemove(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM test_case_datasets WHERE id = ?`, argInt(args[0]))
+	_, err := h.exec(r.Context(), `DELETE FROM test_case_datasets WHERE id = ?`, argInt(args[0]))
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) cfRemove(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM custom_field_defs WHERE id = ?`, argInt(args[0]))
+	_, err := h.exec(r.Context(), `DELETE FROM custom_field_defs WHERE id = ?`, argInt(args[0]))
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) campRemove(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM campaigns WHERE id = ?`, argInt(args[0]))
+	_, err := h.exec(r.Context(), `DELETE FROM campaigns WHERE id = ?`, argInt(args[0]))
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) iterRemove(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM campaign_iterations WHERE id = ?`, argInt(args[0]))
+	_, err := h.exec(r.Context(), `DELETE FROM campaign_iterations WHERE id = ?`, argInt(args[0]))
 	return map[string]any{"ok": err == nil}, err
 }

@@ -193,7 +193,13 @@ func main() {
 	router.Use(middleware.RealIP)
 	router.Use(middleware.Recoverer)
 	router.Use(requestLogger(logger))
-	router.Use(auth.NewRateLimiter(20, time.Minute).LimitAuthRoutes)
+	rateLimiter := auth.NewRateLimiter(20, time.Minute)
+	for _, cidr := range cfg.TrustedProxies {
+		if cidr = strings.TrimSpace(cidr); cidr != "" {
+			rateLimiter.SetTrustedProxies(cidr)
+		}
+	}
+	router.Use(rateLimiter.LimitAuthRoutes)
 	if authSvc != nil {
 		router.Use(authSvc.RequireAuth)
 	}
@@ -223,13 +229,15 @@ func main() {
 	}
 	if cfg.LDAPEnabled() {
 		authSvc.SetLDAPConfig(&auth.LDAPConfig{
-			Server:       cfg.LDAPServer,
-			BindDN:       cfg.LDAPBindDN,
-			BindPassword: cfg.LDAPBindPassword,
-			BaseDN:       cfg.LDAPBaseDN,
-			UserFilter:   cfg.LDAPUserFilter,
-			UsernameAttr: cfg.LDAPUsernameAttr,
-			EmailAttr:    cfg.LDAPEmailAttr,
+			Server:             cfg.LDAPServer,
+			BindDN:             cfg.LDAPBindDN,
+			BindPassword:       cfg.LDAPBindPassword,
+			BaseDN:             cfg.LDAPBaseDN,
+			UserFilter:         cfg.LDAPUserFilter,
+			UsernameAttr:       cfg.LDAPUsernameAttr,
+			EmailAttr:          cfg.LDAPEmailAttr,
+			StartTLS:           cfg.LDAPStartTLS,
+			InsecureSkipVerify: cfg.LDAPInsecureSkipVerify,
 		})
 		logger.Info("LDAP authentication enabled", "server", cfg.LDAPServer, "base_dn", cfg.LDAPBaseDN)
 	}
@@ -348,7 +356,7 @@ func main() {
 	ai.RegisterReportRoutes(api, llm.NewServerStore(sqlDBConn, pgPoolConn), report.NewStore(sqlDBConn, pgPoolConn), guard)
 	ai.RegisterDatasetRoutes(api, llm.NewServerStore(sqlDBConn, pgPoolConn), testCaseRepo, dataset.NewStore(sqlDBConn, pgPoolConn), customfield.NewStore(sqlDBConn, pgPoolConn), guard)
 	ai.RegisterDashboardRoutes(api, llm.NewServerStore(sqlDBConn, pgPoolConn), sqlDBConn, pgPoolConn, guard)
-	xmlrpc.NewHandlerWithWebhooks(authSvc, sqlDBConn, version.VERSION, cfg.UploadDir, webhookStore).Register(router)
+	xmlrpc.NewHandlerWithWebhooks(authSvc, sqlDBConn, pgPoolConn, version.VERSION, cfg.UploadDir, webhookStore).Register(router)
 	initdb.Register(router, initdb.NewStore(sqlDBConn, pgPoolConn))
 	menu.Register(router)
 	docs.Register(router)

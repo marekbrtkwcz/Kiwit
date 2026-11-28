@@ -34,7 +34,7 @@ func (h *Handler) registerExecutionMethods() {
 }
 
 func (h *Handler) execUpdate(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	id := argInt(args[0])
@@ -42,7 +42,7 @@ func (h *Handler) execUpdate(r *http.Request, args []any) (any, error) {
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
 	status := argStr(m["status"])
 	comment := argStr(m["comment"])
-	_, err := h.db.ExecContext(r.Context(), `UPDATE test_executions SET status = COALESCE(?, status), comment = COALESCE(?, comment), updated_at = ?, executed_at = COALESCE(executed_at, ?) WHERE id = ?`,
+	_, err := h.exec(r.Context(), `UPDATE test_executions SET status = COALESCE(?, status), comment = COALESCE(?, comment), updated_at = ?, executed_at = COALESCE(executed_at, ?) WHERE id = ?`,
 		nullIfEmpty(status), nullIfEmpty(comment), now, now, id)
 	if err != nil {
 		return nil, err
@@ -58,22 +58,21 @@ func nullIfEmpty(s string) any {
 }
 
 func (h *Handler) execAddComment(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	res, err := h.db.ExecContext(r.Context(), `INSERT INTO comments (entity_type, entity_id, body) VALUES ('test_execution', ?, ?)`, argInt(args[0]), argStr(args[1]))
+	id, err := h.insertID(r.Context(), `INSERT INTO comments (entity_type, entity_id, body) VALUES ('test_execution', ?, ?)`, argInt(args[0]), argStr(args[1]))
 	if err != nil {
 		return nil, err
 	}
-	id, _ := res.LastInsertId()
 	return map[string]any{"id": id}, nil
 }
 
 func (h *Handler) execGetComments(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	rows, err := h.db.QueryContext(r.Context(), `SELECT id, COALESCE(author_id,0), body, created_at FROM comments WHERE entity_type = 'test_execution' AND entity_id = ? ORDER BY id`, argInt(args[0]))
+	rows, err := h.query(r.Context(), `SELECT id, COALESCE(author_id,0), body, created_at FROM comments WHERE entity_type = 'test_execution' AND entity_id = ? ORDER BY id`, argInt(args[0]))
 	if err != nil {
 		return nil, err
 	}
@@ -90,18 +89,18 @@ func (h *Handler) execGetComments(r *http.Request, args []any) (any, error) {
 }
 
 func (h *Handler) execRemoveComment(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM comments WHERE id = ? AND entity_type = 'test_execution'`, argInt(args[0]))
+	_, err := h.exec(r.Context(), `DELETE FROM comments WHERE id = ? AND entity_type = 'test_execution'`, argInt(args[0]))
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) execHistory(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	rows, err := h.db.QueryContext(r.Context(), `SELECT id, status, comment, updated_at FROM test_executions WHERE id = ? ORDER BY updated_at DESC LIMIT 1`, argInt(args[0]))
+	rows, err := h.query(r.Context(), `SELECT id, status, comment, updated_at FROM test_executions WHERE id = ? ORDER BY updated_at DESC LIMIT 1`, argInt(args[0]))
 	if err != nil {
 		return nil, err
 	}
@@ -117,40 +116,39 @@ func (h *Handler) execHistory(r *http.Request, args []any) (any, error) {
 }
 
 func (h *Handler) execAddTag(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	return h.addTagTo("test_execution_tags", "test_execution_id", r, args)
 }
 
 func (h *Handler) execRemoveTag(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM test_execution_tags WHERE test_execution_id = ? AND tag_id = (SELECT id FROM tags WHERE name = ?)`, argInt(args[0]), argStr(args[1]))
+	_, err := h.exec(r.Context(), `DELETE FROM test_execution_tags WHERE test_execution_id = ? AND tag_id = (SELECT id FROM tags WHERE name = ?)`, argInt(args[0]), argStr(args[1]))
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) execAddProperty(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	res, err := h.db.ExecContext(r.Context(),
+	id, err := h.insertID(r.Context(),
 		`INSERT INTO entity_properties (entity_type, entity_id, name, value) VALUES ('test_execution', ?, ?, ?)
 		 ON CONFLICT (entity_type, entity_id, name) DO UPDATE SET value = excluded.value`,
 		argInt(args[0]), argStr(args[1]), argStr(args[2]))
 	if err != nil {
 		return nil, err
 	}
-	id, _ := res.LastInsertId()
 	return map[string]any{"id": id}, nil
 }
 
 func (h *Handler) execProperties(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	rows, err := h.db.QueryContext(r.Context(), `SELECT name, value FROM entity_properties WHERE entity_type = 'test_execution' AND entity_id = ? ORDER BY name`, argInt(args[0]))
+	rows, err := h.query(r.Context(), `SELECT name, value FROM entity_properties WHERE entity_type = 'test_execution' AND entity_id = ? ORDER BY name`, argInt(args[0]))
 	if err != nil {
 		return nil, err
 	}
@@ -166,10 +164,10 @@ func (h *Handler) execProperties(r *http.Request, args []any) (any, error) {
 }
 
 func (h *Handler) execRemoveProperty(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM entity_properties WHERE entity_type = 'test_execution' AND entity_id = ? AND name = ?`, argInt(args[0]), argStr(args[1]))
+	_, err := h.exec(r.Context(), `DELETE FROM entity_properties WHERE entity_type = 'test_execution' AND entity_id = ? AND name = ?`, argInt(args[0]), argStr(args[1]))
 	return map[string]any{"ok": err == nil}, err
 }
 
@@ -178,17 +176,16 @@ func (h *Handler) addTagTo(table, fkCol string, r *http.Request, args []any) (an
 	entityID := argInt(args[0])
 	tagName := argStr(args[1])
 	var tagID int64
-	err := h.db.QueryRowContext(r.Context(), `SELECT id FROM tags WHERE name = ?`, tagName).Scan(&tagID)
+	err := h.queryRow(r.Context(), `SELECT id FROM tags WHERE name = ?`, tagName).Scan(&tagID)
 	if err == sql.ErrNoRows {
-		res, err := h.db.ExecContext(r.Context(), `INSERT INTO tags (name) VALUES (?)`, tagName)
+		tagID, err = h.insertID(r.Context(), `INSERT INTO tags (name) VALUES (?)`, tagName)
 		if err != nil {
 			return nil, err
 		}
-		tagID, _ = res.LastInsertId()
 	} else if err != nil {
 		return nil, err
 	}
-	_, err = h.db.ExecContext(r.Context(),
+	err = h.execIgnore(r.Context(),
 		fmt.Sprintf(`INSERT OR IGNORE INTO %s (%s, tag_id) VALUES (?, ?)`, table, fkCol), entityID, tagID)
 	return map[string]any{"ok": err == nil}, err
 }
@@ -196,12 +193,12 @@ func (h *Handler) addTagTo(table, fkCol string, r *http.Request, args []any) (an
 // --- TestPlan tree & tags ---
 
 func (h *Handler) planTree(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	rootID := argInt(args[0])
 	// Return the plan with its children recursively (one level deep per call, like Kiwi's tree view).
-	rows, err := h.db.QueryContext(r.Context(), `SELECT id, name, COALESCE(parent_id, 0) FROM test_plans WHERE id = ? OR parent_id = ? ORDER BY id`, rootID, rootID)
+	rows, err := h.query(r.Context(), `SELECT id, name, COALESCE(parent_id, 0) FROM test_plans WHERE id = ? OR parent_id = ? ORDER BY id`, rootID, rootID)
 	if err != nil {
 		return nil, err
 	}
@@ -218,17 +215,17 @@ func (h *Handler) planTree(r *http.Request, args []any) (any, error) {
 }
 
 func (h *Handler) planAddTag(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	return h.addTagTo("test_plan_tags", "test_plan_id", r, args)
 }
 
 func (h *Handler) planRemoveTag(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM test_plan_tags WHERE test_plan_id = ? AND tag_id = (SELECT id FROM tags WHERE name = ?)`, argInt(args[0]), argStr(args[1]))
+	_, err := h.exec(r.Context(), `DELETE FROM test_plan_tags WHERE test_plan_id = ? AND tag_id = (SELECT id FROM tags WHERE name = ?)`, argInt(args[0]), argStr(args[1]))
 	return map[string]any{"ok": err == nil}, err
 }
 

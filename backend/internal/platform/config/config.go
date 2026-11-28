@@ -37,6 +37,9 @@ type Config struct {
 	LDAPUserFilter    string // e.g. (uid=%s)
 	LDAPUsernameAttr  string
 	LDAPEmailAttr     string
+	LDAPStartTLS      bool   // upgrade plain ldap:// with StartTLS
+	LDAPInsecureSkipVerify bool // disable LDAP TLS cert verification (not recommended)
+	TrustedProxies    []string // extra CIDRs whose X-Forwarded-For is trusted (rate limiting)
 	LogLevel          string
 	LogFormat         string // "json" (default) or "text"
 	LogFile           string // empty = stdout only
@@ -83,6 +86,9 @@ func Load() Config {
 		LDAPUserFilter:    getEnv("KIWIT_LDAP_USER_FILTER", "(uid=%s)"),
 		LDAPUsernameAttr:  getEnv("KIWIT_LDAP_USERNAME_ATTR", "uid"),
 		LDAPEmailAttr:     getEnv("KIWIT_LDAP_EMAIL_ATTR", "mail"),
+		LDAPStartTLS:      getEnvBool("KIWIT_LDAP_STARTTLS", false),
+		LDAPInsecureSkipVerify: getEnvBool("KIWIT_LDAP_INSECURE_SKIP_VERIFY", false),
+		TrustedProxies:    strings.Split(getEnv("KIWIT_TRUSTED_PROXIES", ""), ","),
 		LogLevel:          strings.ToLower(getEnv("KIWIT_LOG_LEVEL", "info")),
 		LogFormat:         strings.ToLower(getEnv("KIWIT_LOG_FORMAT", "json")),
 		LogFile:           getEnv("KIWIT_LOG_FILE", ""),

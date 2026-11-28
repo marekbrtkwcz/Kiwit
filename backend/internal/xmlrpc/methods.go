@@ -155,29 +155,28 @@ func (h *Handler) markdownRender(_ *http.Request, args []any) (any, error) {
 
 func (h *Handler) tcCreate(r *http.Request, args []any) (any, error) {
 	m := argMap(args, "values")
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
-	res, err := h.db.ExecContext(r.Context(),
+	id, err := h.insertID(r.Context(),
 		`INSERT INTO test_cases (product_id, summary, preconditions, priority, status, is_automated, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, 'confirmed', 0, ?, ?)`,
 		argInt(m["product_id"]), argStr(m["summary"]), argStr(m["preconditions"]), argStr(m["priority"]), now, now)
 	if err != nil {
 		return nil, err
 	}
-	id, _ := res.LastInsertId()
 	return map[string]any{"id": id, "summary": argStr(m["summary"])}, nil
 }
 
 func (h *Handler) tcUpdate(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	id := argInt(args[0])
 	m := argMap(args, "values")
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
-	_, err := h.db.ExecContext(r.Context(),
+	_, err := h.exec(r.Context(),
 		`UPDATE test_cases SET summary = COALESCE(?, summary), preconditions = COALESCE(?, preconditions), priority = COALESCE(?, priority), updated_at = ? WHERE id = ?`,
 		argStr(m["summary"]), argStr(m["preconditions"]), argStr(m["priority"]), now, id)
 	if err != nil {
@@ -187,60 +186,58 @@ func (h *Handler) tcUpdate(r *http.Request, args []any) (any, error) {
 }
 
 func (h *Handler) tcRemove(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	// Soft-delete: the case moves to the trash (deleted_at) like the REST API.
-	_, err := h.db.ExecContext(r.Context(), `UPDATE test_cases SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL`, time.Now().UTC(), argInt(args[0]))
+	_, err := h.exec(r.Context(), `UPDATE test_cases SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL`, time.Now().UTC(), argInt(args[0]))
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) tcAddTag(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	caseID := argInt(args[0])
 	tag := argStr(args[1])
 	var tagID int64
-	err := h.db.QueryRowContext(r.Context(), `SELECT id FROM tags WHERE name = ?`, tag).Scan(&tagID)
+	err := h.queryRow(r.Context(), `SELECT id FROM tags WHERE name = ?`, tag).Scan(&tagID)
 	if err == sql.ErrNoRows {
-		res, err := h.db.ExecContext(r.Context(), `INSERT INTO tags (name) VALUES (?)`, tag)
+		tagID, err = h.insertID(r.Context(), `INSERT INTO tags (name) VALUES (?)`, tag)
 		if err != nil {
 			return nil, err
 		}
-		tagID, _ = res.LastInsertId()
 	} else if err != nil {
 		return nil, err
 	}
-	_, err = h.db.ExecContext(r.Context(), `INSERT OR IGNORE INTO test_case_tags (test_case_id, tag_id) VALUES (?, ?)`, caseID, tagID)
+	err = h.execIgnore(r.Context(), `INSERT OR IGNORE INTO test_case_tags (test_case_id, tag_id) VALUES (?, ?)`, caseID, tagID)
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) tcRemoveTag(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM test_case_tags WHERE test_case_id = ? AND tag_id = (SELECT id FROM tags WHERE name = ?)`, argInt(args[0]), argStr(args[1]))
+	_, err := h.exec(r.Context(), `DELETE FROM test_case_tags WHERE test_case_id = ? AND tag_id = (SELECT id FROM tags WHERE name = ?)`, argInt(args[0]), argStr(args[1]))
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) tcAddComment(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	res, err := h.db.ExecContext(r.Context(), `INSERT INTO comments (entity_type, entity_id, body) VALUES ('test_case', ?, ?)`, argInt(args[0]), argStr(args[1]))
+	id, err := h.insertID(r.Context(), `INSERT INTO comments (entity_type, entity_id, body) VALUES ('test_case', ?, ?)`, argInt(args[0]), argStr(args[1]))
 	if err != nil {
 		return nil, err
 	}
-	id, _ := res.LastInsertId()
 	return map[string]any{"id": id}, nil
 }
 
 func (h *Handler) tcComments(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	rows, err := h.db.QueryContext(r.Context(), `SELECT id, COALESCE(author_id,0), body, created_at FROM comments WHERE entity_type = 'test_case' AND entity_id = ? ORDER BY id`, argInt(args[0]))
+	rows, err := h.query(r.Context(), `SELECT id, COALESCE(author_id,0), body, created_at FROM comments WHERE entity_type = 'test_case' AND entity_id = ? ORDER BY id`, argInt(args[0]))
 	if err != nil {
 		return nil, err
 	}
@@ -257,10 +254,10 @@ func (h *Handler) tcComments(r *http.Request, args []any) (any, error) {
 }
 
 func (h *Handler) tcHistory(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	rows, err := h.db.QueryContext(r.Context(), `SELECT id, summary, updated_at FROM test_case_revisions WHERE test_case_id = ? ORDER BY id DESC LIMIT 50`, argInt(args[0]))
+	rows, err := h.query(r.Context(), `SELECT id, summary, updated_at FROM test_case_revisions WHERE test_case_id = ? ORDER BY id DESC LIMIT 50`, argInt(args[0]))
 	if err != nil {
 		// table may not exist in older schemas — return empty
 		return []map[string]any{}, nil
@@ -281,28 +278,27 @@ func (h *Handler) tcHistory(r *http.Request, args []any) (any, error) {
 
 func (h *Handler) tpCreate(r *http.Request, args []any) (any, error) {
 	m := argMap(args, "values")
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
-	res, err := h.db.ExecContext(r.Context(),
+	id, err := h.insertID(r.Context(),
 		`INSERT INTO test_plans (product_id, version_id, name, description, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?)`,
 		argInt(m["product_id"]), argInt(m["version_id"]), argStr(m["name"]), argStr(m["description"]), now, now)
 	if err != nil {
 		return nil, err
 	}
-	id, _ := res.LastInsertId()
 	return map[string]any{"id": id, "name": argStr(m["name"])}, nil
 }
 
 func (h *Handler) tpUpdate(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	id := argInt(args[0])
 	m := argMap(args, "values")
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
-	_, err := h.db.ExecContext(r.Context(), `UPDATE test_plans SET name = COALESCE(?, name), description = COALESCE(?, description), updated_at = ? WHERE id = ?`,
+	_, err := h.exec(r.Context(), `UPDATE test_plans SET name = COALESCE(?, name), description = COALESCE(?, description), updated_at = ? WHERE id = ?`,
 		argStr(m["name"]), argStr(m["description"]), now, id)
 	if err != nil {
 		return nil, err
@@ -311,36 +307,36 @@ func (h *Handler) tpUpdate(r *http.Request, args []any) (any, error) {
 }
 
 func (h *Handler) tpRemove(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM test_plans WHERE id = ?`, argInt(args[0]))
+	_, err := h.exec(r.Context(), `DELETE FROM test_plans WHERE id = ?`, argInt(args[0]))
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) tpAddCase(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	var pos int64
-	_ = h.db.QueryRowContext(r.Context(), `SELECT COALESCE(MAX(position),0)+1 FROM test_plan_cases WHERE test_plan_id = ?`, argInt(args[0])).Scan(&pos)
-	_, err := h.db.ExecContext(r.Context(), `INSERT OR IGNORE INTO test_plan_cases (test_plan_id, test_case_id, position) VALUES (?, ?, ?)`, argInt(args[0]), argInt(args[1]), pos)
+	_ = h.queryRow(r.Context(), `SELECT COALESCE(MAX(position),0)+1 FROM test_plan_cases WHERE test_plan_id = ?`, argInt(args[0])).Scan(&pos)
+	err := h.execIgnore(r.Context(), `INSERT OR IGNORE INTO test_plan_cases (test_plan_id, test_case_id, position) VALUES (?, ?, ?)`, argInt(args[0]), argInt(args[1]), pos)
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) tpRemoveCase(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM test_plan_cases WHERE test_plan_id = ? AND test_case_id = ?`, argInt(args[0]), argInt(args[1]))
+	_, err := h.exec(r.Context(), `DELETE FROM test_plan_cases WHERE test_plan_id = ? AND test_case_id = ?`, argInt(args[0]), argInt(args[1]))
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) tpGetCases(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	rows, err := h.db.QueryContext(r.Context(), `
+	rows, err := h.query(r.Context(), `
 		SELECT tc.id, tc.summary, tpc.position FROM test_plan_cases tpc
 		JOIN test_cases tc ON tc.id = tpc.test_case_id
 		WHERE tpc.test_plan_id = ? ORDER BY tpc.position, tc.id`, argInt(args[0]))
@@ -363,27 +359,26 @@ func (h *Handler) tpGetCases(r *http.Request, args []any) (any, error) {
 
 func (h *Handler) trCreate(r *http.Request, args []any) (any, error) {
 	m := argMap(args, "values")
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
-	res, err := h.db.ExecContext(r.Context(),
+	id, err := h.insertID(r.Context(),
 		`INSERT INTO test_runs (plan_id, build_id, summary, started_at) VALUES (?, ?, ?, ?)`,
 		argInt(m["plan_id"]), argInt(m["build_id"]), argStr(m["summary"]), now)
 	if err != nil {
 		return nil, err
 	}
-	id, _ := res.LastInsertId()
 	return map[string]any{"id": id, "summary": argStr(m["summary"])}, nil
 }
 
 func (h *Handler) trUpdate(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	id := argInt(args[0])
 	m := argMap(args, "values")
-	_, err := h.db.ExecContext(r.Context(), `UPDATE test_runs SET summary = COALESCE(?, summary) WHERE id = ?`, argStr(m["summary"]), id)
+	_, err := h.exec(r.Context(), `UPDATE test_runs SET summary = COALESCE(?, summary) WHERE id = ?`, argStr(m["summary"]), id)
 	if err != nil {
 		return nil, err
 	}
@@ -391,26 +386,26 @@ func (h *Handler) trUpdate(r *http.Request, args []any) (any, error) {
 }
 
 func (h *Handler) trAddCase(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	_, err := h.db.ExecContext(r.Context(), `INSERT OR IGNORE INTO test_run_cases (run_id, case_id) VALUES (?, ?)`, argInt(args[0]), argInt(args[1]))
+	err := h.execIgnore(r.Context(), `INSERT OR IGNORE INTO test_run_cases (run_id, case_id) VALUES (?, ?)`, argInt(args[0]), argInt(args[1]))
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) trRemoveCase(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM test_run_cases WHERE run_id = ? AND case_id = ?`, argInt(args[0]), argInt(args[1]))
+	_, err := h.exec(r.Context(), `DELETE FROM test_run_cases WHERE run_id = ? AND case_id = ?`, argInt(args[0]), argInt(args[1]))
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) trGetCases(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	rows, err := h.db.QueryContext(r.Context(), `
+	rows, err := h.query(r.Context(), `
 		SELECT tc.id, tc.summary FROM test_run_cases trc JOIN test_cases tc ON tc.id = trc.case_id WHERE trc.run_id = ? ORDER BY tc.id`, argInt(args[0]))
 	if err != nil {
 		return nil, err
@@ -428,26 +423,26 @@ func (h *Handler) trGetCases(r *http.Request, args []any) (any, error) {
 }
 
 func (h *Handler) trAddCC(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	_, err := h.db.ExecContext(r.Context(), `INSERT OR IGNORE INTO test_run_cc (run_id, user_id) VALUES (?, ?)`, argInt(args[0]), argInt(args[1]))
+	err := h.execIgnore(r.Context(), `INSERT OR IGNORE INTO test_run_cc (run_id, user_id) VALUES (?, ?)`, argInt(args[0]), argInt(args[1]))
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) trRemoveCC(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM test_run_cc WHERE run_id = ? AND user_id = ?`, argInt(args[0]), argInt(args[1]))
+	_, err := h.exec(r.Context(), `DELETE FROM test_run_cc WHERE run_id = ? AND user_id = ?`, argInt(args[0]), argInt(args[1]))
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) trGetCC(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	rows, err := h.db.QueryContext(r.Context(), `SELECT user_id FROM test_run_cc WHERE run_id = ? ORDER BY user_id`, argInt(args[0]))
+	rows, err := h.query(r.Context(), `SELECT user_id FROM test_run_cc WHERE run_id = ? ORDER BY user_id`, argInt(args[0]))
 	if err != nil {
 		return nil, err
 	}
@@ -466,7 +461,7 @@ func (h *Handler) trGetCC(r *http.Request, args []any) (any, error) {
 
 func (h *Handler) simpleCreate(table string, cols []string) func(r *http.Request, args []any) (any, error) {
 	return func(r *http.Request, args []any) (any, error) {
-		if h.db == nil {
+		if !h.available() {
 			return nil, errNoDB
 		}
 		m := argMap(args, "values")
@@ -481,21 +476,20 @@ func (h *Handler) simpleCreate(table string, cols []string) func(r *http.Request
 				vals[i] = argStr(v)
 			}
 		}
-		res, err := h.db.ExecContext(r.Context(),
+		id, err := h.insertID(r.Context(),
 			fmt.Sprintf(`INSERT INTO %s (%s) VALUES (%s)`, table, strings.Join(cols, ", "), strings.Join(placeholders, ", ")), vals...)
 		if err != nil {
 			return nil, err
 		}
-		id, _ := res.LastInsertId()
 		return map[string]any{"id": id}, nil
 	}
 }
 
 func (h *Handler) groupUsers(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	rows, err := h.db.QueryContext(r.Context(), `
+	rows, err := h.query(r.Context(), `
 		SELECT u.id, u.username FROM user_group_members m JOIN users u ON u.id = m.user_id WHERE m.group_id = ? ORDER BY u.id`, argInt(args[0]))
 	if err != nil {
 		return nil, err
@@ -513,18 +507,18 @@ func (h *Handler) groupUsers(r *http.Request, args []any) (any, error) {
 }
 
 func (h *Handler) userJoinGroup(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	// args: username, groupname
 	var uid, gid int64
-	if err := h.db.QueryRowContext(r.Context(), `SELECT id FROM users WHERE username = ? OR email = ?`, argStr(args[0]), argStr(args[0])).Scan(&uid); err != nil {
+	if err := h.queryRow(r.Context(), `SELECT id FROM users WHERE username = ? OR email = ?`, argStr(args[0]), argStr(args[0])).Scan(&uid); err != nil {
 		return nil, err
 	}
-	if err := h.db.QueryRowContext(r.Context(), `SELECT id FROM user_groups WHERE name = ?`, argStr(args[1])).Scan(&gid); err != nil {
+	if err := h.queryRow(r.Context(), `SELECT id FROM user_groups WHERE name = ?`, argStr(args[1])).Scan(&gid); err != nil {
 		return nil, err
 	}
-	_, err := h.db.ExecContext(r.Context(), `INSERT OR IGNORE INTO user_group_members (group_id, user_id) VALUES (?, ?)`, gid, uid)
+	err := h.execIgnore(r.Context(), `INSERT OR IGNORE INTO user_group_members (group_id, user_id) VALUES (?, ?)`, gid, uid)
 	return map[string]any{"ok": err == nil}, err
 }
 
@@ -532,7 +526,7 @@ func (h *Handler) userJoinGroup(r *http.Request, args []any) (any, error) {
 
 func (h *Handler) addLink(entityType string) func(r *http.Request, args []any) (any, error) {
 	return func(r *http.Request, args []any) (any, error) {
-		if h.db == nil {
+		if !h.available() {
 			return nil, errNoDB
 		}
 		m := argMap(args, "values")
@@ -543,24 +537,23 @@ func (h *Handler) addLink(entityType string) func(r *http.Request, args []any) (
 		if entityID == 0 {
 			entityID = argInt(m["run_id"])
 		}
-		res, err := h.db.ExecContext(r.Context(),
+		id, err := h.insertID(r.Context(),
 			`INSERT INTO link_references (entity_type, entity_id, name, url) VALUES (?, ?, ?, ?)`,
 			entityType, entityID, argStr(m["name"]), argStr(m["url"]))
 		if err != nil {
 			return nil, err
 		}
-		id, _ := res.LastInsertId()
 		return map[string]any{"id": id}, nil
 	}
 }
 
 func (h *Handler) getLinks(entityType string) func(r *http.Request, args []any) (any, error) {
 	return func(r *http.Request, args []any) (any, error) {
-		if h.db == nil {
+		if !h.available() {
 			return nil, errNoDB
 		}
 		entityID := argInt(args[0])
-		rows, err := h.db.QueryContext(r.Context(),
+		rows, err := h.query(r.Context(),
 			`SELECT id, name, url FROM link_references WHERE entity_type = ? AND entity_id = ? ORDER BY id`, entityType, entityID)
 		if err != nil {
 			return nil, err
@@ -579,10 +572,10 @@ func (h *Handler) getLinks(entityType string) func(r *http.Request, args []any) 
 }
 
 func (h *Handler) removeLink(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM link_references WHERE id = ?`, argInt(args[0]))
+	_, err := h.exec(r.Context(), `DELETE FROM link_references WHERE id = ?`, argInt(args[0]))
 	return map[string]any{"ok": err == nil}, err
 }
 

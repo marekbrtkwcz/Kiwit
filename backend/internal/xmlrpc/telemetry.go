@@ -9,13 +9,13 @@ import (
 // Telemetry methods — lightweight aggregates over test executions (SQLite path).
 
 func (h *Handler) telemetryBreakdown(r *http.Request, _ []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	var total, automated int64
-	_ = h.db.QueryRowContext(r.Context(), `SELECT COUNT(*), COALESCE(SUM(is_automated),0) FROM test_cases WHERE deleted_at IS NULL`).Scan(&total, &automated)
+	_ = h.queryRow(r.Context(), `SELECT COUNT(*), COALESCE(SUM(is_automated),0) FROM test_cases WHERE deleted_at IS NULL`).Scan(&total, &automated)
 	var passed, failed, blocked, skipped int64
-	rows, err := h.db.QueryContext(r.Context(), `
+	rows, err := h.query(r.Context(), `
 		SELECT es.name, COUNT(*) FROM test_executions te
 		JOIN execution_statuses es ON es.name = te.status
 		GROUP BY es.name`)
@@ -54,10 +54,10 @@ func (h *Handler) telemetryBreakdown(r *http.Request, _ []any) (any, error) {
 }
 
 func (h *Handler) telemetryMatrix(r *http.Request, _ []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	rows, err := h.db.QueryContext(r.Context(), `
+	rows, err := h.query(r.Context(), `
 		SELECT tc.id, tc.summary, es.name, COUNT(te.id)
 		FROM test_cases tc
 		LEFT JOIN test_executions te ON te.case_id = tc.id
@@ -99,7 +99,7 @@ func (h *Handler) telemetryMatrix(r *http.Request, _ []any) (any, error) {
 }
 
 func (h *Handler) telemetryTrends(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	m := argMap(args, "query")
@@ -117,7 +117,7 @@ func (h *Handler) telemetryTrends(r *http.Request, args []any) (any, error) {
 		params = append(params, to)
 	}
 	q += ` GROUP BY DATE(te.executed_at), es.name ORDER BY 1`
-	rows, err := h.db.QueryContext(r.Context(), q, params...)
+	rows, err := h.query(r.Context(), q, params...)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +148,7 @@ func (h *Handler) telemetryTrends(r *http.Request, args []any) (any, error) {
 }
 
 func (h *Handler) telemetryHealth(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	m := argMap(args, "query")
@@ -156,7 +156,7 @@ func (h *Handler) telemetryHealth(r *http.Request, args []any) (any, error) {
 	if l, ok := m["limit"]; ok {
 		limit = int(argInt(l))
 	}
-	rows, err := h.db.QueryContext(r.Context(), `
+	rows, err := h.query(r.Context(), `
 		SELECT tc.id, tc.summary,
 			COUNT(te.id) AS total,
 			COALESCE(SUM(CASE WHEN es.name IN ('failed','fail') THEN 1 ELSE 0 END),0) AS failed,

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -196,6 +197,8 @@ func (s *Store) seedDictionaries(ctx context.Context) error {
 	}
 	for _, q := range stmts {
 		if s.pg != nil {
+			// PostgreSQL has no INSERT OR IGNORE — translate to ON CONFLICT DO NOTHING.
+			q = strings.Replace(q, "INSERT OR IGNORE INTO", "INSERT INTO", 1) + " ON CONFLICT DO NOTHING"
 			if _, err := s.pg.Exec(ctx, q); err != nil {
 				return err
 			}

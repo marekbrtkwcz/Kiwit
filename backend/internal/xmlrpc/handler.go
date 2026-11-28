@@ -1,6 +1,7 @@
 package xmlrpc
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"encoding/xml"
@@ -13,6 +14,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/kiwit/kiwit/internal/auth"
 	"github.com/kiwit/kiwit/internal/webhook"
 )
@@ -23,6 +26,8 @@ const sessionCookie = "kiwit_session"
 type Handler struct {
 	svc       *auth.Service
 	db        *sql.DB
+	pg        *pgxpool.Pool
+	pgDB      *sql.DB // database/sql handle over the pgx pool (for PostgreSQL mode)
 	version   string
 	methods   map[string]reflect.Value // "Service.Method" -> func(r *http.Request, args []any) (any, error)
 	uploadDir string
@@ -31,8 +36,13 @@ type Handler struct {
 
 // NewHandlerWithWebhooks is like NewHandler but also wires the webhook store so
 // that Bug.report emits a "bug.created" event with full issue details.
-func NewHandlerWithWebhooks(svc *auth.Service, db *sql.DB, version string, uploadDir string, wh *webhook.Store) *Handler {
-	h := &Handler{svc: svc, db: db, version: version, methods: map[string]reflect.Value{}, uploadDir: uploadDir, webhooks: wh}
+// pg may be nil (SQLite mode); when set, all queries go through the pgx pool
+// with ? placeholders rebound to $n.
+func NewHandlerWithWebhooks(svc *auth.Service, db *sql.DB, pg *pgxpool.Pool, version string, uploadDir string, wh *webhook.Store) *Handler {
+	h := &Handler{svc: svc, db: db, pg: pg, version: version, methods: map[string]reflect.Value{}, uploadDir: uploadDir, webhooks: wh}
+	if pg != nil {
+		h.pgDB = stdlib.OpenDBFromPool(pg)
+	}
 	h.registerAll()
 	h.registerExtrasMethods(uploadDir)
 	return h
@@ -46,6 +56,52 @@ func NewHandler(svc *auth.Service, db *sql.DB, version string, uploadDir ...stri
 	h.registerAll()
 	h.registerExtrasMethods(h.uploadDir)
 	return h
+}
+
+// available reports whether any database backend is configured.
+func (h *Handler) available() bool { return h.db != nil || h.pgDB != nil }
+
+// exec runs a write query on the configured backend (PostgreSQL: ? → $n).
+func (h *Handler) exec(ctx context.Context, q string, args ...any) (sql.Result, error) {
+	if h.pgDB != nil {
+		return h.pgDB.ExecContext(ctx, rebindPlaceholders(q), args...)
+	}
+	return h.db.ExecContext(ctx, q, args...)
+}
+
+// query runs a SELECT on the configured backend (PostgreSQL: ? → $n).
+func (h *Handler) query(ctx context.Context, q string, args ...any) (*sql.Rows, error) {
+	if h.pgDB != nil {
+		return h.pgDB.QueryContext(ctx, rebindPlaceholders(q), args...)
+	}
+	return h.db.QueryContext(ctx, q, args...)
+}
+
+// queryRow runs a single-row query on the configured backend.
+func (h *Handler) queryRow(ctx context.Context, q string, args ...any) *sql.Row {
+	if h.pgDB != nil {
+		return h.pgDB.QueryRowContext(ctx, rebindPlaceholders(q), args...)
+	}
+	return h.db.QueryRowContext(ctx, q, args...)
+}
+
+// insertID runs an INSERT and returns the new row id via RETURNING
+// (supported by both SQLite >= 3.35 and PostgreSQL; LastInsertId does not
+// work over the pgx stdlib driver).
+func (h *Handler) insertID(ctx context.Context, q string, args ...any) (int64, error) {
+	var id int64
+	err := h.queryRow(ctx, q+" RETURNING id", args...).Scan(&id)
+	return id, err
+}
+
+// execIgnore runs an idempotent INSERT: INSERT OR IGNORE on SQLite,
+// INSERT ... ON CONFLICT DO NOTHING on PostgreSQL.
+func (h *Handler) execIgnore(ctx context.Context, q string, args ...any) error {
+	if h.pgDB != nil {
+		q = strings.Replace(q, "INSERT OR IGNORE INTO", "INSERT INTO", 1) + " ON CONFLICT DO NOTHING"
+	}
+	_, err := h.exec(ctx, q, args...)
+	return err
 }
 
 func (h *Handler) register(name string, fn func(r *http.Request, args []any) (any, error)) {
@@ -107,7 +163,9 @@ func classifyMethod(name string) methodClass {
 		name == "Markdown.render" ||
 		name == "Auth.logout" ||
 		name == "Group.users" ||
-		name == "Group.permissions" {
+		name == "Group.permissions" ||
+		name == "TestPlan.tree" ||
+		name == "Search.query" {
 		return methodRead
 	}
 	return methodWrite
@@ -254,6 +312,8 @@ var productScopedTables = map[string]string{
 	"test_executions":    "(SELECT tp.product_id FROM test_runs tr JOIN test_plans tp ON tp.id = tr.test_plan_id WHERE tr.id = t.test_run_id)",
 	"milestones":         "(SELECT v.product_id FROM versions v WHERE v.id = t.version_id)",
 	"test_case_datasets": "(SELECT tc.product_id FROM test_cases tc WHERE tc.id = t.test_case_id)",
+	"builds":             "(SELECT v.product_id FROM versions v WHERE v.id = t.version_id)",
+	"campaign_iterations": "(SELECT c.product_id FROM campaigns c WHERE c.id = t.campaign_id)",
 }
 
 // productAccessCond returns a SQL condition (mirroring AccessGuard semantics:
@@ -280,7 +340,7 @@ func (h *Handler) filterRowsWhere(table, baseCond string, cols []string, relatio
 		relMap = relations[0]
 	}
 	return func(r *http.Request, args []any) (any, error) {
-		if h.db == nil {
+		if !h.available() {
 			return nil, fmt.Errorf("database not available")
 		}
 		// Parse optional query dict from args[0] for field lookups
@@ -322,7 +382,7 @@ func (h *Handler) filterRowsWhere(table, baseCond string, cols []string, relatio
 		}
 		q := fmt.Sprintf("SELECT %s FROM %s t %sWHERE %s ORDER BY t.id DESC LIMIT 100",
 			strings.Join(cols, ", "), table, joinClause, where)
-		rows, err := h.db.QueryContext(r.Context(), q, qargs...)
+		rows, err := h.query(r.Context(), q, qargs...)
 		if err != nil {
 			return nil, err
 		}
@@ -355,7 +415,7 @@ func (h *Handler) filterRowsWhere(table, baseCond string, cols []string, relatio
 // sortKeys implements TestPlan.sortkeys — returns case IDs with their sort position for a plan.
 // args: [plan_id] or [{plan_id: N}]
 func (h *Handler) sortKeys(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, fmt.Errorf("database not available")
 	}
 	var planID int64
@@ -374,7 +434,7 @@ func (h *Handler) sortKeys(r *http.Request, args []any) (any, error) {
 	if planID == 0 {
 		return nil, fmt.Errorf("plan_id required")
 	}
-	rows, err := h.db.QueryContext(r.Context(), `
+	rows, err := h.query(r.Context(), `
 		SELECT test_case_id, position FROM test_plan_cases WHERE test_plan_id = ? ORDER BY position, test_case_id`, planID)
 	if err != nil {
 		return nil, err

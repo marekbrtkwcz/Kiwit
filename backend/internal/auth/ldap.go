@@ -13,13 +13,28 @@ import (
 
 // LDAPConfig holds LDAP connection and search settings.
 type LDAPConfig struct {
-	Server       string // host:port
+	Server       string // host:port, or a full URL: ldap://host:port / ldaps://host:port
 	BindDN       string // optional service account for search
 	BindPassword string
 	BaseDN       string
 	UserFilter   string // e.g. "(uid=%s)" — %s replaced with username (escaped)
 	UsernameAttr string
 	EmailAttr    string
+	StartTLS     bool // upgrade a plain ldap:// connection with StartTLS
+	// InsecureSkipVerify disables TLS certificate verification. Off by
+	// default; only enable for internal CAs you explicitly trust.
+	InsecureSkipVerify bool
+}
+
+// serverHost extracts the host part for TLS ServerName from a Server value
+// that may be bare host:port or a full ldap(s):// URL.
+func serverHost(server string) string {
+	s := strings.TrimPrefix(server, "ldaps://")
+	s = strings.TrimPrefix(s, "ldap://")
+	if h, _, err := net.SplitHostPort(s); err == nil {
+		return h
+	}
+	return s
 }
 
 // LDAPAuthenticate validates credentials against LDAP and returns email + username.
@@ -33,13 +48,29 @@ func LDAPAuthenticate(ctx context.Context, cfg LDAPConfig, username, password st
 		return "", "", ErrInvalidCredentials
 	}
 	dialer := &net.Dialer{Timeout: 5 * time.Second}
-	conn, err := ldap.DialURL("ldap://"+cfg.Server, ldap.DialWithDialer(dialer), ldap.DialWithTLSConfig(&tls.Config{InsecureSkipVerify: true})) //nolint:gosec // LDAP commonly internal
+	tlsConfig := &tls.Config{ServerName: serverHost(cfg.Server), InsecureSkipVerify: cfg.InsecureSkipVerify} //nolint:gosec // opt-in only
+	server := cfg.Server
+	switch {
+	case strings.HasPrefix(server, "ldaps://"):
+		// TLS from the start, certificate verified by default.
+	case strings.HasPrefix(server, "ldap://"):
+		// plain, possibly upgraded via StartTLS below
+	default:
+		server = "ldap://" + server
+	}
+	conn, err := ldap.DialURL(server, ldap.DialWithDialer(dialer), ldap.DialWithTLSConfig(tlsConfig))
 	if err != nil {
-		// try ldaps if plain fails? keep simple: error out
 		return "", "", fmt.Errorf("ldap connect: %w", err)
 	}
 	defer conn.Close()
 	conn.SetTimeout(10 * time.Second)
+
+	// Upgrade a plain connection to TLS when configured (verify certs by default).
+	if cfg.StartTLS && strings.HasPrefix(server, "ldap://") {
+		if err := conn.StartTLS(tlsConfig); err != nil {
+			return "", "", fmt.Errorf("ldap starttls: %w", err)
+		}
+	}
 
 	// Escape username for LDAP filter (RFC 4515).
 	esc := ldap.EscapeFilter(username)

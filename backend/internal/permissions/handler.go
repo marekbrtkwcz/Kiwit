@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"net/http"
 	"time"
 
@@ -133,11 +134,28 @@ func (s *Store) assignTesterToAllProducts(ctx context.Context) error {
 			WHERE gpp.group_id = ? AND gpp.product_id = p.id
 		)`
 	if s.pg != nil {
+		// pgx requires $n placeholders, not ?
+		q = rebindPlaceholders(q)
 		_, err = s.pg.Exec(ctx, q, testerID, testerID)
 	} else {
 		_, err = s.db.ExecContext(ctx, q, testerID, testerID)
 	}
 	return err
+}
+
+// rebindPlaceholders converts SQLite-style "?" placeholders to PostgreSQL "$n".
+func rebindPlaceholders(q string) string {
+	var b strings.Builder
+	n := 0
+	for _, r := range q {
+		if r == '?' {
+			n++
+			fmt.Fprintf(&b, "$%d", n)
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

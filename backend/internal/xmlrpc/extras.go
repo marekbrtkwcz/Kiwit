@@ -47,7 +47,7 @@ func (h *Handler) registerExtrasMethods(uploadDir string) {
 
 func (h *Handler) addAttachment(entityType string) func(r *http.Request, args []any) (any, error) {
 	return func(r *http.Request, args []any) (any, error) {
-		if h.db == nil {
+		if !h.available() {
 			return nil, errNoDB
 		}
 		// args: entity_id, filename, b64content
@@ -65,23 +65,22 @@ func (h *Handler) addAttachment(entityType string) func(r *http.Request, args []
 				defer func() { _ = os.Remove(p) }()
 			}
 		}
-		res, err := h.db.ExecContext(r.Context(),
+		id, err := h.insertID(r.Context(),
 			`INSERT INTO attachments (entity_type, entity_id, filename, content_type, size_bytes, storage_path) VALUES (?, ?, ?, ?, ?, ?)`,
 			entityType, entityID, filename, "application/octet-stream", len(data), filename)
 		if err != nil {
 			return nil, err
 		}
-		id, _ := res.LastInsertId()
 		return map[string]any{"id": id, "filename": filename}, nil
 	}
 }
 
 func (h *Handler) listAttachments(entityType string) func(r *http.Request, args []any) (any, error) {
 	return func(r *http.Request, args []any) (any, error) {
-		if h.db == nil {
+		if !h.available() {
 			return nil, errNoDB
 		}
-		rows, err := h.db.QueryContext(r.Context(), `SELECT id, filename, size_bytes FROM attachments WHERE entity_type = ? AND entity_id = ? ORDER BY id`, entityType, argInt(args[0]))
+		rows, err := h.query(r.Context(), `SELECT id, filename, size_bytes FROM attachments WHERE entity_type = ? AND entity_id = ? ORDER BY id`, entityType, argInt(args[0]))
 		if err != nil {
 			return nil, err
 		}
@@ -99,15 +98,15 @@ func (h *Handler) listAttachments(entityType string) func(r *http.Request, args 
 }
 
 func (h *Handler) removeAttachment(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	_, err := h.db.ExecContext(r.Context(), `DELETE FROM attachments WHERE id = ?`, argInt(args[0]))
+	_, err := h.exec(r.Context(), `DELETE FROM attachments WHERE id = ?`, argInt(args[0]))
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) bugReport(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	// args: execution_id, tracker_id, summary, description (simplified: store locally)
@@ -119,14 +118,13 @@ func (h *Handler) bugReport(r *http.Request, args []any) (any, error) {
 	trackerID := argInt(m["tracker_id"])
 	summary := argStr(m["summary"])
 	description := argStr(m["description"])
-	res, err := h.db.ExecContext(r.Context(),
+	id, err := h.insertID(r.Context(),
 		`INSERT INTO bugs (test_execution_id, tracker_id, external_key, url, title, status) VALUES (?, ?, ?, ?, ?, 'open')`,
 		execID, trackerID, argStr(m["external_key"]), argStr(m["url"]), summary)
 	if err != nil {
 		// bugs table may have different columns — fallback generic
 		return nil, err
 	}
-	id, _ := res.LastInsertId()
 	url := argStr(m["url"])
 	if url == "" {
 		url = fmt.Sprintf("/bugs/%d", id)
@@ -146,7 +144,7 @@ func (h *Handler) bugReport(r *http.Request, args []any) (any, error) {
 		// Look up tracker name and reporter if available
 		if trackerID > 0 {
 			var tname string
-			if err := h.db.QueryRowContext(r.Context(), `SELECT name FROM issue_trackers WHERE id = ?`, trackerID).Scan(&tname); err == nil {
+			if err := h.queryRow(r.Context(), `SELECT name FROM issue_trackers WHERE id = ?`, trackerID).Scan(&tname); err == nil {
 				data["tracker"] = tname
 			}
 		}
@@ -161,7 +159,7 @@ func (h *Handler) bugReport(r *http.Request, args []any) (any, error) {
 }
 
 func (h *Handler) xmlSearch(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	m := argMap(args, "query")
@@ -175,7 +173,7 @@ func (h *Handler) xmlSearch(r *http.Request, args []any) (any, error) {
 	terms := strings.Fields(q)
 	out := []map[string]any{}
 	for _, t := range terms {
-		rows, err := h.db.QueryContext(r.Context(), `SELECT 'test_case', id, summary FROM test_cases WHERE deleted_at IS NULL AND LOWER(summary) LIKE ? LIMIT 10`, "%"+t+"%")
+		rows, err := h.query(r.Context(), `SELECT 'test_case', id, summary FROM test_cases WHERE deleted_at IS NULL AND LOWER(summary) LIKE ? LIMIT 10`, "%"+t+"%")
 		if err != nil {
 			continue
 		}
@@ -193,7 +191,7 @@ func (h *Handler) xmlSearch(r *http.Request, args []any) (any, error) {
 }
 
 func (h *Handler) userUpdate(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
 	m := argMap(args, "values")
@@ -204,15 +202,15 @@ func (h *Handler) userUpdate(r *http.Request, args []any) (any, error) {
 	if b, ok := isActive.(bool); ok && !b {
 		active = 0
 	}
-	_, err := h.db.ExecContext(r.Context(), `UPDATE users SET role = COALESCE(?, role), is_active = ? WHERE username = ? OR email = ?`,
+	_, err := h.exec(r.Context(), `UPDATE users SET role = COALESCE(?, role), is_active = ? WHERE username = ? OR email = ?`,
 		nullIfEmpty(role), active, username, username)
 	return map[string]any{"ok": err == nil}, err
 }
 
 func (h *Handler) userDeactivate(r *http.Request, args []any) (any, error) {
-	if h.db == nil {
+	if !h.available() {
 		return nil, errNoDB
 	}
-	_, err := h.db.ExecContext(r.Context(), `UPDATE users SET is_active = 0 WHERE username = ? OR email = ?`, argStr(args[0]), argStr(args[0]))
+	_, err := h.exec(r.Context(), `UPDATE users SET is_active = 0 WHERE username = ? OR email = ?`, argStr(args[0]), argStr(args[0]))
 	return map[string]any{"ok": err == nil}, err
 }
