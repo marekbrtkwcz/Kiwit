@@ -65,7 +65,8 @@ func (s *Store) List(ctx context.Context, f filter, limit, offset int) ([]Requir
 	var conds []string
 	var args []any
 	if f.q != "" {
-		conds = append(conds, "(key ILIKE ? OR name ILIKE ? OR description ILIKE ?)")
+		// LOWER() LIKE works on both SQLite and PostgreSQL (ILIKE is PG-only).
+		conds = append(conds, "(LOWER(key) LIKE LOWER(?) OR LOWER(name) LIKE LOWER(?) OR LOWER(description) LIKE LOWER(?))")
 		pat := "%" + f.q + "%"
 		args = append(args, pat, pat, pat)
 	}
@@ -285,9 +286,11 @@ func (s *Store) Coverage(ctx context.Context, requirementID int64) ([]CoverageEn
 	out := []CoverageEntry{}
 	for rows.Next() {
 		var c CoverageEntry
-		if err := rows.Scan(&c.TestCaseID, &c.Summary, &c.Status, &c.LinkedAt, &c.LatestExecutionID, &c.LatestExecStatus, &c.LatestRunID); err != nil {
+		var execStatus sql.NullString // NULL when the case was never executed
+		if err := rows.Scan(&c.TestCaseID, &c.Summary, &c.Status, &c.LinkedAt, &c.LatestExecutionID, &execStatus, &c.LatestRunID); err != nil {
 			return nil, err
 		}
+		c.LatestExecStatus = execStatus.String
 		out = append(out, c)
 	}
 	return out, rows.Err()
@@ -304,7 +307,9 @@ func (s *Store) UpdateAIQuality(ctx context.Context, id int64, analysis string) 
 }
 
 func (s *Store) RequirementsForCase(ctx context.Context, testCaseID int64) ([]Requirement, error) {
-	q := fmt.Sprintf(`SELECT %s FROM requirements r JOIN requirement_coverage rc ON rc.requirement_id = r.id WHERE rc.test_case_id = ? ORDER BY r.id`, requirementCols)
+	// Qualify every column with the alias — requirement_coverage also has created_at.
+	qualifiedCols := "r." + strings.Join(strings.Split(requirementCols, ", "), ", r.")
+	q := fmt.Sprintf(`SELECT %s FROM requirements r JOIN requirement_coverage rc ON rc.requirement_id = r.id WHERE rc.test_case_id = ? ORDER BY r.id`, qualifiedCols)
 	if s.pg != nil {
 		q = strings.ReplaceAll(q, "?", "$1")
 		rows, err := s.pg.Query(ctx, q, testCaseID)
