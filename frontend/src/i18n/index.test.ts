@@ -101,6 +101,7 @@ describe('api client', () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response('{"detail":"forbidden"}', { status: 403 }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(request('/api/v1/products')).rejects.toThrow('{"detail":"forbidden"}')
+    // request() unwraps huma's {"detail": ...} into the thrown message
+    await expect(request('/api/v1/products')).rejects.toThrow('forbidden')
   })
 })
