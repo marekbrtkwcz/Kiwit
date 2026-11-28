@@ -76,6 +76,18 @@ npm run dev
 | `KIWIT_LDAP_BASE_DN` | *(wymagane)* | Base DN, np. `dc=example,dc=com`. |
 | `KIWIT_LDAP_USER_FILTER` | `(uid=%s)` | Filtr wyszukiwania użytkownika (`%s` = username). |
 | `KIWIT_LDAP_USERNAME_ATTR` / `KIWIT_LDAP_EMAIL_ATTR` | `uid` / `mail` | Atrybuty LDAP z nazwą użytkownika i e-mailem. |
+| `KIWIT_LDAP_STARTTLS` | `false` | Gdy `true`, połączenie `ldap://` jest podnoszone do TLS przez StartTLS (certyfikat weryfikowany). |
+| `KIWIT_LDAP_INSECURE_SKIP_VERIFY` | `false` | Gdy `true`, wyłącza weryfikację certyfikatu TLS LDAP/ldaps (tylko dla wewnętrznego CA). `KIWIT_LDAP_SERVER` może też zawierać pełny URL `ldaps://host:port`. |
+| `KIWIT_BASE_URL` | `http://localhost:8080` | Publiczny adres instancji (linki e-mail, redirect SSO). |
+| `KIWIT_ANONYMOUS_ACCESS` | `false` | Gdy `true`, niezalogowani użytkownicy mają dostęp read-only (rola `anonymous`). |
+| `KIWIT_CAPTCHA_ENABLED` | `false` | Gdy `true`, rejestracja wymaga captchy (`GET /api/v1/auth/captcha`). |
+| `KIWIT_MENU_JSON` | *(brak)* | Opcjonalny JSON nadpisujący strukturę menu (`GET /api/v1/menu`). |
+| `KIWIT_TRUSTED_PROXIES` | *(puste)* | Lista CIDR proxy (oddzielona przecinkami), których nagłówek `X-Forwarded-For` jest zaufany przy rate-limitingu. Loopback/link-local są zawsze zaufane. |
+| `KIWIT_LOG_LEVEL` | `info` | Poziom logów (`debug` / `info` / `warn` / `error`). |
+| `KIWIT_LOG_FORMAT` | `json` | Format logów: `json` lub `text`. |
+| `KIWIT_LOG_FILE` | *(brak)* | Plik logów (pusty = sam stdout). |
+| `KIWIT_LOG_MAX_SIZE` / `KIWIT_LOG_MAX_FILES` | `10` / `3` | Rotacja pliku logów (MB / liczba plików). |
+| `KIWIT_LLM_API_KEY` | *(brak)* | Klucz API dostawcy LLM dla funkcji AI (puste = funkcje AI wyłączone). |
 
 ## Testy i budowanie
 

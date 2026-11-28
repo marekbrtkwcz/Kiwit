@@ -213,6 +213,36 @@ func TestRPCFilterProductIsolation(t *testing.T) {
 	}
 }
 
+// Oversized RPC bodies are rejected instead of being read into memory.
+func TestRPCBodyLimit(t *testing.T) {
+	db := setupTestDB(t)
+	svc := auth.NewService(db, "test-secret")
+	h := NewHandler(svc, db, "0.1.0")
+	r := chi.NewRouter()
+	h.Register(r)
+
+	big := make([]byte, maxRPCBodyBytes+1)
+	for i := range big {
+		big[i] = 'x'
+	}
+	req := httptest.NewRequest(http.MethodPost, "/xml-rpc/", strings.NewReader(string(big)))
+	req.Header.Set("Authorization", "Bearer "+adminToken(t, svc))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code == http.StatusOK {
+		t.Fatalf("oversized body must not return 200, got body: %.100s", rec.Body.String())
+	}
+
+	// JSON-RPC variant
+	req = httptest.NewRequest(http.MethodPost, "/json-rpc/", strings.NewReader(string(big)))
+	req.Header.Set("Authorization", "Bearer "+adminToken(t, svc))
+	rec = httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code == http.StatusOK {
+		t.Fatalf("oversized JSON-RPC body must not return 200")
+	}
+}
+
 // End-to-end: a malicious struct member name in TestCase.filter must produce
 // a fault, not dump rows.
 func TestRPCFilterInjectionEndToEnd(t *testing.T) {

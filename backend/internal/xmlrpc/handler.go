@@ -22,6 +22,10 @@ import (
 
 const sessionCookie = "kiwit_session"
 
+// maxRPCBodyBytes caps XML-RPC/JSON-RPC request bodies (10 MiB) so a huge
+// POST cannot exhaust memory via io.ReadAll.
+const maxRPCBodyBytes = 10 << 20
+
 // Handler exposes a Kiwi TCMS-compatible XML-RPC API at /xml-rpc/.
 type Handler struct {
 	svc       *auth.Service
@@ -216,7 +220,7 @@ func (h *Handler) authenticate(req *http.Request) *http.Request {
 
 func (h *Handler) serveHTTP(w http.ResponseWriter, req *http.Request) {
 	req = h.authenticate(req)
-	body, err := io.ReadAll(req.Body)
+	body, err := io.ReadAll(http.MaxBytesReader(w, req.Body, maxRPCBodyBytes))
 	if err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
@@ -596,7 +600,7 @@ type jsonRPCResponse struct {
 
 func (h *Handler) serveJSONRPC(w http.ResponseWriter, req *http.Request) {
 	req = h.authenticate(req)
-	body, err := io.ReadAll(req.Body)
+	body, err := io.ReadAll(http.MaxBytesReader(w, req.Body, maxRPCBodyBytes))
 	if err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return

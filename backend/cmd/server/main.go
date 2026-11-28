@@ -188,6 +188,7 @@ func main() {
 	}
 
 	router := chi.NewMux()
+	router.Use(web.SecurityHeaders)
 	router.Use(middleware.RequestID)
 	router.Use(web.RequestIDMiddleware)
 	// Rate limiting must run BEFORE middleware.RealIP: RealIP overwrites
@@ -442,6 +443,9 @@ func main() {
 		Addr:              cfg.Addr,
 		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	ln, actualAddr, err := listenWithFallback(cfg.Addr, os.Getenv("KIWIT_ADDR") != "")

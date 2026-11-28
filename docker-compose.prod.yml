@@ -1,0 +1,56 @@
+# Production deployment: kiwit + postgres with persistent volumes.
+#
+#   cp .env.example .env   # or create .env manually — see README
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Required in .env: POSTGRES_PASSWORD, KIWIT_JWT_SECRET (min. 16 chars),
+# KIWIT_BASE_URL. Optional: KIWIT_TRUSTED_PROXIES, KIWIT_OIDC_*, KIWIT_LDAP_*,
+# KIWIT_LLM_API_KEY, SMTP/S3 settings.
+services:
+  postgres:
+    image: docker.io/library/postgres:16-alpine
+    container_name: kiwit-postgres-prod
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kiwit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-kiwit}
+    volumes:
+      - kiwit_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    # No public port: kiwit reaches postgres over the compose network only.
+
+  kiwit:
+    build: .
+    image: kiwit:latest
+    container_name: kiwit-prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      KIWIT_ENV: production
+      KIWIT_ADDR: :8080
+      KIWIT_DATABASE_URL: postgres://${POSTGRES_USER:-kiwit}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-kiwit}
+      KIWIT_JWT_SECRET: ${KIWIT_JWT_SECRET:?set KIWIT_JWT_SECRET in .env (min. 16 chars)}
+      KIWIT_BASE_URL: ${KIWIT_BASE_URL:-http://localhost:8080}
+      KIWIT_UPLOAD_DIR: /app/uploads
+    ports:
+      - "8080:8080"
+    volumes:
+      - kiwit_uploads:/app/uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  kiwit_pgdata:
+  kiwit_uploads:
