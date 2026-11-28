@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/kiwit/kiwit/internal/auth"
 )
 
 // Store handles default group/permission setup.
@@ -49,8 +50,10 @@ type refreshResult struct {
 }
 
 func (s *Store) handleRefresh(w http.ResponseWriter, r *http.Request) {
-	// Admin-only: check role from context (set by auth middleware)
-	if role, ok := r.Context().Value("user_role").(string); ok && role != "admin" {
+	// Admin-only, fail-closed: role is read via the typed context key set by
+	// auth.RequireAuth — a plain-string key would never match and fail open.
+	u, ok := auth.UserFromContext(r.Context())
+	if !ok || u.Role != "admin" {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "admin role required"})
 		return
 	}

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/kiwit/kiwit/internal/auth"
 	_ "modernc.org/sqlite"
 )
 
@@ -86,7 +87,7 @@ func TestRefreshEndpoint(t *testing.T) {
 
 	// With admin role
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/refresh-permissions", nil)
-	req = req.WithContext(context.WithValue(req.Context(), "user_role", "admin"))
+	req = req.WithContext(auth.WithUser(req.Context(), auth.User{Role: "admin"}))
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -108,7 +109,7 @@ func TestRefreshEndpointForbidden(t *testing.T) {
 	Register(r, NewStore(db, nil))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/refresh-permissions", nil)
-	req = req.WithContext(context.WithValue(req.Context(), "user_role", "tester"))
+	req = req.WithContext(auth.WithUser(req.Context(), auth.User{Role: "tester"}))
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -117,5 +118,21 @@ func TestRefreshEndpointForbidden(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "admin") {
 		t.Errorf("expected admin error, got: %s", rec.Body.String())
+	}
+}
+
+// Fail-closed: no authenticated user in context must be rejected (regression:
+// the plain-string "user_role" key never matched, so the check failed open).
+func TestRefreshEndpointNoContextForbidden(t *testing.T) {
+	db := setupTestDB(t)
+	r := chi.NewRouter()
+	Register(r, NewStore(db, nil))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/refresh-permissions", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", rec.Code)
 	}
 }

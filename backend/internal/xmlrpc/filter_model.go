@@ -144,7 +144,10 @@ func FilterModel(ctx context.Context, db *sql.DB, pg *pgxpool.Pool, model string
 	if relMap == nil {
 		relMap = map[string]relationJoin{}
 	}
-	lw := buildWhere(clean, "t", relMap)
+	lw, err := buildWhere(clean, "t", relMap, deriveAllowed(spec.Cols, relMap))
+	if err != nil {
+		return nil, err
+	}
 	joins := joinsForQuery(clean, relMap)
 	joinClause := ""
 	if len(joins) > 0 {

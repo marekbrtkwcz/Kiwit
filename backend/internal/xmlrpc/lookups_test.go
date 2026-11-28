@@ -39,9 +39,9 @@ func TestParseLookupKey(t *testing.T) {
 }
 
 func TestBuildWhereExact(t *testing.T) {
-	res := buildWhere(map[string]any{"id": int64(5)}, "t", nil)
-	if !strings.Contains(res.where, "t.id = ?") {
-		t.Errorf("expected t.id = ?, got: %s", res.where)
+	res, _ := buildWhere(map[string]any{"id": int64(5)}, "t", nil, nil)
+	if !strings.Contains(res.where, "t.\"id\" = ?") {
+		t.Errorf("expected t.\"id\" = ?, got: %s", res.where)
 	}
 	if len(res.args) != 1 || res.args[0] != int64(5) {
 		t.Errorf("expected args [5], got: %v", res.args)
@@ -49,8 +49,8 @@ func TestBuildWhereExact(t *testing.T) {
 }
 
 func TestBuildWhereStartswith(t *testing.T) {
-	res := buildWhere(map[string]any{"summary__startswith": "test"}, "t", nil)
-	if !strings.Contains(res.where, "t.summary LIKE ?") {
+	res, _ := buildWhere(map[string]any{"summary__startswith": "test"}, "t", nil, nil)
+	if !strings.Contains(res.where, "t.\"summary\" LIKE ?") {
 		t.Errorf("expected LIKE, got: %s", res.where)
 	}
 	if len(res.args) != 1 || res.args[0] != "test%" {
@@ -59,8 +59,8 @@ func TestBuildWhereStartswith(t *testing.T) {
 }
 
 func TestBuildWhereContains(t *testing.T) {
-	res := buildWhere(map[string]any{"summary__contains": "login"}, "t", nil)
-	if !strings.Contains(res.where, "t.summary LIKE ?") {
+	res, _ := buildWhere(map[string]any{"summary__contains": "login"}, "t", nil, nil)
+	if !strings.Contains(res.where, "t.\"summary\" LIKE ?") {
 		t.Errorf("expected LIKE, got: %s", res.where)
 	}
 	if res.args[0] != "%login%" {
@@ -69,22 +69,22 @@ func TestBuildWhereContains(t *testing.T) {
 }
 
 func TestBuildWhereIContains(t *testing.T) {
-	res := buildWhere(map[string]any{"email__icontains": "@Example.COM"}, "t", nil)
-	if !strings.Contains(res.where, "LOWER(t.email) LIKE LOWER(?)") {
+	res, _ := buildWhere(map[string]any{"email__icontains": "@Example.COM"}, "t", nil, nil)
+	if !strings.Contains(res.where, "LOWER(t.\"email\") LIKE LOWER(?)") {
 		t.Errorf("expected LOWER LIKE, got: %s", res.where)
 	}
 }
 
 func TestBuildWhereGte(t *testing.T) {
-	res := buildWhere(map[string]any{"id__gte": int64(100)}, "t", nil)
-	if !strings.Contains(res.where, "t.id >= ?") {
+	res, _ := buildWhere(map[string]any{"id__gte": int64(100)}, "t", nil, nil)
+	if !strings.Contains(res.where, "t.\"id\" >= ?") {
 		t.Errorf("expected >=, got: %s", res.where)
 	}
 }
 
 func TestBuildWhereIn(t *testing.T) {
-	res := buildWhere(map[string]any{"id__in": []any{int64(1), int64(2), int64(3)}}, "t", nil)
-	if !strings.Contains(res.where, "t.id IN (?,?,?)") {
+	res, _ := buildWhere(map[string]any{"id__in": []any{int64(1), int64(2), int64(3)}}, "t", nil, nil)
+	if !strings.Contains(res.where, "t.\"id\" IN (?,?,?)") {
 		t.Errorf("expected IN (?,?,?), got: %s", res.where)
 	}
 	if len(res.args) != 3 {
@@ -93,26 +93,26 @@ func TestBuildWhereIn(t *testing.T) {
 }
 
 func TestBuildWhereInEmpty(t *testing.T) {
-	res := buildWhere(map[string]any{"id__in": []any{}}, "t", nil)
+	res, _ := buildWhere(map[string]any{"id__in": []any{}}, "t", nil, nil)
 	if !strings.Contains(res.where, "1=0") {
 		t.Errorf("expected 1=0 for empty IN, got: %s", res.where)
 	}
 }
 
 func TestBuildWhereIsNull(t *testing.T) {
-	res := buildWhere(map[string]any{"stopped_at__isnull": true}, "t", nil)
-	if !strings.Contains(res.where, "t.stopped_at IS NULL") {
+	res, _ := buildWhere(map[string]any{"stopped_at__isnull": true}, "t", nil, nil)
+	if !strings.Contains(res.where, "t.\"stopped_at\" IS NULL") {
 		t.Errorf("expected IS NULL, got: %s", res.where)
 	}
-	res2 := buildWhere(map[string]any{"stopped_at__isnull": false}, "t", nil)
-	if !strings.Contains(res2.where, "t.stopped_at IS NOT NULL") {
+	res2, _ := buildWhere(map[string]any{"stopped_at__isnull": false}, "t", nil, nil)
+	if !strings.Contains(res2.where, "t.\"stopped_at\" IS NOT NULL") {
 		t.Errorf("expected IS NOT NULL, got: %s", res2.where)
 	}
 }
 
 func TestBuildWhereRange(t *testing.T) {
-	res := buildWhere(map[string]any{"id__range": []any{int64(10), int64(20)}}, "t", nil)
-	if !strings.Contains(res.where, "t.id BETWEEN ? AND ?") {
+	res, _ := buildWhere(map[string]any{"id__range": []any{int64(10), int64(20)}}, "t", nil, nil)
+	if !strings.Contains(res.where, "t.\"id\" BETWEEN ? AND ?") {
 		t.Errorf("expected BETWEEN, got: %s", res.where)
 	}
 	if len(res.args) != 2 {
@@ -121,11 +121,11 @@ func TestBuildWhereRange(t *testing.T) {
 }
 
 func TestBuildWhereMultiple(t *testing.T) {
-	res := buildWhere(map[string]any{
+	res, _ := buildWhere(map[string]any{
 		"summary__startswith": "test",
 		"id__gte":             int64(10),
 		"is_active":           true,
-	}, "t", nil)
+	}, "t", nil, nil)
 	if !strings.Contains(res.where, "AND") {
 		t.Errorf("expected AND between clauses, got: %s", res.where)
 	}
@@ -137,7 +137,7 @@ func TestBuildWhereMultiple(t *testing.T) {
 }
 
 func TestBuildWhereEmpty(t *testing.T) {
-	res := buildWhere(map[string]any{}, "t", nil)
+	res, _ := buildWhere(map[string]any{}, "t", nil, nil)
 	if res.where != "1=1" {
 		t.Errorf("expected 1=1, got: %s", res.where)
 	}
@@ -147,8 +147,8 @@ func TestBuildWhereRelation(t *testing.T) {
 	relations := map[string]relationJoin{
 		"product": {joinSQL: "JOIN products p ON p.id = t.product_id", alias: "p"},
 	}
-	res := buildWhere(map[string]any{"product__name__startswith": "My"}, "t", relations)
-	if !strings.Contains(res.where, "p.name LIKE ?") {
+	res, _ := buildWhere(map[string]any{"product__name__startswith": "My"}, "t", relations, nil)
+	if !strings.Contains(res.where, "p.\"name\" LIKE ?") {
 		t.Errorf("expected p.name LIKE, got: %s", res.where)
 	}
 	if res.args[0] != "My%" {

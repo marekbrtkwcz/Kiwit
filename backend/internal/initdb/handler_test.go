@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/kiwit/kiwit/internal/auth"
 	_ "modernc.org/sqlite"
 )
 
@@ -220,5 +221,30 @@ func TestResetDBForbidden(t *testing.T) {
 
 // contextWithRole is a test helper to inject a role into the request context.
 func contextWithRole(r *http.Request, role string) (ctx context.Context) {
-	return context.WithValue(r.Context(), "user_role", role)
+	return auth.WithUser(r.Context(), auth.User{Role: role})
+}
+
+// Fail-closed: a request without an authenticated user in context must NOT
+// be able to wipe the database (regression: plain-string context key made
+// the role check fail open).
+func TestResetDBNoContextForbidden(t *testing.T) {
+	db := setupTestDB(t)
+	r := setupRouter(db)
+	// Seed a row that a successful wipe would delete
+	if _, err := db.Exec(`INSERT INTO users (id, email, username, password_hash, role, is_active) VALUES (1, 'a@b.c', 'admin', 'x', 'admin', 1)`); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/reset-db", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", rec.Code)
+	}
+	var count int
+	_ = db.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&count)
+	if count == 0 {
+		t.Error("database was wiped without an authenticated admin in context")
+	}
 }

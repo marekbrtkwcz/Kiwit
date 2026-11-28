@@ -26,6 +26,15 @@ func WithUser(ctx context.Context, u User) context.Context {
 	return context.WithValue(ctx, userContextKey, u)
 }
 
+// RoleFromContext returns the role of the authenticated user in ctx, if any.
+func RoleFromContext(ctx context.Context) (string, bool) {
+	u, ok := UserFromContext(ctx)
+	if !ok {
+		return "", false
+	}
+	return u.Role, true
+}
+
 // IsAPIToken reports whether the current request was authenticated with a kiwit_* API token.
 func IsAPIToken(ctx context.Context) bool {
 	m, _ := ctx.Value(authMethodContextKey).(string)
@@ -78,10 +87,40 @@ var AnonymousUser = User{
 	Role:     "anonymous",
 }
 
+// publicAuthPaths are /api/v1/* routes reachable without a bearer token:
+// everything needed by the pre-login UI (captcha, auth method discovery,
+// LDAP/SSO login, menu, public settings). The password-reset pair is handled
+// separately: it is public only when no bearer is sent, so API tokens are
+// still detected and rejected by the handlers.
+var publicAuthPaths = map[string]bool{
+	"/api/v1/auth/login":       true,
+	"/api/v1/auth/register":    true,
+	"/api/v1/auth/captcha":     true,
+	"/api/v1/auth/methods":     true,
+	"/api/v1/auth/ldap-login":  true,
+	"/api/v1/menu":             true,
+	"/api/v1/auth/sso/login":   true,
+	"/api/v1/auth/sso/callback": true,
+	"/api/v1/auth/sso/config":  true,
+}
+
+// isPublicSettingsPath reports whether a GET on a settings route is public.
+// GET /api/v1/settings and GET /api/v1/settings/{key} are public — the
+// handler itself only exposes keys marked Public and enforces admin for the
+// rest (fail-closed via UserFromContext).
+func isPublicSettingsPath(method, path string) bool {
+	if method != http.MethodGet {
+		return false
+	}
+	return path == "/api/v1/settings" || path == "/api/v1/settings/domain" ||
+		strings.HasPrefix(path, "/api/v1/settings/")
+}
+
 // RequireAuth protects /api/v1/* routes using JWT or kiwit_* API tokens.
-// Public (bypass) paths: login, register and the password-reset pair — the
-// reset paths still authenticate when a valid bearer is provided, so API
-// tokens can be detected and rejected by the handlers.
+// Public (bypass) paths: login, register, captcha, auth methods, LDAP/SSO
+// login, menu, public settings and the password-reset pair — the reset paths
+// still authenticate when a valid bearer is provided, so API tokens can be
+// detected and rejected by the handlers.
 // When anonymous access is enabled (SetAnonymousAccess(true)), requests
 // without a bearer token are allowed through with the AnonymousUser in
 // context — handlers must still enforce read-only via CheckRole.
@@ -89,8 +128,8 @@ func (s *Service) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := r.Header.Get("Authorization")
 		if !strings.HasPrefix(r.URL.Path, "/api/v1/") ||
-			r.URL.Path == "/api/v1/auth/login" ||
-			r.URL.Path == "/api/v1/auth/register" ||
+			publicAuthPaths[r.URL.Path] ||
+			isPublicSettingsPath(r.Method, r.URL.Path) ||
 			((r.URL.Path == "/api/v1/auth/password-reset" ||
 				r.URL.Path == "/api/v1/auth/password-reset/confirm") && header == "") {
 			next.ServeHTTP(w, r)
@@ -101,7 +140,6 @@ func (s *Service) RequireAuth(next http.Handler) http.Handler {
 			if s.anonymousAccess && r.Method == http.MethodGet {
 				// Anonymous read-only access: inject AnonymousUser into context
 				ctx := context.WithValue(r.Context(), userContextKey, AnonymousUser)
-				ctx = context.WithValue(ctx, contextKey("user_role"), "anonymous")
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
@@ -115,7 +153,6 @@ func (s *Service) RequireAuth(next http.Handler) http.Handler {
 		if err != nil {
 			if s.anonymousAccess && r.Method == http.MethodGet {
 				ctx := context.WithValue(r.Context(), userContextKey, AnonymousUser)
-				ctx = context.WithValue(ctx, contextKey("user_role"), "anonymous")
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
@@ -130,7 +167,6 @@ func (s *Service) RequireAuth(next http.Handler) http.Handler {
 		}
 		ctx := context.WithValue(r.Context(), userContextKey, u)
 		ctx = context.WithValue(ctx, authMethodContextKey, method)
-		ctx = context.WithValue(ctx, contextKey("user_role"), u.Role)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

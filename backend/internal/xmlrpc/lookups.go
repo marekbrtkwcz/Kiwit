@@ -7,8 +7,13 @@ package xmlrpc
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
+
+// identRe matches a safe SQL identifier segment (letters, digits, underscore,
+// not starting with a digit). Every field name that reaches SQL must pass it.
+var identRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // lookupResult holds a built WHERE fragment and its bound parameters.
 type lookupResult struct {
@@ -26,9 +31,13 @@ type relationJoin struct {
 // buildWhere converts a query map into a SQL WHERE clause.
 // tableAlias is the alias for the main table (e.g. "t").
 // relations maps relation field names to their JOIN definitions.
-func buildWhere(query map[string]any, tableAlias string, relations map[string]relationJoin) lookupResult {
+// allowed is the whitelist of lookup keys (without operator, e.g. "id" or
+// "product__name"); when non-nil, any key not in it is rejected with an
+// error. Field names are additionally validated against identRe and quoted,
+// so a malicious key can never inject SQL.
+func buildWhere(query map[string]any, tableAlias string, relations map[string]relationJoin, allowed map[string]bool) (lookupResult, error) {
 	if len(query) == 0 {
-		return lookupResult{where: "1=1"}
+		return lookupResult{where: "1=1"}, nil
 	}
 	clauses := make([]string, 0, len(query))
 	args := make([]any, 0, len(query)*2)
@@ -50,11 +59,19 @@ func buildWhere(query map[string]any, tableAlias string, relations map[string]re
 		val := query[key]
 		col, op := parseLookupKey(key)
 
+		// Whitelist check: reject any lookup key the caller did not declare.
+		if allowed != nil && !allowed[col] {
+			return lookupResult{}, fmt.Errorf("lookup field not allowed: %q", col)
+		}
+
 		// Handle relation traversal: product__name__startswith → join products
 		field := col
 		alias := tableAlias
 		if idx := strings.Index(col, "__"); idx > 0 {
 			relName := col[:idx]
+			if !identRe.MatchString(relName) {
+				return lookupResult{}, fmt.Errorf("invalid relation name: %q", relName)
+			}
 			if rel, ok := relations[relName]; ok {
 				if !joins[relName] {
 					// JOIN will be prepended by caller via joinsNeeded
@@ -62,15 +79,21 @@ func buildWhere(query map[string]any, tableAlias string, relations map[string]re
 				}
 				alias = rel.alias
 				field = col[idx+2:]
-				// If field itself contains __ it's another lookup on the related table
-				if idx2 := strings.Index(field, "__"); idx2 > 0 {
-					// nested relation not supported beyond depth 1 for now
-					field = strings.ReplaceAll(field, "__", "_")
+				// nested relation beyond depth 1 is not supported — reject
+				if strings.Contains(field, "__") {
+					return lookupResult{}, fmt.Errorf("nested relation not supported: %q", col)
 				}
+			} else {
+				// Unknown relation prefix: the whole key is a field name on the
+				// main table and must be a single plain identifier.
+				return lookupResult{}, fmt.Errorf("unknown relation in lookup: %q", col)
 			}
 		}
+		if !identRe.MatchString(field) {
+			return lookupResult{}, fmt.Errorf("invalid field name: %q", field)
+		}
 
-		colRef := alias + "." + field
+		colRef := alias + "." + quoteIdent(field)
 		switch op {
 		case "exact":
 			clauses = append(clauses, colRef+" = ?")
@@ -141,7 +164,7 @@ func buildWhere(query map[string]any, tableAlias string, relations map[string]re
 	return lookupResult{
 		where: strings.Join(clauses, " AND "),
 		args:  args,
-	}
+	}, nil
 }
 
 // parseLookupKey splits "summary__startswith" into ("summary", "startswith")
@@ -193,6 +216,42 @@ func joinsForQuery(query map[string]any, relations map[string]relationJoin) []st
 // quoteIdent safely quotes a column reference for SQL.
 func quoteIdent(s string) string {
 	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
+}
+
+var (
+	colRefRe = regexp.MustCompile(`\bt\.([A-Za-z_][A-Za-z0-9_]*)\b`)
+	bareColRe = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)$`)
+)
+
+// safeRelatedFields are the only fields filterable through a relation
+// (e.g. product__name). Sensitive columns (password_hash, tokens, secrets)
+// are deliberately not in this set.
+var safeRelatedFields = map[string]bool{
+	"id": true, "name": true, "value": true, "summary": true,
+	"username": true, "email": true, "title": true, "description": true,
+	"status": true, "key": true,
+}
+
+// deriveAllowed builds the lookup-key whitelist for a filter: main-table
+// columns taken from the SELECT list (so only already-exposed columns are
+// filterable), plus relation lookups limited to safeRelatedFields.
+func deriveAllowed(cols []string, relations map[string]relationJoin) map[string]bool {
+	allowed := map[string]bool{}
+	for _, c := range cols {
+		if m := bareColRe.FindStringSubmatch(c); m != nil {
+			allowed[m[1]] = true
+			continue
+		}
+		for _, m := range colRefRe.FindAllStringSubmatch(c, -1) {
+			allowed[m[1]] = true
+		}
+	}
+	for rel := range relations {
+		for f := range safeRelatedFields {
+			allowed[rel+"__"+f] = true
+		}
+	}
+	return allowed
 }
 
 var _ = fmt.Sprintf // keep fmt import if needed later

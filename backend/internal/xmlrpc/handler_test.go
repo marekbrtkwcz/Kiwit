@@ -20,6 +20,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 	}
 	for _, stmt := range []string{
 		`CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT, username TEXT, password_hash TEXT, role TEXT, is_active INTEGER, created_at TEXT, updated_at TEXT)`,
+		`INSERT INTO users (id, email, username, password_hash, role, is_active) VALUES (1, 'admin@example.com', 'admin', 'x', 'admin', 1)`,
 		`CREATE TABLE test_runs (id INTEGER PRIMARY KEY, summary TEXT, plan_id INTEGER, build_id INTEGER, stopped_at TEXT)`,
 		`CREATE TABLE test_cases (id INTEGER PRIMARY KEY, summary TEXT, category_id INTEGER, is_automated INTEGER, deleted_at DATETIME NULL)`,
 		`CREATE TABLE test_plans (id INTEGER PRIMARY KEY, name TEXT, product_id INTEGER, version_id INTEGER, description TEXT DEFAULT '', is_active INTEGER DEFAULT 1, created_at TEXT, updated_at TEXT)`,
@@ -35,6 +36,17 @@ func setupTestDB(t *testing.T) *sql.DB {
 		}
 	}
 	return db
+}
+
+// adminToken issues a JWT for a synthetic admin user (no DB row needed —
+// AuthenticateBearer only verifies the signature and reads the claims).
+func adminToken(t *testing.T, svc *auth.Service) string {
+	t.Helper()
+	tok, err := svc.IssueJWT(auth.User{ID: 1, Username: "admin", Email: "admin@example.com", Role: "admin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tok
 }
 
 func TestVersion(t *testing.T) {
@@ -73,6 +85,7 @@ func TestProductFilter(t *testing.T) {
 	body := `<?xml version="1.0"?><methodCall><methodName>Product.filter</methodName><params><param><value><struct></struct></value></param></params></methodCall>`
 	req := httptest.NewRequest(http.MethodPost, "/xml-rpc/", strings.NewReader(body))
 	req.Header.Set("Content-Type", "text/xml")
+	req.Header.Set("Authorization", "Bearer "+adminToken(t, svc))
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -92,6 +105,7 @@ func TestPlanCreateAndSortkeys(t *testing.T) {
 	call := func(name, params string) string {
 		body := `<?xml version="1.0"?><methodCall><methodName>` + name + `</methodName><params>` + params + `</params></methodCall>`
 		req := httptest.NewRequest(http.MethodPost, "/xml-rpc/", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+adminToken(t, svc))
 		rec := httptest.NewRecorder()
 		r.ServeHTTP(rec, req)
 		return rec.Body.String()
@@ -119,6 +133,7 @@ func TestMarkdownRender(t *testing.T) {
 	h.Register(r)
 	body := `<?xml version="1.0"?><methodCall><methodName>Markdown.render</methodName><params><param><value><struct><member><name>text</name><value><string>**hi**</string></value></member></struct></value></param></params></methodCall>`
 	req := httptest.NewRequest(http.MethodPost, "/xml-rpc/", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+adminToken(t, svc))
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 	if !strings.Contains(rec.Body.String(), "&lt;strong&gt;hi&lt;/strong&gt;") && !strings.Contains(rec.Body.String(), "<strong>hi</strong>") {

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/kiwit/kiwit/internal/auth"
 	_ "modernc.org/sqlite"
 )
 
@@ -77,7 +78,7 @@ func TestDomainEndpoint(t *testing.T) {
 	// PUT as admin
 	body := `{"domain": "kiwit.example.com"}`
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/domain", strings.NewReader(body))
-	req = req.WithContext(context.WithValue(req.Context(), "user_role", "admin"))
+	req = req.WithContext(auth.WithUser(req.Context(), auth.User{Role: "admin"}))
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -112,7 +113,7 @@ func TestDomainEndpointForbidden(t *testing.T) {
 	Register(r, NewStore(db, nil))
 
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/domain", strings.NewReader(`{"domain":"x.com"}`))
-	req = req.WithContext(context.WithValue(req.Context(), "user_role", "tester"))
+	req = req.WithContext(auth.WithUser(req.Context(), auth.User{Role: "tester"}))
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
@@ -126,7 +127,7 @@ func TestDomainEndpointBadRequest(t *testing.T) {
 	Register(r, NewStore(db, nil))
 
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/domain", strings.NewReader(`{"domain":""}`))
-	req = req.WithContext(context.WithValue(req.Context(), "user_role", "admin"))
+	req = req.WithContext(auth.WithUser(req.Context(), auth.User{Role: "admin"}))
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -145,7 +146,7 @@ func TestBulkUpdateAndCallbacks(t *testing.T) {
 
 	body := `{"settings": {"allow_registration": "false", "anonymous_access": "true", "unknown_key": "x"}}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/settings", strings.NewReader(body))
-	req = req.WithContext(context.WithValue(req.Context(), "user_role", "admin"))
+	req = req.WithContext(auth.WithUser(req.Context(), auth.User{Role: "admin"}))
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
@@ -195,7 +196,7 @@ func TestMaskedPassword(t *testing.T) {
 	Register(r, s)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/settings", nil)
-	req = req.WithContext(context.WithValue(req.Context(), "user_role", "admin"))
+	req = req.WithContext(auth.WithUser(req.Context(), auth.User{Role: "admin"}))
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 

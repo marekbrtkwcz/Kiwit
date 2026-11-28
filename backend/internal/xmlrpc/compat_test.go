@@ -74,6 +74,7 @@ func setupFullTestDB(t *testing.T) *sql.DB {
 	}
 	stmts := []string{
 		`CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT, username TEXT, password_hash TEXT, role TEXT, is_active INTEGER, created_at TEXT, updated_at TEXT)`,
+		`INSERT INTO users (id, email, username, password_hash, role, is_active) VALUES (1, 'admin@example.com', 'admin', 'x', 'admin', 1)`,
 		`CREATE TABLE api_tokens (id INTEGER PRIMARY KEY, user_id INTEGER, token TEXT, created_at TEXT, expires_at TEXT)`,
 		`CREATE TABLE products (id INTEGER PRIMARY KEY, name TEXT, description TEXT DEFAULT '', classification_id INTEGER)`,
 		`CREATE TABLE versions (id INTEGER PRIMARY KEY, value TEXT, product_id INTEGER)`,
@@ -236,6 +237,7 @@ func TestXMLRPCNewMethods(t *testing.T) {
 		t.Run(tc.method, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/xml-rpc/", strings.NewReader(tc.body))
 			req.Header.Set("Content-Type", "text/xml")
+			req.Header.Set("Authorization", "Bearer "+adminToken(t, svc))
 			rec := httptest.NewRecorder()
 			r.ServeHTTP(rec, req)
 			if rec.Code != http.StatusOK {
@@ -319,6 +321,7 @@ func TestXMLRPCFilterWithLookups(t *testing.T) {
 			body := `<?xml version="1.0"?><methodCall><methodName>` + tc.method + `</methodName><params>` + tc.queryXML + `</params></methodCall>`
 			req := httptest.NewRequest(http.MethodPost, "/xml-rpc/", strings.NewReader(body))
 			req.Header.Set("Content-Type", "text/xml")
+			req.Header.Set("Authorization", "Bearer "+adminToken(t, svc))
 			rec := httptest.NewRecorder()
 			r.ServeHTTP(rec, req)
 

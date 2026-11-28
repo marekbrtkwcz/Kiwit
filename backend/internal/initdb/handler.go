@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/kiwit/kiwit/internal/auth"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -135,8 +136,10 @@ func (s *Store) handleInit(w http.ResponseWriter, r *http.Request) {
 // handleReset — POST /api/v1/admin/reset-db — wipes all data and re-seeds.
 // Requires admin role (checked via context value set by auth middleware).
 func (s *Store) handleReset(w http.ResponseWriter, r *http.Request) {
-	// Check admin role from context if present
-	if role, ok := r.Context().Value("user_role").(string); ok && role != "admin" {
+	// Admin-only, fail-closed: the role is read via the typed context key set
+	// by auth.RequireAuth — a plain-string key would never match and fail open.
+	u, ok := auth.UserFromContext(r.Context())
+	if !ok || u.Role != "admin" {
 		writeJSON(w, http.StatusForbidden, map[string]any{"error": "admin role required"})
 		return
 	}

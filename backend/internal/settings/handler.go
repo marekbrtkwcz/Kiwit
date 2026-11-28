@@ -16,6 +16,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/kiwit/kiwit/internal/auth"
 )
 
 // Store persists instance settings in SQLite or PostgreSQL.
@@ -357,8 +358,8 @@ func BoolVal(s string) bool {
 }
 
 func isAdmin(r *http.Request) bool {
-	role, ok := r.Context().Value("user_role").(string)
-	return ok && role == "admin"
+	u, ok := auth.UserFromContext(r.Context())
+	return ok && u.Role == "admin"
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

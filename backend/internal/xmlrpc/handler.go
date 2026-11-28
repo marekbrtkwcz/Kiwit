@@ -57,12 +57,34 @@ func (h *Handler) Register(r chi.Router) {
 	r.Post("/json-rpc/", h.serveJSONRPC)
 }
 
-func (h *Handler) serveHTTP(w http.ResponseWriter, req *http.Request) {
+// publicRPCMethods may be called without authentication (login and version
+// probe only). Every other method requires an authenticated user.
+var publicRPCMethods = map[string]bool{
+	"Auth.login":       true,
+	"KiwiTCMS.version": true,
+}
+
+// authenticate resolves the caller from the Authorization bearer token or
+// the session cookie and stores the user in the request context. Requests
+// with an invalid credential are left unauthenticated (fail-closed below).
+func (h *Handler) authenticate(req *http.Request) *http.Request {
+	if header := req.Header.Get("Authorization"); strings.HasPrefix(header, "Bearer ") {
+		token := strings.TrimPrefix(header, "Bearer ")
+		if u, err := h.svc.AuthenticateBearer(req.Context(), token); err == nil {
+			return req.WithContext(auth.WithUser(req.Context(), u))
+		}
+		return req
+	}
 	if c, err := req.Cookie(sessionCookie); err == nil && c.Value != "" {
 		if u, err := h.svc.AuthenticateBearer(req.Context(), c.Value); err == nil {
-			req = req.WithContext(auth.WithUser(req.Context(), u))
+			return req.WithContext(auth.WithUser(req.Context(), u))
 		}
 	}
+	return req
+}
+
+func (h *Handler) serveHTTP(w http.ResponseWriter, req *http.Request) {
+	req = h.authenticate(req)
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -77,6 +99,12 @@ func (h *Handler) serveHTTP(w http.ResponseWriter, req *http.Request) {
 	if !ok {
 		writeFault(w, 2, "method not found: "+call.MethodName)
 		return
+	}
+	if !publicRPCMethods[call.MethodName] {
+		if _, ok := auth.UserFromContext(req.Context()); !ok {
+			writeFault(w, 401, "authentication required")
+			return
+		}
 	}
 	args := make([]any, len(call.Params))
 	for i, p := range call.Params {
@@ -158,7 +186,10 @@ func (h *Handler) filterRowsWhere(table, baseCond string, cols []string, relatio
 				query = m
 			}
 		}
-		lw := buildWhere(query, "t", relMap)
+		lw, err := buildWhere(query, "t", relMap, deriveAllowed(cols, relMap))
+		if err != nil {
+			return nil, err
+		}
 		where := lw.where
 		if baseCond != "" {
 			if where == "1=1" {
@@ -387,11 +418,7 @@ type jsonRPCResponse struct {
 }
 
 func (h *Handler) serveJSONRPC(w http.ResponseWriter, req *http.Request) {
-	if c, err := req.Cookie(sessionCookie); err == nil && c.Value != "" {
-		if u, err := h.svc.AuthenticateBearer(req.Context(), c.Value); err == nil {
-			req = req.WithContext(auth.WithUser(req.Context(), u))
-		}
-	}
+	req = h.authenticate(req)
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -406,6 +433,12 @@ func (h *Handler) serveJSONRPC(w http.ResponseWriter, req *http.Request) {
 	if !ok {
 		writeJSONFault(w, call.ID, -32601, "method not found: "+call.Method)
 		return
+	}
+	if !publicRPCMethods[call.Method] {
+		if _, ok := auth.UserFromContext(req.Context()); !ok {
+			writeJSONFault(w, call.ID, -32001, "authentication required")
+			return
+		}
 	}
 	args := call.Params
 	if args == nil {
