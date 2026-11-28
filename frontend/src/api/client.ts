@@ -775,10 +775,8 @@ export const api = {
     website?: string // honeypot — must stay empty
     captcha_id?: string
     captcha_answer?: string
-  }) =>
-    request<User>('/api/v1/auth/register', { method: 'POST', body: JSON.stringify(body) }),
-  getCaptcha: () =>
-    request<{ captcha_id: string; question: string; expires_in: number }>('/api/v1/auth/captcha'),
+  }) => request<User>('/api/v1/auth/register', { method: 'POST', body: JSON.stringify(body) }),
+  getCaptcha: () => request<{ captcha_id: string; question: string; expires_in: number }>('/api/v1/auth/captcha'),
   getPublicSettings: () => request<Record<string, string>>('/api/v1/settings'),
   getAdminSettings: () => request<Record<string, string>>('/api/v1/admin/settings'),
   bulkUpdateSettings: (settings: Record<string, string>) =>
@@ -812,12 +810,18 @@ export const api = {
     request<UserGroup>('/api/v1/admin/groups', { method: 'POST', body: JSON.stringify({ name }) }),
   deleteGroup: (id: number) => request<void>(`/api/v1/admin/groups/${id}`, { method: 'DELETE' }),
   addGroupMember: (groupId: number, userId: number) =>
-    request<{ ok: boolean }>(`/api/v1/admin/groups/${groupId}/members`, { method: 'POST', body: JSON.stringify({ user_id: userId }) }),
+    request<{ ok: boolean }>(`/api/v1/admin/groups/${groupId}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId }),
+    }),
   removeGroupMember: (groupId: number, userId: number) =>
     request<{ ok: boolean }>(`/api/v1/admin/groups/${groupId}/members/${userId}`, { method: 'DELETE' }),
   authMethods: () => request<{ sso: boolean; ldap: boolean }>('/api/v1/auth/methods'),
   ldapLogin: (body: { username: string; password: string }) =>
-    request<{ access_token: string; token_type: string; user: User }>('/api/v1/auth/ldap-login', { method: 'POST', body: JSON.stringify(body) }),
+    request<{ access_token: string; token_type: string; user: User }>('/api/v1/auth/ldap-login', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   listClassifications: () => request<{ items: Classification[] }>('/api/v1/classifications'),
   createClassification: (name: string) =>
     request<Classification>('/api/v1/classifications', { method: 'POST', body: JSON.stringify({ name }) }),
@@ -839,7 +843,15 @@ export const api = {
   createCategory: (name: string) =>
     request<Category>('/api/v1/categories', { method: 'POST', body: JSON.stringify({ name }) }),
 
-  listRequirements: (params?: { q?: string; product_id?: number; status?: string; priority?: string; category?: string; limit?: number; offset?: number }) => {
+  listRequirements: (params?: {
+    q?: string
+    product_id?: number
+    status?: string
+    priority?: string
+    category?: string
+    limit?: number
+    offset?: number
+  }) => {
     const qs = new URLSearchParams()
     if (params?.q) qs.set('q', params.q)
     if (params?.product_id) qs.set('product_id', String(params.product_id))
@@ -857,25 +869,44 @@ export const api = {
     request<Requirement>(`/api/v1/requirements/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteRequirement: (id: number) => request<void>(`/api/v1/requirements/${id}`, { method: 'DELETE' }),
   linkRequirementCase: (id: number, testCaseId: number) =>
-    request<void>(`/api/v1/requirements/${id}/link-case`, { method: 'POST', body: JSON.stringify({ test_case_id: testCaseId }) }),
+    request<void>(`/api/v1/requirements/${id}/link-case`, {
+      method: 'POST',
+      body: JSON.stringify({ test_case_id: testCaseId }),
+    }),
   unlinkRequirementCase: (id: number, testCaseId: number) =>
-    request<void>(`/api/v1/requirements/${id}/unlink-case`, { method: 'POST', body: JSON.stringify({ test_case_id: testCaseId }) }),
+    request<void>(`/api/v1/requirements/${id}/unlink-case`, {
+      method: 'POST',
+      body: JSON.stringify({ test_case_id: testCaseId }),
+    }),
   requirementCoverage: (id: number) => request<{ items: CoverageEntry[] }>(`/api/v1/requirements/${id}/coverage`),
   testCaseRequirements: (id: number) => request<{ items: Requirement[] }>(`/api/v1/testcases/${id}/requirements`),
   listMilestones: (versionId?: number) =>
     request<{ items: Milestone[] }>(`/api/v1/milestones${versionId ? `?version_id=${versionId}` : ''}`),
-  createMilestone: (body: { version_id: number; name: string; description?: string; due_date?: string; status?: string }) =>
-    request<Milestone>('/api/v1/milestones', { method: 'POST', body: JSON.stringify(body) }),
-  updateMilestone: (id: number, body: { version_id: number; name: string; description?: string; due_date?: string; status?: string }) =>
-    request<Milestone>(`/api/v1/milestones/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  createMilestone: (body: {
+    version_id: number
+    name: string
+    description?: string
+    due_date?: string
+    status?: string
+  }) => request<Milestone>('/api/v1/milestones', { method: 'POST', body: JSON.stringify(body) }),
+  updateMilestone: (
+    id: number,
+    body: { version_id: number; name: string; description?: string; due_date?: string; status?: string },
+  ) => request<Milestone>(`/api/v1/milestones/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteMilestone: (id: number) => request<void>(`/api/v1/milestones/${id}`, { method: 'DELETE' }),
   milestoneSignoff: (id: number, body: { decision: 'go' | 'no-go'; note?: string }) =>
     request<Milestone>(`/api/v1/milestones/${id}/signoff`, { method: 'POST', body: JSON.stringify(body) }),
   milestoneProgress: (id: number) => request<MilestoneProgress>(`/api/v1/milestones/${id}/progress`),
   milestoneLinkRun: (id: number, testRunId: number) =>
-    request<void>(`/api/v1/milestones/${id}/link-run`, { method: 'POST', body: JSON.stringify({ test_run_id: testRunId }) }),
+    request<void>(`/api/v1/milestones/${id}/link-run`, {
+      method: 'POST',
+      body: JSON.stringify({ test_run_id: testRunId }),
+    }),
   milestoneUnlinkRun: (id: number, testRunId: number) =>
-    request<void>(`/api/v1/milestones/${id}/unlink-run`, { method: 'POST', body: JSON.stringify({ test_run_id: testRunId }) }),
+    request<void>(`/api/v1/milestones/${id}/unlink-run`, {
+      method: 'POST',
+      body: JSON.stringify({ test_run_id: testRunId }),
+    }),
   milestoneRuns: (id: number) => request<{ items: number[] }>(`/api/v1/milestones/${id}/runs`),
   renderMarkdown: (md: string) =>
     request<{ html: string }>('/api/v1/markdown/render', { method: 'POST', body: JSON.stringify({ markdown: md }) }),
@@ -913,7 +944,10 @@ export const api = {
   updateTestCase: (id: number, body: Omit<TestCase, 'id' | 'created_at' | 'updated_at'>) =>
     request<TestCase>(`/api/v1/testcases/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   cloneTestCase: (id: number, summary?: string) =>
-    request<TestCase>(`/api/v1/testcases/${id}/clone`, { method: 'POST', body: JSON.stringify({ summary: summary || '' }) }),
+    request<TestCase>(`/api/v1/testcases/${id}/clone`, {
+      method: 'POST',
+      body: JSON.stringify({ summary: summary || '' }),
+    }),
   fetchReportHtml: async (milestoneIds: number[]): Promise<string> => {
     const token = getAuthToken()
     const res = await fetch(`/api/v1/reports/multi/html?milestone_ids=${milestoneIds.join(',')}`, {
@@ -925,8 +959,14 @@ export const api = {
   },
   listCampaigns: (productId?: number) =>
     request<{ items: Campaign[] }>(`/api/v1/campaigns${productId ? `?product_id=${productId}` : ''}`),
-  createCampaign: (body: { product_id: number; name: string; description?: string; status?: string; start_date?: string; end_date?: string }) =>
-    request<Campaign>('/api/v1/campaigns', { method: 'POST', body: JSON.stringify(body) }),
+  createCampaign: (body: {
+    product_id: number
+    name: string
+    description?: string
+    status?: string
+    start_date?: string
+    end_date?: string
+  }) => request<Campaign>('/api/v1/campaigns', { method: 'POST', body: JSON.stringify(body) }),
   deleteCampaign: (id: number) => request<void>(`/api/v1/campaigns/${id}`, { method: 'DELETE' }),
   campaignTree: (id: number) => request<CampaignTree>(`/api/v1/campaigns/${id}/tree`),
   listIterations: (campaignId: number) => request<{ items: Iteration[] }>(`/api/v1/campaigns/${campaignId}/iterations`),
@@ -934,13 +974,25 @@ export const api = {
     request<Iteration>(`/api/v1/campaigns/${campaignId}/iterations`, { method: 'POST', body: JSON.stringify(body) }),
   deleteIteration: (id: number) => request<void>(`/api/v1/iterations/${id}`, { method: 'DELETE' }),
   assignPlanToCampaign: (campaignId: number, testPlanId: number, iterationId?: number) =>
-    request<void>(`/api/v1/campaigns/${campaignId}/assign-plan`, { method: 'POST', body: JSON.stringify({ test_plan_id: testPlanId, iteration_id: iterationId }) }),
+    request<void>(`/api/v1/campaigns/${campaignId}/assign-plan`, {
+      method: 'POST',
+      body: JSON.stringify({ test_plan_id: testPlanId, iteration_id: iterationId }),
+    }),
   aiSummarizeRun: (testRunId: number) =>
-    request<{ summary: string; model: string }>('/api/v1/ai/summarize-run', { method: 'POST', body: JSON.stringify({ test_run_id: testRunId }) }),
+    request<{ summary: string; model: string }>('/api/v1/ai/summarize-run', {
+      method: 'POST',
+      body: JSON.stringify({ test_run_id: testRunId }),
+    }),
   aiSuggestBug: (body: { summary: string; description?: string }) =>
-    request<{ severity: string; title: string; model: string }>('/api/v1/ai/suggest-bug', { method: 'POST', body: JSON.stringify(body) }),
+    request<{ severity: string; title: string; model: string }>('/api/v1/ai/suggest-bug', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   aiGenerateSteps: (gherkin: string) =>
-    request<{ code: string; model: string }>('/api/v1/ai/generate-steps', { method: 'POST', body: JSON.stringify({ gherkin }) }),
+    request<{ code: string; model: string }>('/api/v1/ai/generate-steps', {
+      method: 'POST',
+      body: JSON.stringify({ gherkin }),
+    }),
   listAIServers: () => request<{ items: AIServer[] }>('/api/v1/admin/ai-servers'),
   createAIServer: (body: AIServerInput) =>
     request<AIServer>('/api/v1/admin/ai-servers', { method: 'POST', body: JSON.stringify(body) }),
@@ -948,56 +1000,136 @@ export const api = {
     request<AIServer>(`/api/v1/admin/ai-servers/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteAIServer: (id: number) => request<void>(`/api/v1/admin/ai-servers/${id}`, { method: 'DELETE' }),
   aiGenerateTests: (body: { product_id: number; requirement_id?: number; text?: string; max_scenarios?: number }) =>
-    request<{ created: { id: number; summary: string }[]; gherkin: string; model: string; scenarios: number }>('/api/v1/ai/generate-tests', { method: 'POST', body: JSON.stringify(body) }),
+    request<{ created: { id: number; summary: string }[]; gherkin: string; model: string; scenarios: number }>(
+      '/api/v1/ai/generate-tests',
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
   aiSearch: (query: string) =>
-    request<{ model: string; filters: Record<string, unknown>; explanation: string; items: { type: string; title: string; row: Record<string, unknown> }[]; llm_model: string }>('/api/v1/ai/search', { method: 'POST', body: JSON.stringify({ query }) }),
+    request<{
+      model: string
+      filters: Record<string, unknown>
+      explanation: string
+      items: { type: string; title: string; row: Record<string, unknown> }[]
+      llm_model: string
+    }>('/api/v1/ai/search', { method: 'POST', body: JSON.stringify({ query }) }),
   aiVisualVerdict: (comparisonId: number) =>
-    request<{ verdict: 'real-defect' | 'acceptable-change' | 'unclear'; confidence: number; explanation: string; diff_percent: number; pixel_verdict: string; model: string }>('/api/v1/ai/visual-verdict', { method: 'POST', body: JSON.stringify({ comparison_id: comparisonId }) }),
+    request<{
+      verdict: 'real-defect' | 'acceptable-change' | 'unclear'
+      confidence: number
+      explanation: string
+      diff_percent: number
+      pixel_verdict: string
+      model: string
+    }>('/api/v1/ai/visual-verdict', { method: 'POST', body: JSON.stringify({ comparison_id: comparisonId }) }),
   aiReportSummary: (milestoneIds: number[]) =>
-    request<{ summary: string; model: string }>('/api/v1/ai/report-summary', { method: 'POST', body: JSON.stringify({ milestone_ids: milestoneIds }) }),
+    request<{ summary: string; model: string }>('/api/v1/ai/report-summary', {
+      method: 'POST',
+      body: JSON.stringify({ milestone_ids: milestoneIds }),
+    }),
   aiTriageBug: (bugId: number) =>
-    request<{ duplicates: { bug_id: number; confidence: number; reason: string }[]; suggested_severity: string; suggested_status: string; triage_note: string; model: string }>('/api/v1/ai/triage-bug', { method: 'POST', body: JSON.stringify({ bug_id: bugId }) }),
+    request<{
+      duplicates: { bug_id: number; confidence: number; reason: string }[]
+      suggested_severity: string
+      suggested_status: string
+      triage_note: string
+      model: string
+    }>('/api/v1/ai/triage-bug', { method: 'POST', body: JSON.stringify({ bug_id: bugId }) }),
   aiAnalyzeRequirement: (requirementId: number) =>
-    request<{ quality_score: number; verdict: 'good' | 'needs-work' | 'poor'; summary: string; issues: { type: string; severity: string; description: string }[]; suggestions: string[]; model: string }>('/api/v1/ai/analyze-requirement', { method: 'POST', body: JSON.stringify({ requirement_id: requirementId }) }),
+    request<{
+      quality_score: number
+      verdict: 'good' | 'needs-work' | 'poor'
+      summary: string
+      issues: { type: string; severity: string; description: string }[]
+      suggestions: string[]
+      model: string
+    }>('/api/v1/ai/analyze-requirement', { method: 'POST', body: JSON.stringify({ requirement_id: requirementId }) }),
   aiRegressionScope: (requirementId: number) =>
-    request<{ summary: string; retest: { case_id: number; summary: string; reason: string; priority: string }[]; risks: string[]; gaps: string[]; model: string }>('/api/v1/ai/regression-scope', { method: 'POST', body: JSON.stringify({ requirement_id: requirementId }) }),
+    request<{
+      summary: string
+      retest: { case_id: number; summary: string; reason: string; priority: string }[]
+      risks: string[]
+      gaps: string[]
+      model: string
+    }>('/api/v1/ai/regression-scope', { method: 'POST', body: JSON.stringify({ requirement_id: requirementId }) }),
   aiGenerateCharter: (objective: string) =>
-    request<{ charter: string; model: string }>('/api/v1/ai/generate-charter', { method: 'POST', body: JSON.stringify({ objective }) }),
+    request<{ charter: string; model: string }>('/api/v1/ai/generate-charter', {
+      method: 'POST',
+      body: JSON.stringify({ objective }),
+    }),
   aiNotesToFindings: (sessionId: number) =>
-    request<{ findings: string[]; model: string }>('/api/v1/ai/notes-to-findings', { method: 'POST', body: JSON.stringify({ session_id: sessionId }) }),
+    request<{ findings: string[]; model: string }>('/api/v1/ai/notes-to-findings', {
+      method: 'POST',
+      body: JSON.stringify({ session_id: sessionId }),
+    }),
   aiGenerateDatasets: (caseId: number, count = 5) =>
-    request<{ datasets: { name: string; params: string; rationale: string }[]; model: string }>('/api/v1/ai/generate-datasets', { method: 'POST', body: JSON.stringify({ test_case_id: caseId, count }) }),
+    request<{ datasets: { name: string; params: string; rationale: string }[]; model: string }>(
+      '/api/v1/ai/generate-datasets',
+      { method: 'POST', body: JSON.stringify({ test_case_id: caseId, count }) },
+    ),
   aiDashboardTldr: (body: { product_id?: number; from?: string; to?: string }) =>
-    request<{ summary: string; model: string }>('/api/v1/ai/dashboard-tldr', { method: 'POST', body: JSON.stringify(body) }),
+    request<{ summary: string; model: string }>('/api/v1/ai/dashboard-tldr', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   getLogs: (params?: { level?: string; limit?: number }) => {
     const q = new URLSearchParams()
     if (params?.level) q.set('level', params.level)
     if (params?.limit) q.set('limit', String(params.limit))
     const qs = q.toString()
-    return request<{ items: { time: string; level: string; message: string; attrs?: Record<string, string> }[] }>(`/api/v1/admin/logs${qs ? `?${qs}` : ''}`)
+    return request<{ items: { time: string; level: string; message: string; attrs?: Record<string, string> }[] }>(
+      `/api/v1/admin/logs${qs ? `?${qs}` : ''}`,
+    )
   },
   listVisualBaselines: (caseId: number) =>
     request<{ items: VisualBaseline[] }>(`/api/v1/testcases/${caseId}/visual-baselines`),
   addVisualBaseline: (caseId: number, attachmentId: number, label?: string) =>
-    request<VisualBaseline>(`/api/v1/testcases/${caseId}/visual-baselines`, { method: 'POST', body: JSON.stringify({ attachment_id: attachmentId, label }) }),
+    request<VisualBaseline>(`/api/v1/testcases/${caseId}/visual-baselines`, {
+      method: 'POST',
+      body: JSON.stringify({ attachment_id: attachmentId, label }),
+    }),
   deleteVisualBaseline: (id: number) => request<void>(`/api/v1/visual-baselines/${id}`, { method: 'DELETE' }),
   visualCompare: (executionId: number, attachmentId: number, baselineId = 0) =>
-    request<VisualComparison>(`/api/v1/executions/${executionId}/visual-compare`, { method: 'POST', body: JSON.stringify({ attachment_id: attachmentId, baseline_id: baselineId }) }),
+    request<VisualComparison>(`/api/v1/executions/${executionId}/visual-compare`, {
+      method: 'POST',
+      body: JSON.stringify({ attachment_id: attachmentId, baseline_id: baselineId }),
+    }),
   listVisualComparisons: (executionId: number) =>
     request<{ items: VisualComparison[] }>(`/api/v1/executions/${executionId}/visual-comparisons`),
   listExploratory: (productId?: number) =>
     request<{ items: ExploratorySession[] }>(`/api/v1/exploratory${productId ? `?product_id=${productId}` : ''}`),
-  createExploratory: (body: { product_id: number; test_run_id?: number; charter: string; timebox_minutes?: number; notes?: string; findings?: string }) =>
-    request<ExploratorySession>('/api/v1/exploratory', { method: 'POST', body: JSON.stringify(body) }),
-  updateExploratory: (id: number, body: { product_id: number; test_run_id?: number; charter: string; timebox_minutes?: number; tester_id?: number; notes?: string; findings?: string }) =>
-    request<ExploratorySession>(`/api/v1/exploratory/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  createExploratory: (body: {
+    product_id: number
+    test_run_id?: number
+    charter: string
+    timebox_minutes?: number
+    notes?: string
+    findings?: string
+  }) => request<ExploratorySession>('/api/v1/exploratory', { method: 'POST', body: JSON.stringify(body) }),
+  updateExploratory: (
+    id: number,
+    body: {
+      product_id: number
+      test_run_id?: number
+      charter: string
+      timebox_minutes?: number
+      tester_id?: number
+      notes?: string
+      findings?: string
+    },
+  ) => request<ExploratorySession>(`/api/v1/exploratory/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteExploratory: (id: number) => request<void>(`/api/v1/exploratory/${id}`, { method: 'DELETE' }),
   getUXMetrics: (params?: TelemetryFilterParams) =>
     request<UXMetricRow[]>(`/api/v1/telemetry/ux-metrics${buildTelemetryQuery(params)}`),
   bulkUpdateTestCases: (body: { ids: number[]; status?: string; priority?: string }) =>
     request<{ updated: number }>('/api/v1/testcases/bulk', { method: 'PATCH', body: JSON.stringify(body) }),
 
-  listTestPlans: (params?: { product_id?: number; version_id?: number; is_active?: 'true' | 'false'; tag_id?: number; q?: string }) => {
+  listTestPlans: (params?: {
+    product_id?: number
+    version_id?: number
+    is_active?: 'true' | 'false'
+    tag_id?: number
+    q?: string
+  }) => {
     const qs = new URLSearchParams()
     if (params?.product_id) qs.set('product_id', String(params.product_id))
     if (params?.version_id) qs.set('version_id', String(params.version_id))
@@ -1008,10 +1140,27 @@ export const api = {
     return request<{ items: TestPlan[] }>(`/api/v1/testplans${suffix}`)
   },
   listTestPlanCases: (planId: number) => request<{ items: PlanCaseItem[] }>(`/api/v1/testplans/${planId}/cases`),
-  createTestPlan: (body: { product_id: number; version_id: number; parent_id?: number; name: string; description?: string; plan_type?: string; extra_link?: string }) =>
-    request<TestPlan>('/api/v1/testplans', { method: 'POST', body: JSON.stringify(body) }),
-  updateTestPlan: (id: number, body: { name: string; description?: string; version_id?: number; parent_id?: number; plan_type?: string; extra_link?: string; is_active?: boolean }) =>
-    request<TestPlan>(`/api/v1/testplans/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  createTestPlan: (body: {
+    product_id: number
+    version_id: number
+    parent_id?: number
+    name: string
+    description?: string
+    plan_type?: string
+    extra_link?: string
+  }) => request<TestPlan>('/api/v1/testplans', { method: 'POST', body: JSON.stringify(body) }),
+  updateTestPlan: (
+    id: number,
+    body: {
+      name: string
+      description?: string
+      version_id?: number
+      parent_id?: number
+      plan_type?: string
+      extra_link?: string
+      is_active?: boolean
+    },
+  ) => request<TestPlan>(`/api/v1/testplans/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteTestPlan: (id: number) => request<void>(`/api/v1/testplans/${id}`, { method: 'DELETE' }),
   addTestPlanCases: (planId: number, caseIds: number[]) =>
     request<{ plan_id: number; added: number }>(`/api/v1/testplans/${planId}/cases`, {
@@ -1051,10 +1200,18 @@ export const api = {
     const suffix = qs.toString() ? `?${qs.toString()}` : ''
     return request<{ items: TestRun[]; total?: number }>(`/api/v1/testruns${suffix}`)
   },
-  createTestRun: (body: { test_plan_id: number; build_id: number; environment_id?: number; default_tester_id?: number; summary: string; notes?: string }) =>
-    request<TestRun>('/api/v1/testruns', { method: 'POST', body: JSON.stringify(body) }),
-  updateTestRun: (id: number, body: { summary: string; notes?: string; build_id?: number; environment_id?: number; default_tester_id?: number }) =>
-    request<TestRun>(`/api/v1/testruns/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  createTestRun: (body: {
+    test_plan_id: number
+    build_id: number
+    environment_id?: number
+    default_tester_id?: number
+    summary: string
+    notes?: string
+  }) => request<TestRun>('/api/v1/testruns', { method: 'POST', body: JSON.stringify(body) }),
+  updateTestRun: (
+    id: number,
+    body: { summary: string; notes?: string; build_id?: number; environment_id?: number; default_tester_id?: number },
+  ) => request<TestRun>(`/api/v1/testruns/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   addTestRunCases: (runId: number, caseIds: number[], environmentId?: number) =>
     request<{ added: number }>(`/api/v1/testruns/${runId}/cases`, {
       method: 'POST',
@@ -1062,10 +1219,8 @@ export const api = {
     }),
   deleteTestRunExecution: (runId: number, execId: number) =>
     request<void>(`/api/v1/testruns/${runId}/executions/${execId}`, { method: 'DELETE' }),
-  stopTestRun: (runId: number) =>
-    request<{ stopped: boolean }>(`/api/v1/testruns/${runId}/stop`, { method: 'POST' }),
-  deleteTestRun: (runId: number) =>
-    request<void>(`/api/v1/testruns/${runId}`, { method: 'DELETE' }),
+  stopTestRun: (runId: number) => request<{ stopped: boolean }>(`/api/v1/testruns/${runId}/stop`, { method: 'POST' }),
+  deleteTestRun: (runId: number) => request<void>(`/api/v1/testruns/${runId}`, { method: 'DELETE' }),
   downloadRunExport: (runId: number, format: 'csv' | 'html') =>
     downloadAuthenticated(
       `/api/v1/testruns/${runId}/export?format=${format}`,
@@ -1073,22 +1228,33 @@ export const api = {
       format === 'html',
     ),
   listExecutions: (runId: number) => request<{ items: TestExecution[] }>(`/api/v1/testruns/${runId}/executions`),
-  updateExecution: (id: number, body: { status?: string; comment?: string; assignee_id?: number; environment_id?: number }) =>
-    request<{ id: number; status: string; comment?: string; assignee_id?: number; tested_by_id?: number; environment_id?: number }>(`/api/v1/executions/${id}`, {
+  updateExecution: (
+    id: number,
+    body: { status?: string; comment?: string; assignee_id?: number; environment_id?: number },
+  ) =>
+    request<{
+      id: number
+      status: string
+      comment?: string
+      assignee_id?: number
+      tested_by_id?: number
+      environment_id?: number
+    }>(`/api/v1/executions/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
   bulkUpdateExecutions: (body: { ids: number[]; status?: string; assignee_id?: number }) =>
     request<{ updated: number }>('/api/v1/executions/bulk', { method: 'PATCH', body: JSON.stringify(body) }),
-  syncExecutionCase: (id: number) =>
-    request<TestExecution>(`/api/v1/executions/${id}/sync-case`, { method: 'POST' }),
+  syncExecutionCase: (id: number) => request<TestExecution>(`/api/v1/executions/${id}/sync-case`, { method: 'POST' }),
   listLinks: (entityType: 'test_run' | 'test_execution', entityId: number) =>
     request<{ items: LinkRefItem[] }>(`/api/v1/links?entity_type=${entityType}&entity_id=${entityId}`),
   addLink: (entityType: 'test_run' | 'test_execution', entityId: number, body: { name: string; url: string }) =>
-    request<LinkRefItem>(`/api/v1/links`, { method: 'POST', body: JSON.stringify({ entity_type: entityType, entity_id: entityId, ...body }) }),
+    request<LinkRefItem>(`/api/v1/links`, {
+      method: 'POST',
+      body: JSON.stringify({ entity_type: entityType, entity_id: entityId, ...body }),
+    }),
   deleteLink: (id: number) => request<void>(`/api/v1/links/${id}`, { method: 'DELETE' }),
-  listExecutionLinks: (id: number) =>
-    request<{ items: ExecutionLinkItem[] }>(`/api/v1/executions/${id}/links`),
+  listExecutionLinks: (id: number) => request<{ items: ExecutionLinkItem[] }>(`/api/v1/executions/${id}/links`),
   addExecutionLink: (id: number, body: { name: string; url: string }) =>
     request<ExecutionLinkItem>(`/api/v1/executions/${id}/links`, { method: 'POST', body: JSON.stringify(body) }),
   deleteExecutionLink: (id: number, linkId: number) =>
@@ -1098,21 +1264,29 @@ export const api = {
     request<{ items: AttachmentItem[] }>(`/api/v1/attachments?entity_type=${entityType}&entity_id=${entityId}`),
   downloadAttachment: (id: number, filename: string) =>
     downloadAuthenticated(`/api/v1/attachments/${id}/download`, filename),
-  deleteAttachment: (id: number) =>
-    request<void>(`/api/v1/attachments/${id}`, { method: 'DELETE' }),
+  deleteAttachment: (id: number) => request<void>(`/api/v1/attachments/${id}`, { method: 'DELETE' }),
   listCustomFieldDefs: (entityType?: string) =>
     request<{ items: CustomFieldDef[] }>(`/api/v1/custom-fields${entityType ? `?entity_type=${entityType}` : ''}`),
-  createCustomFieldDef: (body: { entity_type: string; name: string; field_type?: string; options?: string; required?: boolean }) =>
-    request<CustomFieldDef>('/api/v1/custom-fields', { method: 'POST', body: JSON.stringify(body) }),
-  updateCustomFieldDef: (id: number, body: { entity_type: string; name: string; field_type: string; options: string; required: boolean }) =>
-    request<CustomFieldDef>(`/api/v1/custom-fields/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  createCustomFieldDef: (body: {
+    entity_type: string
+    name: string
+    field_type?: string
+    options?: string
+    required?: boolean
+  }) => request<CustomFieldDef>('/api/v1/custom-fields', { method: 'POST', body: JSON.stringify(body) }),
+  updateCustomFieldDef: (
+    id: number,
+    body: { entity_type: string; name: string; field_type: string; options: string; required: boolean },
+  ) => request<CustomFieldDef>(`/api/v1/custom-fields/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteCustomFieldDef: (id: number) => request<void>(`/api/v1/custom-fields/${id}`, { method: 'DELETE' }),
   getEntityCustomFields: (entityType: string, entityId: number) =>
     request<{ items: CustomFieldWithValue[] }>(`/api/v1/${entityType}/${entityId}/custom-fields`),
   setEntityCustomField: (entityType: string, entityId: number, fieldId: number, value: string) =>
-    request<CustomFieldValue>(`/api/v1/${entityType}/${entityId}/custom-fields/${fieldId}`, { method: 'PUT', body: JSON.stringify({ value }) }),
-  listCaseDatasets: (caseId: number) =>
-    request<{ items: Dataset[] }>(`/api/v1/testcases/${caseId}/datasets`),
+    request<CustomFieldValue>(`/api/v1/${entityType}/${entityId}/custom-fields/${fieldId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ value }),
+    }),
+  listCaseDatasets: (caseId: number) => request<{ items: Dataset[] }>(`/api/v1/testcases/${caseId}/datasets`),
   createDataset: (caseId: number, body: { name: string; params?: string }) =>
     request<Dataset>(`/api/v1/testcases/${caseId}/datasets`, { method: 'POST', body: JSON.stringify(body) }),
   updateDataset: (id: number, body: { name: string; params?: string }) =>
@@ -1177,16 +1351,12 @@ export const api = {
     return res.json() as Promise<ImportResult>
   },
 
-  listExecutionBugs: (executionId: number) =>
-    request<{ items: BugItem[] }>(`/api/v1/executions/${executionId}/bugs`),
+  listExecutionBugs: (executionId: number) => request<{ items: BugItem[] }>(`/api/v1/executions/${executionId}/bugs`),
   linkExecutionBug: (executionId: number, body: { external_key: string; url: string; title?: string }) =>
     request<BugItem>(`/api/v1/executions/${executionId}/bugs`, { method: 'POST', body: JSON.stringify(body) }),
-  deleteTestCase: (id: number) =>
-    request<void>(`/api/v1/testcases/${id}`, { method: 'DELETE' }),
-  purgeTestCase: (id: number) =>
-    request<void>(`/api/v1/testcases/${id}?purge=true`, { method: 'DELETE' }),
-  restoreTestCase: (id: number) =>
-    request<TestCase>(`/api/v1/testcases/${id}/restore`, { method: 'POST' }),
+  deleteTestCase: (id: number) => request<void>(`/api/v1/testcases/${id}`, { method: 'DELETE' }),
+  purgeTestCase: (id: number) => request<void>(`/api/v1/testcases/${id}?purge=true`, { method: 'DELETE' }),
+  restoreTestCase: (id: number) => request<TestCase>(`/api/v1/testcases/${id}/restore`, { method: 'POST' }),
   listTrashCases: (params?: { q?: string; product_id?: number; limit?: number; offset?: number }) => {
     const qs = new URLSearchParams()
     if (params?.q) qs.set('q', params.q)
@@ -1195,8 +1365,7 @@ export const api = {
     qs.set('offset', String(params?.offset ?? 0))
     return request<{ items: TestCase[]; total: number }>(`/api/v1/testcases/trash?${qs.toString()}`)
   },
-  listTestCaseRevisions: (id: number) =>
-    request<{ items: RevisionItem[] }>(`/api/v1/testcases/${id}/revisions`),
+  listTestCaseRevisions: (id: number) => request<{ items: RevisionItem[] }>(`/api/v1/testcases/${id}/revisions`),
   listComments: (entityType: 'test_case' | 'test_execution', entityId: number) =>
     request<{ items: CommentItem[] }>(`/api/v1/comments?entity_type=${entityType}&entity_id=${entityId}`),
   createComment: (entityType: 'test_case' | 'test_execution', entityId: number, body: string) =>
@@ -1204,11 +1373,20 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ entity_type: entityType, entity_id: entityId, body }),
     }),
-  importJUnitXML: (body: { test_plan_id: number; build_id: number; summary: string; xml: string; auto_create_cases?: boolean }) =>
-    request<{ test_run: TestRun; results: { name: string; status: string }[]; created_cases: number }>('/api/v1/testruns/import/junit', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    }),
+  importJUnitXML: (body: {
+    test_plan_id: number
+    build_id: number
+    summary: string
+    xml: string
+    auto_create_cases?: boolean
+  }) =>
+    request<{ test_run: TestRun; results: { name: string; status: string }[]; created_cases: number }>(
+      '/api/v1/testruns/import/junit',
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+      },
+    ),
   listComponents: (productId: number) =>
     request<{ items: ComponentItem[] }>(`/api/v1/products/${productId}/components`),
   createComponent: (productId: number, name: string, description?: string) =>
@@ -1239,21 +1417,26 @@ export const api = {
     }),
 
   listIssueTrackers: () => request<{ items: IssueTrackerItem[] }>('/api/v1/issue-trackers'),
-  createIssueTracker: (body: { name: string; provider: 'github' | 'gitlab' | 'jira' | 'bugzilla' | 'azure'; base_url: string; api_username?: string }) =>
-    request<IssueTrackerItem>('/api/v1/issue-trackers', { method: 'POST', body: JSON.stringify(body) }),
+  createIssueTracker: (body: {
+    name: string
+    provider: 'github' | 'gitlab' | 'jira' | 'bugzilla' | 'azure'
+    base_url: string
+    api_username?: string
+  }) => request<IssueTrackerItem>('/api/v1/issue-trackers', { method: 'POST', body: JSON.stringify(body) }),
   listWebhooks: () => request<{ items: WebhookItem[] }>('/api/v1/webhooks'),
   createWebhook: (body: { name: string; url: string; secret?: string; events: string[]; is_active?: boolean }) =>
     request<WebhookItem>('/api/v1/webhooks', { method: 'POST', body: JSON.stringify(body) }),
-  updateWebhook: (id: number, body: { name: string; url: string; secret?: string; secret_clear?: boolean; events: string[]; is_active?: boolean }) =>
-    request<WebhookItem>(`/api/v1/webhooks/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
-  deleteWebhook: (id: number) =>
-    request<{ deleted: boolean }>(`/api/v1/webhooks/${id}`, { method: 'DELETE' }),
-  testWebhook: (id: number) =>
-    request<WebhookTestResult>(`/api/v1/webhooks/${id}/test`, { method: 'POST' }),
+  updateWebhook: (
+    id: number,
+    body: { name: string; url: string; secret?: string; secret_clear?: boolean; events: string[]; is_active?: boolean },
+  ) => request<WebhookItem>(`/api/v1/webhooks/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteWebhook: (id: number) => request<{ deleted: boolean }>(`/api/v1/webhooks/${id}`, { method: 'DELETE' }),
+  testWebhook: (id: number) => request<WebhookTestResult>(`/api/v1/webhooks/${id}/test`, { method: 'POST' }),
   reportExecutionBug: (
     executionId: number,
     body: { tracker_id: number; api_token?: string; project_key?: string; title: string; body?: string },
-  ) => request<BugItem>(`/api/v1/executions/${executionId}/bugs/report`, { method: 'POST', body: JSON.stringify(body) }),
+  ) =>
+    request<BugItem>(`/api/v1/executions/${executionId}/bugs/report`, { method: 'POST', body: JSON.stringify(body) }),
   syncExecutionBug: (executionId: number, bugId: number, apiToken?: string) =>
     request<BugItem>(`/api/v1/executions/${executionId}/bugs/${bugId}/sync`, {
       method: 'POST',
@@ -1265,7 +1448,13 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
-  listInternalBugs: (params?: { product_id?: number; status?: string; severity?: string; test_execution_id?: number; q?: string }) => {
+  listInternalBugs: (params?: {
+    product_id?: number
+    status?: string
+    severity?: string
+    test_execution_id?: number
+    q?: string
+  }) => {
     const qs = new URLSearchParams()
     if (params?.product_id) qs.set('product_id', String(params.product_id))
     if (params?.status) qs.set('status', params.status)
@@ -1286,7 +1475,13 @@ export const api = {
   }) => request<InternalBug>('/api/v1/bugs', { method: 'POST', body: JSON.stringify(body) }),
   updateInternalBug: (
     id: number,
-    body: { summary: string; description?: string; status?: InternalBug['status']; severity?: InternalBug['severity']; assignee_id?: number },
+    body: {
+      summary: string
+      description?: string
+      status?: InternalBug['status']
+      severity?: InternalBug['severity']
+      assignee_id?: number
+    },
   ) => request<InternalBug>(`/api/v1/bugs/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteInternalBug: (id: number) => request<void>(`/api/v1/bugs/${id}`, { method: 'DELETE' }),
 
@@ -1321,13 +1516,11 @@ export const api = {
     if (params?.offset) q.set('offset', String(params.offset))
     const qs = q.toString()
     return request<{ items: NotificationItem[]; total: number; unread_count: number }>(
-      `/api/v1/notifications${qs ? `?${qs}` : ''}`
+      `/api/v1/notifications${qs ? `?${qs}` : ''}`,
     )
   },
-  readNotification: (id: number) =>
-    request<{ read: boolean }>(`/api/v1/notifications/${id}/read`, { method: 'POST' }),
-  readAllNotifications: () =>
-    request<{ updated: number }>('/api/v1/notifications/read-all', { method: 'POST' }),
+  readNotification: (id: number) => request<{ read: boolean }>(`/api/v1/notifications/${id}/read`, { method: 'POST' }),
+  readAllNotifications: () => request<{ updated: number }>('/api/v1/notifications/read-all', { method: 'POST' }),
   getMyNotificationSettings: () =>
     request<{ events: NotificationEventPreference[] }>('/api/v1/me/notification-settings'),
   putMyNotificationSettings: (events: NotificationEventPreference[]) =>

@@ -1,6 +1,14 @@
-import { useEffect, useState } from 'react'
 import { Boxes, GitBranch, Package, Plus, Shield, Tag, UserPlus } from 'lucide-react'
-import { api, Build, Classification, ComponentItem, Product, User, Version } from '../../api/client'
+import { useEffect, useState } from 'react'
+import {
+  api,
+  type Build,
+  type Classification,
+  type ComponentItem,
+  type Product,
+  type User,
+  type Version,
+} from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 
@@ -96,12 +104,30 @@ export function ProductsView() {
       {error && <p className="alert-error">{error}</p>}
 
       <form onSubmit={handleSubmit} className="filter-bar" style={{ marginBottom: 0 }}>
-        <input className="input" placeholder={t.products.namePlaceholder} value={name} onChange={(e) => setName(e.target.value)} required />
-        <input className="input" placeholder={t.products.descPlaceholder} value={description} onChange={(e) => setDescription(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
-        <select className="select" value={classificationId} onChange={(e) => setClassificationId(Number(e.target.value))}>
+        <input
+          className="input"
+          placeholder={t.products.namePlaceholder}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
+        <input
+          className="input"
+          placeholder={t.products.descPlaceholder}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          style={{ flex: 1, minWidth: 200 }}
+        />
+        <select
+          className="select"
+          value={classificationId}
+          onChange={(e) => setClassificationId(Number(e.target.value))}
+        >
           <option value={0}>{t.products.noClassification}</option>
           {classifications.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
           ))}
         </select>
         <button type="submit" className="btn btn-primary">
@@ -125,9 +151,13 @@ export function ProductsView() {
             >
               <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Package size={15} /> {p.name}
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.74rem', color: 'var(--muted)' }}>#{p.id}</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.74rem', color: 'var(--muted)' }}>
+                  #{p.id}
+                </span>
               </div>
-              {p.description && <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: 2 }}>{p.description}</div>}
+              {p.description && (
+                <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: 2 }}>{p.description}</div>
+              )}
             </div>
           ))}
           {products.length === 0 && <p style={{ color: 'var(--muted)', margin: '0.5rem' }}>{t.products.empty}</p>}
@@ -137,18 +167,34 @@ export function ProductsView() {
           <div className="card">
             <h3 style={{ margin: '0 0 0.75rem' }}>{selectedProduct.name}</h3>
             <div className="tabs-bar">
-              <button type="button" className={`tab-btn ${tab === 'versions' ? 'active' : ''}`} onClick={() => setTab('versions')}>
+              <button
+                type="button"
+                className={`tab-btn ${tab === 'versions' ? 'active' : ''}`}
+                onClick={() => setTab('versions')}
+              >
                 <GitBranch size={14} /> {t.products.versions} ({versions.length})
               </button>
-              <button type="button" className={`tab-btn ${tab === 'components' ? 'active' : ''}`} onClick={() => setTab('components')}>
+              <button
+                type="button"
+                className={`tab-btn ${tab === 'components' ? 'active' : ''}`}
+                onClick={() => setTab('components')}
+              >
                 <Boxes size={14} /> {t.products.components} ({components.length})
               </button>
               {users.length > 0 && (
-                <button type="button" className={`tab-btn ${tab === 'members' ? 'active' : ''}`} onClick={() => setTab('members')}>
+                <button
+                  type="button"
+                  className={`tab-btn ${tab === 'members' ? 'active' : ''}`}
+                  onClick={() => setTab('members')}
+                >
                   <Shield size={14} /> {t.products.productAccess}
                 </button>
               )}
-              <button type="button" className={`tab-btn ${tab === 'tags' ? 'active' : ''}`} onClick={() => setTab('tags')}>
+              <button
+                type="button"
+                className={`tab-btn ${tab === 'tags' ? 'active' : ''}`}
+                onClick={() => setTab('tags')}
+              >
                 <Tag size={14} /> {t.common.tags} ({tags.length})
               </button>
             </div>
@@ -170,13 +216,36 @@ export function ProductsView() {
                   }}
                   style={{ display: 'flex', gap: '0.45rem' }}
                 >
-                  <input className="input" placeholder={t.products.versionPlaceholder} value={newVersion} onChange={(e) => setNewVersion(e.target.value)} />
-                  <button type="submit" className="btn btn-primary btn-sm"><Plus size={13} /> {t.products.addVersion}</button>
+                  <input
+                    className="input"
+                    placeholder={t.products.versionPlaceholder}
+                    value={newVersion}
+                    onChange={(e) => setNewVersion(e.target.value)}
+                  />
+                  <button type="submit" className="btn btn-primary btn-sm">
+                    <Plus size={13} /> {t.products.addVersion}
+                  </button>
                 </form>
 
                 {versions.map((v) => (
-                  <div key={v.id} style={{ padding: '0.7rem', background: 'var(--bg-subtle)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <div
+                    key={v.id}
+                    style={{
+                      padding: '0.7rem',
+                      background: 'var(--bg-subtle)',
+                      borderRadius: 8,
+                      border: '1px solid var(--border)',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        flexWrap: 'wrap',
+                      }}
+                    >
                       <strong>{v.value}</strong>
                       <div style={{ display: 'flex', gap: '0.35rem' }}>
                         <input
@@ -205,9 +274,13 @@ export function ProductsView() {
                     </div>
                     <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: '0.45rem' }}>
                       {(builds[v.id] ?? []).map((b) => (
-                        <span key={b.id} className="badge">{b.name} (#{b.id})</span>
+                        <span key={b.id} className="badge">
+                          {b.name} (#{b.id})
+                        </span>
                       ))}
-                      {(builds[v.id] ?? []).length === 0 && <span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>{t.products.noBuilds}</span>}
+                      {(builds[v.id] ?? []).length === 0 && (
+                        <span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>{t.products.noBuilds}</span>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -228,15 +301,33 @@ export function ProductsView() {
                   }}
                   style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}
                 >
-                  <input className="input" placeholder={t.products.compNamePlaceholder} value={newCompName} onChange={(e) => setNewCompName(e.target.value)} required />
-                  <input className="input" placeholder={t.products.descPlaceholder} value={newCompDesc} onChange={(e) => setNewCompDesc(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
-                  <button type="submit" className="btn btn-primary btn-sm"><Plus size={13} /> {t.products.addComponent}</button>
+                  <input
+                    className="input"
+                    placeholder={t.products.compNamePlaceholder}
+                    value={newCompName}
+                    onChange={(e) => setNewCompName(e.target.value)}
+                    required
+                  />
+                  <input
+                    className="input"
+                    placeholder={t.products.descPlaceholder}
+                    value={newCompDesc}
+                    onChange={(e) => setNewCompDesc(e.target.value)}
+                    style={{ flex: 1, minWidth: 180 }}
+                  />
+                  <button type="submit" className="btn btn-primary btn-sm">
+                    <Plus size={13} /> {t.products.addComponent}
+                  </button>
                 </form>
                 <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                   {components.map((c) => (
-                    <span key={c.id} className="badge" title={c.description}>{c.name}</span>
+                    <span key={c.id} className="badge" title={c.description}>
+                      {c.name}
+                    </span>
                   ))}
-                  {components.length === 0 && <span style={{ color: 'var(--muted)', fontSize: '0.84rem' }}>{t.products.noComponents}</span>}
+                  {components.length === 0 && (
+                    <span style={{ color: 'var(--muted)', fontSize: '0.84rem' }}>{t.products.noComponents}</span>
+                  )}
                 </div>
               </div>
             )}
@@ -251,24 +342,41 @@ export function ProductsView() {
                 }}
                 style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}
               >
-                <select className="select" value={memberUserId} onChange={(e) => setMemberUserId(Number(e.target.value))}>
+                <select
+                  className="select"
+                  value={memberUserId}
+                  onChange={(e) => setMemberUserId(Number(e.target.value))}
+                >
                   {users.map((u) => (
-                    <option key={u.id} value={u.id}>{u.username} ({u.email})</option>
+                    <option key={u.id} value={u.id}>
+                      {u.username} ({u.email})
+                    </option>
                   ))}
                 </select>
-                <select className="select" value={memberRole} onChange={(e) => setMemberRole(e.target.value as 'viewer' | 'tester' | 'maintainer')}>
+                <select
+                  className="select"
+                  value={memberRole}
+                  onChange={(e) => setMemberRole(e.target.value as 'viewer' | 'tester' | 'maintainer')}
+                >
                   <option value="viewer">viewer</option>
                   <option value="tester">tester</option>
                   <option value="maintainer">maintainer</option>
                 </select>
-                <button type="submit" className="btn btn-primary btn-sm"><UserPlus size={13} /> {t.products.assignMember}</button>
+                <button type="submit" className="btn btn-primary btn-sm">
+                  <UserPlus size={13} /> {t.products.assignMember}
+                </button>
               </form>
             )}
 
             {tab === 'tags' && (
               <div style={{ display: 'grid', gap: '0.75rem' }}>
                 <div style={{ display: 'flex', gap: '0.45rem' }}>
-                  <input className="input" placeholder={t.products.newTagPlaceholder} value={newTag} onChange={(e) => setNewTag(e.target.value)} />
+                  <input
+                    className="input"
+                    placeholder={t.products.newTagPlaceholder}
+                    value={newTag}
+                    onChange={(e) => setNewTag(e.target.value)}
+                  />
                   <button
                     type="button"
                     className="btn btn-primary btn-sm"
@@ -285,7 +393,9 @@ export function ProductsView() {
                 </div>
                 <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
                   {tags.map((tg) => (
-                    <span key={tg.id} className="badge">{tg.name}</span>
+                    <span key={tg.id} className="badge">
+                      {tg.name}
+                    </span>
                   ))}
                 </div>
               </div>

@@ -77,8 +77,8 @@ func TestLoadDefaultsAndOverrides(t *testing.T) {
 
 func TestValidateProductionRequiresStrongJWT(t *testing.T) {
 	cases := []struct {
-		name   string
-		secret string
+		name    string
+		secret  string
 		wantErr bool
 	}{
 		{"default dev secret", DefaultInsecureJWTSecret, true},

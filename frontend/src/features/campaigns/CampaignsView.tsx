@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
 import { ChevronDown, ChevronRight, FolderTree, Plus, Trash2 } from 'lucide-react'
-import { api, Campaign, CampaignTree, Product, TestPlan } from '../../api/client'
+import { useCallback, useEffect, useState } from 'react'
+import { api, type Campaign, type CampaignTree, type Product, type TestPlan } from '../../api/client'
 import { ConfirmDialog, EmptyState, LoadingSkeleton } from '../../components/UiPrimitives'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
@@ -107,7 +107,9 @@ export function CampaignsView() {
         <select className="select" value={productId} onChange={(e) => setProductId(Number(e.target.value))}>
           <option value={0}>{t.shell.allProducts}</option>
           {products.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
           ))}
         </select>
       </div>
@@ -127,14 +129,28 @@ export function CampaignsView() {
           {campaigns.map((c) => (
             <div key={c.id} className="card" style={{ display: 'grid', gap: '0.4rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <button type="button" className="btn btn-sm" onClick={() => toggle(c.id)} aria-label={t.campaigns.toggleAria}>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => toggle(c.id)}
+                  aria-label={t.campaigns.toggleAria}
+                >
                   {expanded[c.id] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 </button>
                 <FolderTree size={15} />
                 <strong>{c.name}</strong>
-                <span className={`badge badge-${c.status === 'active' ? 'running' : c.status === 'completed' ? 'passed' : 'idle'}`}>{c.status}</span>
+                <span
+                  className={`badge badge-${c.status === 'active' ? 'running' : c.status === 'completed' ? 'passed' : 'idle'}`}
+                >
+                  {c.status}
+                </span>
                 <span style={{ marginLeft: 'auto' }}>
-                  <button type="button" className="btn btn-sm btn-danger" onClick={() => setConfirmDelete(c)} aria-label={t.campaigns.deleteAria}>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-danger"
+                    onClick={() => setConfirmDelete(c)}
+                    aria-label={t.campaigns.deleteAria}
+                  >
                     <Trash2 size={13} />
                   </button>
                 </span>
@@ -149,7 +165,9 @@ export function CampaignsView() {
                       </div>
                       <ul style={{ margin: '0.2rem 0 0.4rem', paddingLeft: '1.2rem', fontSize: '0.82rem' }}>
                         {it.plans.map((p) => (
-                          <li key={p.id}>#{p.id} {p.name}</li>
+                          <li key={p.id}>
+                            #{p.id} {p.name}
+                          </li>
                         ))}
                         {it.plans.length === 0 && <li style={{ color: 'var(--muted)' }}>{t.campaigns.noPlans}</li>}
                       </ul>
@@ -160,7 +178,9 @@ export function CampaignsView() {
                       <strong>{t.campaigns.plansNoIteration}</strong>
                       <ul style={{ margin: '0.2rem 0', paddingLeft: '1.2rem', fontSize: '0.82rem' }}>
                         {trees[c.id].plans.map((p) => (
-                          <li key={p.id}>#{p.id} {p.name}</li>
+                          <li key={p.id}>
+                            #{p.id} {p.name}
+                          </li>
                         ))}
                       </ul>
                     </div>
@@ -173,7 +193,9 @@ export function CampaignsView() {
                       onChange={(e) => setNewIter((prev) => ({ ...prev, [c.id]: e.target.value }))}
                       style={{ width: 160, fontSize: '0.8rem' }}
                     />
-                    <button type="button" className="btn btn-sm" onClick={() => addIteration(c.id)}>{t.campaigns.addIteration}</button>
+                    <button type="button" className="btn btn-sm" onClick={() => addIteration(c.id)}>
+                      {t.campaigns.addIteration}
+                    </button>
                     <select
                       className="select"
                       defaultValue=""
@@ -187,7 +209,9 @@ export function CampaignsView() {
                     >
                       <option value="">{t.campaigns.assignPlanPlaceholder}</option>
                       {plans.map((p) => (
-                        <option key={p.id} value={p.id}>#{p.id} {p.name}</option>
+                        <option key={p.id} value={p.id}>
+                          #{p.id} {p.name}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -200,20 +224,47 @@ export function CampaignsView() {
 
       {showForm && (
         <div className="modal-backdrop" onClick={() => setShowForm(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t.campaigns.formAria}>
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t.campaigns.formAria}
+          >
             <h2>{t.campaigns.newCampaign}</h2>
             <div style={{ display: 'grid', gap: '0.5rem' }}>
-              <select className="select" value={productId || (products[0]?.id ?? 0)} onChange={(e) => setProductId(Number(e.target.value))}>
+              <select
+                className="select"
+                value={productId || (products[0]?.id ?? 0)}
+                onChange={(e) => setProductId(Number(e.target.value))}
+              >
                 {products.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
                 ))}
               </select>
-              <input className="input" placeholder={t.campaigns.namePlaceholder} value={name} onChange={(e) => setName(e.target.value)} />
-              <textarea className="input" rows={3} placeholder={t.common.description} value={description} onChange={(e) => setDescription(e.target.value)} />
+              <input
+                className="input"
+                placeholder={t.campaigns.namePlaceholder}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+              <textarea
+                className="input"
+                rows={3}
+                placeholder={t.common.description}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.75rem' }}>
-              <button type="button" className="btn" onClick={() => setShowForm(false)}>{t.common.cancel}</button>
-              <button type="button" className="btn btn-primary" onClick={create} disabled={!name.trim()}>{t.campaigns.create}</button>
+              <button type="button" className="btn" onClick={() => setShowForm(false)}>
+                {t.common.cancel}
+              </button>
+              <button type="button" className="btn btn-primary" onClick={create} disabled={!name.trim()}>
+                {t.campaigns.create}
+              </button>
             </div>
           </div>
         </div>

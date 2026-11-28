@@ -41,15 +41,15 @@
   --radius: 10px;
   --radius-lg: 14px;
 
-  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   --sidebar-w: 252px;
   --sidebar-collapsed-w: 68px;
   --topbar-h: 58px;
 }
 
-[data-theme='dark'] {
+[data-theme="dark"] {
   color-scheme: dark;
   --bg: #0b0f19;
   --bg-subtle: #111827;
@@ -208,7 +208,9 @@ a {
   text-decoration: none;
   font-weight: 500;
   font-size: 0.875rem;
-  transition: background 140ms ease, color 140ms ease;
+  transition:
+    background 140ms ease,
+    color 140ms ease;
   white-space: nowrap;
   overflow: hidden;
 }
@@ -293,7 +295,9 @@ a {
   color: var(--muted);
   font-size: 0.82rem;
   cursor: pointer;
-  transition: border-color 140ms ease, color 140ms ease;
+  transition:
+    border-color 140ms ease,
+    color 140ms ease;
 }
 
 .cmdk-trigger:hover {
@@ -394,7 +398,10 @@ a {
   font-size: 0.84rem;
   font-weight: 500;
   line-height: 1.2;
-  transition: background 140ms ease, border-color 140ms ease, transform 80ms ease;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    transform 80ms ease;
   text-decoration: none;
   white-space: nowrap;
 }
@@ -470,7 +477,9 @@ a {
   color: var(--text);
   font-size: 0.85rem;
   font-family: inherit;
-  transition: border-color 140ms ease, box-shadow 140ms ease;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
 }
 
 .input:focus,
@@ -970,8 +979,12 @@ a {
 
 /* UX flow primitives */
 @keyframes kiwit-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .toast {

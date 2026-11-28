@@ -1,5 +1,5 @@
-import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react'
-import { api, getAuthToken, Product } from '../api/client'
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react'
+import { api, getAuthToken, type Product } from '../api/client'
 
 export type Theme = 'light' | 'dark'
 
@@ -102,16 +102,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // notifyAction — toast with an action button (e.g. Undo), longer duration by default
-  const notifyAction = useCallback(
-    (text: string, actionLabel: string, onAction: () => void, duration = 6000) => {
-      const id = Date.now() + Math.floor(Math.random() * 1000)
-      setToasts((prev) => [...prev.slice(-3), { id, kind: 'ok', text, actionLabel, onAction }])
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== id))
-      }, duration)
-    },
-    []
-  )
+  const notifyAction = useCallback((text: string, actionLabel: string, onAction: () => void, duration = 6000) => {
+    const id = Date.now() + Math.floor(Math.random() * 1000)
+    setToasts((prev) => [...prev.slice(-3), { id, kind: 'ok', text, actionLabel, onAction }])
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id))
+    }, duration)
+  }, [])
 
   return (
     <WorkspaceContext.Provider

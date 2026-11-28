@@ -93,15 +93,15 @@ var AnonymousUser = User{
 // separately: it is public only when no bearer is sent, so API tokens are
 // still detected and rejected by the handlers.
 var publicAuthPaths = map[string]bool{
-	"/api/v1/auth/login":       true,
-	"/api/v1/auth/register":    true,
-	"/api/v1/auth/captcha":     true,
-	"/api/v1/auth/methods":     true,
-	"/api/v1/auth/ldap-login":  true,
-	"/api/v1/menu":             true,
-	"/api/v1/auth/sso/login":   true,
+	"/api/v1/auth/login":        true,
+	"/api/v1/auth/register":     true,
+	"/api/v1/auth/captcha":      true,
+	"/api/v1/auth/methods":      true,
+	"/api/v1/auth/ldap-login":   true,
+	"/api/v1/menu":              true,
+	"/api/v1/auth/sso/login":    true,
 	"/api/v1/auth/sso/callback": true,
-	"/api/v1/auth/sso/config":  true,
+	"/api/v1/auth/sso/config":   true,
 }
 
 // isPublicSettingsPath reports whether a GET on a settings route is public.

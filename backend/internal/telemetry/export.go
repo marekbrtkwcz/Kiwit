@@ -22,7 +22,7 @@ func RegisterExportRoutes(r chi.Router, db *sql.DB, pgPool *pgxpool.Pool) {
 		ctx := req.Context()
 		f := Filter{
 			ProductID:  export.QueryInt64(req, "product_id"),
-			VersionID: export.QueryInt64(req, "version_id"),
+			VersionID:  export.QueryInt64(req, "version_id"),
 			BuildID:    export.QueryInt64(req, "build_id"),
 			TestPlanID: export.QueryInt64(req, "test_plan_id"),
 			From:       req.URL.Query().Get("from"),

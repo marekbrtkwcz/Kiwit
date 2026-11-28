@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
 import {
+  Ban,
   Bot,
   Bug,
   CheckCircle2,
@@ -17,15 +16,27 @@ import {
   Square,
   Trash2,
   XCircle,
-  Ban,
 } from 'lucide-react'
-import { api, VisualComparison, BugItem, Build, EnvironmentItem, ExecutionLinkItem, IssueTrackerItem, TestExecution, TestPlan, TestRun } from '../../api/client'
-import { useWorkspace } from '../../context/WorkspaceContext'
+import { useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import {
+  api,
+  type BugItem,
+  type Build,
+  type EnvironmentItem,
+  type ExecutionLinkItem,
+  type IssueTrackerItem,
+  type TestExecution,
+  type TestPlan,
+  type TestRun,
+  type VisualComparison,
+} from '../../api/client'
+import { CustomFieldsPanel } from '../../components/CustomFieldsPanel'
 import { ExportButton } from '../../components/ExportButton'
+import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 import { AttachmentsPanel } from '../attachments/AttachmentsPanel'
 import { ScreenshotsGallery } from '../attachments/ScreenshotsGallery'
-import { CustomFieldsPanel } from '../../components/CustomFieldsPanel'
 import { CommentsPanel } from '../comments/CommentsPanel'
 import { EntityTagsBar } from '../management/EntityTagsBar'
 
@@ -108,8 +119,14 @@ function ExecutionBugsPanel({ executionId, trackers }: { executionId: number; tr
         </span>
         {bugs.map((b) => (
           <span key={b.id} className="badge" style={{ gap: 5 }}>
-            <a href={b.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-              {b.external_key}{b.title ? `: ${b.title}` : ''} [{b.status}]
+            <a
+              href={b.url}
+              target="_blank"
+              rel="noreferrer"
+              style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+            >
+              {b.external_key}
+              {b.title ? `: ${b.title}` : ''} [{b.status}]
               <ExternalLink size={11} />
             </a>
             {b.tracker_id && (
@@ -125,7 +142,14 @@ function ExecutionBugsPanel({ executionId, trackers }: { executionId: number; tr
                     setErr(e instanceof Error ? e.message : t.testruns.syncFailed)
                   }
                 }}
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--primary-text)', padding: 0, display: 'inline-flex' }}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  color: 'var(--primary-text)',
+                  padding: 0,
+                  display: 'inline-flex',
+                }}
               >
                 <RefreshCw size={11} />
               </button>
@@ -136,18 +160,48 @@ function ExecutionBugsPanel({ executionId, trackers }: { executionId: number; tr
           {mode === 'link' ? t.common.cancel : t.testruns.linkBug}
         </button>
         {trackers.length > 0 && (
-          <button type="button" className="btn btn-sm" onClick={() => setMode((m) => (m === 'report' ? 'none' : 'report'))}>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => setMode((m) => (m === 'report' ? 'none' : 'report'))}
+          >
             {mode === 'report' ? t.common.cancel : t.testruns.reportToTracker}
           </button>
         )}
       </div>
-      {err && <div className="alert-error" style={{ margin: 0 }}>{err}</div>}
+      {err && (
+        <div className="alert-error" style={{ margin: 0 }}>
+          {err}
+        </div>
+      )}
       {mode === 'link' && (
         <form onSubmit={handleLink} style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-          <input className="input" placeholder={t.testruns.bugKeyPlaceholder} value={key} onChange={(e) => setKey(e.target.value)} required style={{ width: 120 }} />
-          <input className="input" placeholder="https://..." value={url} onChange={(e) => setUrl(e.target.value)} required style={{ flex: 1, minWidth: 180 }} />
-          <input className="input" placeholder={t.testruns.bugTitleOptionalPlaceholder} value={title} onChange={(e) => setTitle(e.target.value)} style={{ width: 160 }} />
-          <button type="submit" className="btn btn-primary btn-sm"><Link2 size={13} /> {t.testruns.link}</button>
+          <input
+            className="input"
+            placeholder={t.testruns.bugKeyPlaceholder}
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            required
+            style={{ width: 120 }}
+          />
+          <input
+            className="input"
+            placeholder="https://..."
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            required
+            style={{ flex: 1, minWidth: 180 }}
+          />
+          <input
+            className="input"
+            placeholder={t.testruns.bugTitleOptionalPlaceholder}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            style={{ width: 160 }}
+          />
+          <button type="submit" className="btn btn-primary btn-sm">
+            <Link2 size={13} /> {t.testruns.link}
+          </button>
         </form>
       )}
       {mode === 'report' && (
@@ -155,16 +209,46 @@ function ExecutionBugsPanel({ executionId, trackers }: { executionId: number; tr
           <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
             <select className="select" value={trackerId} onChange={(e) => setTrackerId(Number(e.target.value))}>
               {trackers.map((tr) => (
-                <option key={tr.id} value={tr.id}>{tr.name} ({tr.provider})</option>
+                <option key={tr.id} value={tr.id}>
+                  {tr.name} ({tr.provider})
+                </option>
               ))}
             </select>
-            <input className="input" placeholder={t.testruns.issueTitlePlaceholder} value={title} onChange={(e) => setTitle(e.target.value)} required style={{ flex: 1, minWidth: 160 }} />
-            <input className="input" placeholder={t.testruns.projectKeyPlaceholder} value={projectKey} onChange={(e) => setProjectKey(e.target.value)} style={{ width: 130 }} />
-            <input className="input" type="password" placeholder={t.testruns.apiTokenPlaceholder} value={apiToken} onChange={(e) => setApiToken(e.target.value)} style={{ width: 150 }} />
+            <input
+              className="input"
+              placeholder={t.testruns.issueTitlePlaceholder}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              style={{ flex: 1, minWidth: 160 }}
+            />
+            <input
+              className="input"
+              placeholder={t.testruns.projectKeyPlaceholder}
+              value={projectKey}
+              onChange={(e) => setProjectKey(e.target.value)}
+              style={{ width: 130 }}
+            />
+            <input
+              className="input"
+              type="password"
+              placeholder={t.testruns.apiTokenPlaceholder}
+              value={apiToken}
+              onChange={(e) => setApiToken(e.target.value)}
+              style={{ width: 150 }}
+            />
           </div>
           <div style={{ display: 'flex', gap: '0.35rem' }}>
-            <input className="input" placeholder={t.testruns.descOptionalPlaceholder} value={reportBody} onChange={(e) => setReportBody(e.target.value)} style={{ flex: 1 }} />
-            <button type="submit" className="btn btn-primary btn-sm"><ExternalLink size={13} /> {t.testruns.createIssue}</button>
+            <input
+              className="input"
+              placeholder={t.testruns.descOptionalPlaceholder}
+              value={reportBody}
+              onChange={(e) => setReportBody(e.target.value)}
+              style={{ flex: 1 }}
+            />
+            <button type="submit" className="btn btn-primary btn-sm">
+              <ExternalLink size={13} /> {t.testruns.createIssue}
+            </button>
           </div>
         </form>
       )}
@@ -201,14 +285,22 @@ function ExecutionLinksPanel({ executionId }: { executionId: number }) {
         </span>
         {links.map((l) => (
           <span key={l.id} className="badge" style={{ gap: 5 }}>
-            <a href={l.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>{l.name}</a>
+            <a href={l.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+              {l.name}
+            </a>
             <button
               type="button"
               onClick={async () => {
                 await api.deleteExecutionLink(executionId, l.id)
                 await load()
               }}
-              style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--muted)', padding: 0 }}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                color: 'var(--muted)',
+                padding: 0,
+              }}
               title={t.testruns.removeLinkTitle}
             >
               ×
@@ -233,9 +325,25 @@ function ExecutionLinksPanel({ executionId }: { executionId: number }) {
           }}
           style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}
         >
-          <input className="input" placeholder={t.testruns.linkLabelPlaceholder} value={name} onChange={(e) => setName(e.target.value)} required style={{ width: 150 }} />
-          <input className="input" placeholder="https://..." value={url} onChange={(e) => setUrl(e.target.value)} required style={{ flex: 1, minWidth: 180 }} />
-          <button type="submit" className="btn btn-primary btn-sm">{t.common.add}</button>
+          <input
+            className="input"
+            placeholder={t.testruns.linkLabelPlaceholder}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            style={{ width: 150 }}
+          />
+          <input
+            className="input"
+            placeholder="https://..."
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            required
+            style={{ flex: 1, minWidth: 180 }}
+          />
+          <button type="submit" className="btn btn-primary btn-sm">
+            {t.common.add}
+          </button>
         </form>
       )}
     </div>
@@ -258,7 +366,9 @@ export function TestRunsView() {
   const [activeExecId, setActiveExecId] = useState<number | null>(null)
   const [selectedExecIds, setSelectedExecIds] = useState<number[]>([])
   const [visualResults, setVisualResults] = useState<Record<number, VisualComparison[]>>({})
-  const [aiVerdicts, setAiVerdicts] = useState<Record<number, { verdict: string; confidence: number; explanation: string } | 'busy'>>({})
+  const [aiVerdicts, setAiVerdicts] = useState<
+    Record<number, { verdict: string; confidence: number; explanation: string } | 'busy'>
+  >({})
   const [bulkStatus, setBulkStatus] = useState('passed')
 
   const [filterStatus, setFilterStatus] = useState<'' | 'running' | 'stopped'>('')
@@ -452,7 +562,10 @@ export function TestRunsView() {
       {/* Top filter & actions */}
       <div className="filter-bar" style={{ marginBottom: 0 }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 180 }}>
-          <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
+          <Search
+            size={14}
+            style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }}
+          />
           <input
             className="input"
             placeholder={t.testruns.summaryPlaceholder}
@@ -461,15 +574,33 @@ export function TestRunsView() {
             style={{ width: '100%', paddingLeft: 30 }}
           />
         </div>
-        <select className="select" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as '' | 'running' | 'stopped')}>
+        <select
+          className="select"
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value as '' | 'running' | 'stopped')}
+        >
           <option value="">{t.testruns.allRuns}</option>
           <option value="running">{t.testruns.runningRuns}</option>
           <option value="stopped">{t.testruns.stoppedRuns}</option>
         </select>
-        <button type="button" className="btn btn-primary" onClick={() => { setShowCreate((v) => !v); setShowJUnit(false) }}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() => {
+            setShowCreate((v) => !v)
+            setShowJUnit(false)
+          }}
+        >
           <Plus size={15} /> {t.testruns.create}
         </button>
-        <button type="button" className="btn" onClick={() => { setShowJUnit((v) => !v); setShowCreate(false) }}>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => {
+            setShowJUnit((v) => !v)
+            setShowCreate(false)
+          }}
+        >
           <FileCode2 size={15} /> {t.testruns.importJUnit}
         </button>
         <ExportButton
@@ -486,27 +617,44 @@ export function TestRunsView() {
       </div>
 
       {showCreate && (
-        <form onSubmit={handleCreateRun} className="card" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        <form
+          onSubmit={handleCreateRun}
+          className="card"
+          style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}
+        >
           <select className="select" value={planId} onChange={(e) => setPlanId(Number(e.target.value))}>
             {plans.map((tp) => (
-              <option key={tp.id} value={tp.id}>{tp.name}</option>
+              <option key={tp.id} value={tp.id}>
+                {tp.name}
+              </option>
             ))}
           </select>
           <select className="select" value={buildId} onChange={(e) => setBuildId(Number(e.target.value))}>
             {builds.length === 0 && <option value={0}>{t.testruns.noBuilds}</option>}
             {builds.map((b) => (
-              <option key={b.id} value={b.id}>{b.name} (#{b.id})</option>
+              <option key={b.id} value={b.id}>
+                {b.name} (#{b.id})
+              </option>
             ))}
           </select>
           {environments.length > 0 && (
             <select className="select" value={environmentId} onChange={(e) => setEnvironmentId(Number(e.target.value))}>
               <option value={0}>{t.testruns.noEnv}</option>
               {environments.map((env) => (
-                <option key={env.id} value={env.id}>{env.name}</option>
+                <option key={env.id} value={env.id}>
+                  {env.name}
+                </option>
               ))}
             </select>
           )}
-          <input className="input" placeholder={t.testruns.summaryPlaceholder} value={summary} onChange={(e) => setSummary(e.target.value)} style={{ flex: 1, minWidth: 200 }} required />
+          <input
+            className="input"
+            placeholder={t.testruns.summaryPlaceholder}
+            value={summary}
+            onChange={(e) => setSummary(e.target.value)}
+            style={{ flex: 1, minWidth: 200 }}
+            required
+          />
           <button type="submit" disabled={!planId || !buildId} className="btn btn-primary">
             <Play size={14} /> {t.testruns.start}
           </button>
@@ -518,13 +666,17 @@ export function TestRunsView() {
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
             <select className="select" value={planId} onChange={(e) => setPlanId(Number(e.target.value))}>
               {plans.map((tp) => (
-                <option key={tp.id} value={tp.id}>{tp.name}</option>
+                <option key={tp.id} value={tp.id}>
+                  {tp.name}
+                </option>
               ))}
             </select>
             <select className="select" value={buildId} onChange={(e) => setBuildId(Number(e.target.value))}>
               {builds.length === 0 && <option value={0}>{t.testruns.noBuilds}</option>}
               {builds.map((b) => (
-                <option key={b.id} value={b.id}>{b.name} (#{b.id})</option>
+                <option key={b.id} value={b.id}>
+                  {b.name} (#{b.id})
+                </option>
               ))}
             </select>
             <input
@@ -555,7 +707,15 @@ export function TestRunsView() {
       {/* Main split: Runs sidebar + Execution Runner */}
       <div className="runs-layout">
         <div className="card" style={{ padding: '0.75rem', display: 'grid', gap: '0.45rem' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', padding: '0 0.25rem' }}>
+          <div
+            style={{
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              color: 'var(--muted)',
+              textTransform: 'uppercase',
+              padding: '0 0.25rem',
+            }}
+          >
             {t.testruns.runsCount(runs.length)}
           </div>
           {runs.map((r) => (
@@ -584,28 +744,48 @@ export function TestRunsView() {
               </div>
             </div>
           ))}
-          {runs.length === 0 && <p style={{ color: 'var(--muted)', margin: '0.5rem', fontSize: '0.84rem' }}>{t.testruns.emptyRuns}</p>}
+          {runs.length === 0 && (
+            <p style={{ color: 'var(--muted)', margin: '0.5rem', fontSize: '0.84rem' }}>{t.testruns.emptyRuns}</p>
+          )}
         </div>
 
         {/* Right: Active TestRun Execution Runner */}
         {selectedRun ? (
           <div style={{ display: 'grid', gap: '0.9rem' }}>
             <div className="card" style={{ display: 'grid', gap: '0.75rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '0.5rem',
+                }}
+              >
                 <div>
                   <h3 style={{ margin: 0, fontSize: '1.02rem' }}>
                     #{selectedRun.id} {selectedRun.summary}
                   </h3>
                   <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: 2 }}>
                     {t.testruns.startedLabel} {new Date(selectedRun.started_at).toLocaleString()}
-                    {selectedRun.stopped_at ? ` · ${t.testruns.stoppedLabel} ${new Date(selectedRun.stopped_at).toLocaleString()}` : ''}
+                    {selectedRun.stopped_at
+                      ? ` · ${t.testruns.stoppedLabel} ${new Date(selectedRun.stopped_at).toLocaleString()}`
+                      : ''}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-                  <button type="button" className="btn btn-sm" onClick={() => void api.downloadRunExport(selectedRun.id, 'csv')}>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    onClick={() => void api.downloadRunExport(selectedRun.id, 'csv')}
+                  >
                     <Download size={13} /> CSV
                   </button>
-                  <button type="button" className="btn btn-sm" onClick={() => void api.downloadRunExport(selectedRun.id, 'html')}>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    onClick={() => void api.downloadRunExport(selectedRun.id, 'html')}
+                  >
                     <Download size={13} /> HTML
                   </button>
                   {!selectedRun.stopped_at && (
@@ -645,7 +825,15 @@ export function TestRunsView() {
                 <div style={{ width: `${((counts.skipped ?? 0) / totalExecs) * 100}%`, background: '#64748b' }} />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '0.5rem',
+                }}
+              >
                 <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
                   {['', 'passed', 'failed', 'blocked', 'skipped', 'idle'].map((st) => (
                     <button
@@ -658,7 +846,15 @@ export function TestRunsView() {
                     </button>
                   ))}
                 </div>
-                <span style={{ fontSize: '0.75rem', color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <span
+                  style={{
+                    fontSize: '0.75rem',
+                    color: 'var(--muted)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
                   <Keyboard size={13} /> {t.testruns.shortcutsHint}
                 </span>
               </div>
@@ -682,249 +878,388 @@ export function TestRunsView() {
             </div>
 
             {filteredExecs.length === 0 ? (
-              <div className="card" style={{ color: 'var(--muted)' }}>{t.testruns.emptyExecutions}</div>
+              <div className="card" style={{ color: 'var(--muted)' }}>
+                {t.testruns.emptyExecutions}
+              </div>
             ) : (
               <>
-              {selectedExecIds.length > 0 && (
-                <div className="card" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', padding: '0.45rem 0.6rem', marginBottom: '0.5rem' }}>
-                  <strong style={{ fontSize: '0.82rem' }}>{selectedExecIds.length} {t.common.selected}</strong>
-                  <select className="select" value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)} style={{ fontSize: '0.8rem' }}>
-                    {['passed', 'failed', 'blocked', 'skipped', 'running', 'idle'].map((s) => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-primary"
-                    onClick={async () => {
-                      try {
-                        const res = await api.bulkUpdateExecutions({ ids: selectedExecIds, status: bulkStatus })
-                        notify(t.testruns.bulkUpdatedToast(res.updated))
-                        setSelectedExecIds([])
-                        await loadRuns()
-                      } catch {
-                        notify(t.testruns.bulkFailed, 'error')
-                      }
+                {selectedExecIds.length > 0 && (
+                  <div
+                    className="card"
+                    style={{
+                      display: 'flex',
+                      gap: '0.5rem',
+                      alignItems: 'center',
+                      padding: '0.45rem 0.6rem',
+                      marginBottom: '0.5rem',
                     }}
                   >
-                    {t.testruns.applyStatus}
-                  </button>
-                  <button type="button" className="btn btn-sm" onClick={() => setSelectedExecIds([])}>{t.common.clear}</button>
-                </div>
-              )}
-              <div className="runner-split">
-                <div className="card" style={{ padding: '0.6rem', display: 'grid', gap: '0.35rem', maxHeight: 560, overflowY: 'auto' }}>
-                  {filteredExecs.map((ex) => (
-                    <div
-                      key={ex.id}
-                      style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', borderRadius: 8, border: activeExec?.id === ex.id ? '1px solid var(--primary)' : '1px solid transparent', background: activeExec?.id === ex.id ? 'var(--primary-soft)' : 'transparent' }}
+                    <strong style={{ fontSize: '0.82rem' }}>
+                      {selectedExecIds.length} {t.common.selected}
+                    </strong>
+                    <select
+                      className="select"
+                      value={bulkStatus}
+                      onChange={(e) => setBulkStatus(e.target.value)}
+                      style={{ fontSize: '0.8rem' }}
                     >
-                      <input
-                        type="checkbox"
-                        checked={selectedExecIds.includes(ex.id)}
-                        onChange={() => setSelectedExecIds((prev) => prev.includes(ex.id) ? prev.filter((x) => x !== ex.id) : [...prev, ex.id])}
-                        aria-label={t.testruns.selectExecAria(ex.id)}
-                      />
+                      {['passed', 'failed', 'blocked', 'skipped', 'running', 'idle'].map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
                     <button
                       type="button"
-                      onClick={() => setActiveExecId(ex.id)}
-                      style={{
-                        textAlign: 'left',
-                        padding: '0.55rem 0.65rem',
-                        borderRadius: 8,
-                        border: activeExec?.id === ex.id ? '1px solid var(--primary)' : '1px solid transparent',
-                        background: activeExec?.id === ex.id ? 'var(--primary-soft)' : 'transparent',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        gap: '0.4rem',
-                        color: 'var(--text)',
-                        fontFamily: 'inherit',
+                      className="btn btn-sm btn-primary"
+                      onClick={async () => {
+                        try {
+                          const res = await api.bulkUpdateExecutions({ ids: selectedExecIds, status: bulkStatus })
+                          notify(t.testruns.bulkUpdatedToast(res.updated))
+                          setSelectedExecIds([])
+                          await loadRuns()
+                        } catch {
+                          notify(t.testruns.bulkFailed, 'error')
+                        }
                       }}
                     >
-                      <span style={{ fontSize: '0.83rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--muted)', marginRight: 5 }}>#{ex.test_case_id}</span>
-                        {ex.summary}
-                      </span>
-                      <span style={{ display: 'inline-flex', gap: '0.3rem', alignItems: 'center' }}>
-                        {ex.dataset_name && <span className="badge" title={t.testruns.datasetLabel}>DS: {ex.dataset_name}</span>}
-                        <span className={`badge pill-${ex.status}`}>{ex.status}</span>
-                      </span>
+                      {t.testruns.applyStatus}
                     </button>
-                    </div>
-                  ))}
-                </div>
-
-                {activeExec && (
-                  <div className="card" style={{ display: 'grid', gap: '0.9rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
-                      <div>
-                        <div style={{ fontSize: '0.76rem', color: 'var(--muted)', fontFamily: 'var(--font-mono)' }}>
-                          {t.testruns.execHeader(activeExec.id, activeExec.test_case_id)}
-                        </div>
-                        <h4 style={{ margin: '0.2rem 0 0', fontSize: '1rem' }}>{activeExec.summary}</h4>
-                        {activeExec.dataset_name && (
-                          <div style={{ fontSize: '0.75rem', marginTop: '0.2rem' }}>
-                            <span className="badge">{t.testruns.datasetLabel}: {activeExec.dataset_name}</span>
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
-                        {activeExec.latest_case_version && activeExec.case_text_version && activeExec.latest_case_version > activeExec.case_text_version && (
-                          <button
-                            type="button"
-                            className="btn btn-sm"
-                            style={{ borderColor: 'var(--warning)', color: 'var(--warning-text)' }}
-                            onClick={async () => {
-                              const synced = await api.syncExecutionCase(activeExec.id)
-                              setExecutions((prev) => prev.map((x) => (x.id === synced.id ? synced : x)))
-                              notify(t.testruns.snapshotSynced(synced.case_text_version))
+                    <button type="button" className="btn btn-sm" onClick={() => setSelectedExecIds([])}>
+                      {t.common.clear}
+                    </button>
+                  </div>
+                )}
+                <div className="runner-split">
+                  <div
+                    className="card"
+                    style={{ padding: '0.6rem', display: 'grid', gap: '0.35rem', maxHeight: 560, overflowY: 'auto' }}
+                  >
+                    {filteredExecs.map((ex) => (
+                      <div
+                        key={ex.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          borderRadius: 8,
+                          border: activeExec?.id === ex.id ? '1px solid var(--primary)' : '1px solid transparent',
+                          background: activeExec?.id === ex.id ? 'var(--primary-soft)' : 'transparent',
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedExecIds.includes(ex.id)}
+                          onChange={() =>
+                            setSelectedExecIds((prev) =>
+                              prev.includes(ex.id) ? prev.filter((x) => x !== ex.id) : [...prev, ex.id],
+                            )
+                          }
+                          aria-label={t.testruns.selectExecAria(ex.id)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setActiveExecId(ex.id)}
+                          style={{
+                            textAlign: 'left',
+                            padding: '0.55rem 0.65rem',
+                            borderRadius: 8,
+                            border: activeExec?.id === ex.id ? '1px solid var(--primary)' : '1px solid transparent',
+                            background: activeExec?.id === ex.id ? 'var(--primary-soft)' : 'transparent',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            color: 'var(--text)',
+                            fontFamily: 'inherit',
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: '0.83rem',
+                              fontWeight: 500,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
                             }}
                           >
-                            <RefreshCw size={12} /> {t.testruns.syncVersion(activeExec.case_text_version, activeExec.latest_case_version)}
-                          </button>
-                        )}
-                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => navigate(`/cases/${activeExec.test_case_id}`)}>
-                          {t.testruns.openCase} <ExternalLink size={13} />
+                            <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--muted)', marginRight: 5 }}>
+                              #{ex.test_case_id}
+                            </span>
+                            {ex.summary}
+                          </span>
+                          <span style={{ display: 'inline-flex', gap: '0.3rem', alignItems: 'center' }}>
+                            {ex.dataset_name && (
+                              <span className="badge" title={t.testruns.datasetLabel}>
+                                DS: {ex.dataset_name}
+                              </span>
+                            )}
+                            <span className={`badge pill-${ex.status}`}>{ex.status}</span>
+                          </span>
                         </button>
                       </div>
-                    </div>
+                    ))}
+                  </div>
 
-                    <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
-                      <button type="button" className={`btn btn-sm ${activeExec.status === 'passed' ? 'btn-primary' : ''}`} onClick={() => void handleStatus(activeExec.id, 'passed')}>
-                        <CheckCircle2 size={14} color="#16a34a" /> {t.dashboard.passed} <span className="kbd">P</span>
-                      </button>
-                      <button type="button" className={`btn btn-sm ${activeExec.status === 'failed' ? 'btn-primary' : ''}`} onClick={() => void handleStatus(activeExec.id, 'failed')}>
-                        <XCircle size={14} color="#dc2626" /> {t.dashboard.failed} <span className="kbd">F</span>
-                      </button>
-                      <button type="button" className={`btn btn-sm ${activeExec.status === 'blocked' ? 'btn-primary' : ''}`} onClick={() => void handleStatus(activeExec.id, 'blocked')}>
-                        <Ban size={14} color="#d97706" /> {t.dashboard.blocked} <span className="kbd">B</span>
-                      </button>
-                      <button type="button" className={`btn btn-sm ${activeExec.status === 'skipped' ? 'btn-primary' : ''}`} onClick={() => void handleStatus(activeExec.id, 'skipped')}>
-                        <SkipForward size={14} color="#64748b" /> {t.dashboard.skipped} <span className="kbd">S</span>
-                      </button>
-                    </div>
-
-                    {activeExec.comment && (
-                      <div style={{ padding: '0.55rem 0.75rem', borderRadius: 8, background: 'var(--bg-subtle)', fontSize: '0.82rem', fontFamily: 'var(--font-mono)' }}>
-                        {activeExec.comment}
-                      </div>
-                    )}
-
-                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                      <button
-                        type="button"
-                        className="btn btn-sm"
-                        title={t.testruns.visualCompareHint}
-                        onClick={async () => {
-                          try {
-                            const shots = await api.listExecutionScreenshots(activeExec.id)
-                            if ((shots.items ?? []).length === 0) {
-                              notify(t.testruns.noScreenshots, 'error')
-                              return
-                            }
-                            const res = await api.visualCompare(activeExec.id, shots.items[0].id)
-                            notify(t.testruns.visualResultToast(res.verdict, res.diff_percent.toFixed(2)))
-                            const list = await api.listVisualComparisons(activeExec.id)
-                            setVisualResults((prev) => ({ ...prev, [activeExec.id]: list.items ?? [] }))
-                          } catch (err) {
-                            notify(err instanceof Error ? err.message : t.testruns.visualFailed, 'error')
-                          }
+                  {activeExec && (
+                    <div className="card" style={{ display: 'grid', gap: '0.9rem' }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          gap: '0.5rem',
                         }}
                       >
-                        {t.testruns.visualCompare}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-sm"
-                        title={t.testruns.expandDatasetsHint}
-                        onClick={async () => {
-                          try {
-                            const res = await api.expandDatasets(selectedRun.id, activeExec.test_case_id)
-                            notify(t.testruns.expandToast(res.created))
-                            await loadRuns()
-                          } catch {
-                            notify(t.testruns.expandFailed, 'error')
-                          }
-                        }}
-                      >
-                        {t.testruns.expandDatasets}
-                      </button>
-                    </div>
-                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
-                      <ExecutionLinksPanel executionId={activeExec.id} />
-                    </div>
-                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
-                      <ExecutionBugsPanel executionId={activeExec.id} trackers={trackers} />
-                    </div>
-                    {visualResults[activeExec.id] && visualResults[activeExec.id].length > 0 && (
-                      <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem', display: 'grid', gap: '0.3rem' }}>
-                        <strong style={{ fontSize: '0.85rem' }}>{t.testruns.visualComparisons}</strong>
-                        {visualResults[activeExec.id].map((c) => {
-                          const av = aiVerdicts[c.id]
-                          let stored: { verdict: string; confidence: number; explanation: string } | null = null
-                          if (!av && c.ai_verdict) { try { stored = JSON.parse(c.ai_verdict) } catch { stored = null } }
-                          const verdict = av === 'busy' ? null : (av ?? stored)
-                          return (
-                          <div key={c.id} style={{ fontSize: '0.82rem', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                            <span className={`badge badge-${c.verdict === 'match' ? 'passed' : c.verdict === 'mismatch' ? 'failed' : 'idle'}`}>{c.verdict}</span>
-                            <span>{t.testruns.diffLabel(c.diff_percent.toFixed(2))}</span>
-                            <span style={{ color: 'var(--muted)' }}>{new Date(c.created_at).toLocaleTimeString()}</span>
-                            {c.verdict === 'mismatch' && (
+                        <div>
+                          <div style={{ fontSize: '0.76rem', color: 'var(--muted)', fontFamily: 'var(--font-mono)' }}>
+                            {t.testruns.execHeader(activeExec.id, activeExec.test_case_id)}
+                          </div>
+                          <h4 style={{ margin: '0.2rem 0 0', fontSize: '1rem' }}>{activeExec.summary}</h4>
+                          {activeExec.dataset_name && (
+                            <div style={{ fontSize: '0.75rem', marginTop: '0.2rem' }}>
+                              <span className="badge">
+                                {t.testruns.datasetLabel}: {activeExec.dataset_name}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                          {activeExec.latest_case_version &&
+                            activeExec.case_text_version &&
+                            activeExec.latest_case_version > activeExec.case_text_version && (
                               <button
                                 type="button"
                                 className="btn btn-sm"
-                                disabled={av === 'busy'}
-                                title={t.testruns.aiVerdictHint}
+                                style={{ borderColor: 'var(--warning)', color: 'var(--warning-text)' }}
                                 onClick={async () => {
-                                  setAiVerdicts((prev) => ({ ...prev, [c.id]: 'busy' }))
-                                  try {
-                                    const res = await api.aiVisualVerdict(c.id)
-                                    setAiVerdicts((prev) => ({ ...prev, [c.id]: { verdict: res.verdict, confidence: res.confidence, explanation: res.explanation } }))
-                                    const list = await api.listVisualComparisons(activeExec.id)
-                                    setVisualResults((prev) => ({ ...prev, [activeExec.id]: list.items ?? [] }))
-                                  } catch (err) {
-                                    setAiVerdicts((prev) => { const n = { ...prev }; delete n[c.id]; return n })
-                                    notify(err instanceof Error ? err.message : t.testruns.aiVerdictFailed, 'error')
-                                  }
+                                  const synced = await api.syncExecutionCase(activeExec.id)
+                                  setExecutions((prev) => prev.map((x) => (x.id === synced.id ? synced : x)))
+                                  notify(t.testruns.snapshotSynced(synced.case_text_version))
                                 }}
                               >
-                                {av === 'busy' ? t.testruns.aiVerdictBusy : t.testruns.aiVerdictBtn}
+                                <RefreshCw size={12} />{' '}
+                                {t.testruns.syncVersion(activeExec.case_text_version, activeExec.latest_case_version)}
                               </button>
                             )}
-                            {av === 'busy' && <span style={{ color: 'var(--muted)' }}>{t.testruns.aiAnalyzing}</span>}
-                            {verdict && (
-                              <span style={{ display: 'inline-flex', gap: '0.4rem', alignItems: 'center' }}>
-                                <span className={`badge badge-${verdict.verdict === 'real-defect' ? 'failed' : verdict.verdict === 'acceptable-change' ? 'passed' : 'idle'}`}>AI: {verdict.verdict}</span>
-                                <span style={{ color: 'var(--muted)' }}>{verdict.confidence}% — {verdict.explanation}</span>
-                              </span>
-                            )}
-                          </div>
-                          )
-                        })}
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => navigate(`/cases/${activeExec.test_case_id}`)}
+                          >
+                            {t.testruns.openCase} <ExternalLink size={13} />
+                          </button>
+                        </div>
                       </div>
-                    )}
-                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
-                      <ScreenshotsGallery executionId={activeExec.id} />
+
+                      <div style={{ display: 'flex', gap: '0.45rem', flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          className={`btn btn-sm ${activeExec.status === 'passed' ? 'btn-primary' : ''}`}
+                          onClick={() => void handleStatus(activeExec.id, 'passed')}
+                        >
+                          <CheckCircle2 size={14} color="#16a34a" /> {t.dashboard.passed} <span className="kbd">P</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn btn-sm ${activeExec.status === 'failed' ? 'btn-primary' : ''}`}
+                          onClick={() => void handleStatus(activeExec.id, 'failed')}
+                        >
+                          <XCircle size={14} color="#dc2626" /> {t.dashboard.failed} <span className="kbd">F</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn btn-sm ${activeExec.status === 'blocked' ? 'btn-primary' : ''}`}
+                          onClick={() => void handleStatus(activeExec.id, 'blocked')}
+                        >
+                          <Ban size={14} color="#d97706" /> {t.dashboard.blocked} <span className="kbd">B</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn btn-sm ${activeExec.status === 'skipped' ? 'btn-primary' : ''}`}
+                          onClick={() => void handleStatus(activeExec.id, 'skipped')}
+                        >
+                          <SkipForward size={14} color="#64748b" /> {t.dashboard.skipped} <span className="kbd">S</span>
+                        </button>
+                      </div>
+
+                      {activeExec.comment && (
+                        <div
+                          style={{
+                            padding: '0.55rem 0.75rem',
+                            borderRadius: 8,
+                            background: 'var(--bg-subtle)',
+                            fontSize: '0.82rem',
+                            fontFamily: 'var(--font-mono)',
+                          }}
+                        >
+                          {activeExec.comment}
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          title={t.testruns.visualCompareHint}
+                          onClick={async () => {
+                            try {
+                              const shots = await api.listExecutionScreenshots(activeExec.id)
+                              if ((shots.items ?? []).length === 0) {
+                                notify(t.testruns.noScreenshots, 'error')
+                                return
+                              }
+                              const res = await api.visualCompare(activeExec.id, shots.items[0].id)
+                              notify(t.testruns.visualResultToast(res.verdict, res.diff_percent.toFixed(2)))
+                              const list = await api.listVisualComparisons(activeExec.id)
+                              setVisualResults((prev) => ({ ...prev, [activeExec.id]: list.items ?? [] }))
+                            } catch (err) {
+                              notify(err instanceof Error ? err.message : t.testruns.visualFailed, 'error')
+                            }
+                          }}
+                        >
+                          {t.testruns.visualCompare}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          title={t.testruns.expandDatasetsHint}
+                          onClick={async () => {
+                            try {
+                              const res = await api.expandDatasets(selectedRun.id, activeExec.test_case_id)
+                              notify(t.testruns.expandToast(res.created))
+                              await loadRuns()
+                            } catch {
+                              notify(t.testruns.expandFailed, 'error')
+                            }
+                          }}
+                        >
+                          {t.testruns.expandDatasets}
+                        </button>
+                      </div>
+                      <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+                        <ExecutionLinksPanel executionId={activeExec.id} />
+                      </div>
+                      <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+                        <ExecutionBugsPanel executionId={activeExec.id} trackers={trackers} />
+                      </div>
+                      {visualResults[activeExec.id] && visualResults[activeExec.id].length > 0 && (
+                        <div
+                          style={{
+                            borderTop: '1px solid var(--border)',
+                            paddingTop: '0.75rem',
+                            display: 'grid',
+                            gap: '0.3rem',
+                          }}
+                        >
+                          <strong style={{ fontSize: '0.85rem' }}>{t.testruns.visualComparisons}</strong>
+                          {visualResults[activeExec.id].map((c) => {
+                            const av = aiVerdicts[c.id]
+                            let stored: { verdict: string; confidence: number; explanation: string } | null = null
+                            if (!av && c.ai_verdict) {
+                              try {
+                                stored = JSON.parse(c.ai_verdict)
+                              } catch {
+                                stored = null
+                              }
+                            }
+                            const verdict = av === 'busy' ? null : (av ?? stored)
+                            return (
+                              <div
+                                key={c.id}
+                                style={{
+                                  fontSize: '0.82rem',
+                                  display: 'flex',
+                                  gap: '0.5rem',
+                                  alignItems: 'center',
+                                  flexWrap: 'wrap',
+                                }}
+                              >
+                                <span
+                                  className={`badge badge-${c.verdict === 'match' ? 'passed' : c.verdict === 'mismatch' ? 'failed' : 'idle'}`}
+                                >
+                                  {c.verdict}
+                                </span>
+                                <span>{t.testruns.diffLabel(c.diff_percent.toFixed(2))}</span>
+                                <span style={{ color: 'var(--muted)' }}>
+                                  {new Date(c.created_at).toLocaleTimeString()}
+                                </span>
+                                {c.verdict === 'mismatch' && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm"
+                                    disabled={av === 'busy'}
+                                    title={t.testruns.aiVerdictHint}
+                                    onClick={async () => {
+                                      setAiVerdicts((prev) => ({ ...prev, [c.id]: 'busy' }))
+                                      try {
+                                        const res = await api.aiVisualVerdict(c.id)
+                                        setAiVerdicts((prev) => ({
+                                          ...prev,
+                                          [c.id]: {
+                                            verdict: res.verdict,
+                                            confidence: res.confidence,
+                                            explanation: res.explanation,
+                                          },
+                                        }))
+                                        const list = await api.listVisualComparisons(activeExec.id)
+                                        setVisualResults((prev) => ({ ...prev, [activeExec.id]: list.items ?? [] }))
+                                      } catch (err) {
+                                        setAiVerdicts((prev) => {
+                                          const n = { ...prev }
+                                          delete n[c.id]
+                                          return n
+                                        })
+                                        notify(err instanceof Error ? err.message : t.testruns.aiVerdictFailed, 'error')
+                                      }
+                                    }}
+                                  >
+                                    {av === 'busy' ? t.testruns.aiVerdictBusy : t.testruns.aiVerdictBtn}
+                                  </button>
+                                )}
+                                {av === 'busy' && (
+                                  <span style={{ color: 'var(--muted)' }}>{t.testruns.aiAnalyzing}</span>
+                                )}
+                                {verdict && (
+                                  <span style={{ display: 'inline-flex', gap: '0.4rem', alignItems: 'center' }}>
+                                    <span
+                                      className={`badge badge-${verdict.verdict === 'real-defect' ? 'failed' : verdict.verdict === 'acceptable-change' ? 'passed' : 'idle'}`}
+                                    >
+                                      AI: {verdict.verdict}
+                                    </span>
+                                    <span style={{ color: 'var(--muted)' }}>
+                                      {verdict.confidence}% — {verdict.explanation}
+                                    </span>
+                                  </span>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                      <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+                        <ScreenshotsGallery executionId={activeExec.id} />
+                      </div>
+                      <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+                        <CustomFieldsPanel entityType="test_execution" entityId={activeExec.id} />
+                      </div>
+                      <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+                        <AttachmentsPanel entityType="test_execution" entityId={activeExec.id} />
+                      </div>
+                      <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+                        <CommentsPanel entityType="test_execution" entityId={activeExec.id} />
+                      </div>
                     </div>
-                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
-                      <CustomFieldsPanel entityType="test_execution" entityId={activeExec.id} />
-                    </div>
-                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
-                      <AttachmentsPanel entityType="test_execution" entityId={activeExec.id} />
-                    </div>
-                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
-                      <CommentsPanel entityType="test_execution" entityId={activeExec.id} />
-                    </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
               </>
             )}
           </div>
         ) : (
-          <div className="card" style={{ color: 'var(--muted)' }}>{t.testruns.emptyRuns}</div>
+          <div className="card" style={{ color: 'var(--muted)' }}>
+            {t.testruns.emptyRuns}
+          </div>
         )}
       </div>
     </section>

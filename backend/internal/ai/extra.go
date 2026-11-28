@@ -53,7 +53,7 @@ func RegisterExtraRoutes(api huma.API, servers *llm.ServerStore, runRepo testrun
 			return nil, huma.Error500InternalServerError("failed to list executions", err)
 		}
 		var b strings.Builder
-		b.WriteString(fmt.Sprintf("Test run #%d: %s\n", run.ID, run.Summary))
+		fmt.Fprintf(&b, "Test run #%d: %s\n", run.ID, run.Summary)
 		counts := map[string]int{}
 		for _, e := range execs {
 			counts[e.Status]++
@@ -63,7 +63,7 @@ func RegisterExtraRoutes(api huma.API, servers *llm.ServerStore, runRepo testrun
 			}
 			b.WriteString(line + "\n")
 		}
-		b.WriteString(fmt.Sprintf("\nTotals: %d executions (%s)\n", len(execs), summarizeCounts(counts)))
+		fmt.Fprintf(&b, "\nTotals: %d executions (%s)\n", len(execs), summarizeCounts(counts))
 		sys := "You are a QA lead writing a short release-note style summary of a test run. 3-6 sentences, plain text, no markdown headers. Mention pass rate, notable failures, and a go/no-go hint."
 		out, err := cfg.Chat(ctx, sys, b.String())
 		if err != nil {

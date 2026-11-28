@@ -126,7 +126,6 @@ func RegisterExportRoutes(r chi.Router, repo Repository, guard *auth.AccessGuard
 	})
 }
 
-
 func runStatus(r TestRun) string {
 	if r.StoppedAt != nil {
 		return "stopped"

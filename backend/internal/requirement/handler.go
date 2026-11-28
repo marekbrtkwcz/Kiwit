@@ -42,13 +42,13 @@ func RegisterRoutes(api huma.API, store *Store, guard *auth.AccessGuard) {
 		Summary:     "List requirements with optional filters and pagination",
 		Tags:        []string{"Requirements"},
 	}, func(ctx context.Context, input *struct {
-		Q        string `query:"q" doc:"Search in key, name, description"`
-		ProductID int64 `query:"product_id"`
-		Status   string `query:"status" enum:"draft,approved,obsolete"`
-		Priority string `query:"priority"`
-		Category string `query:"category"`
-		Limit    int    `query:"limit" default:"100"`
-		Offset   int    `query:"offset" default:"0"`
+		Q         string `query:"q" doc:"Search in key, name, description"`
+		ProductID int64  `query:"product_id"`
+		Status    string `query:"status" enum:"draft,approved,obsolete"`
+		Priority  string `query:"priority"`
+		Category  string `query:"category"`
+		Limit     int    `query:"limit" default:"100"`
+		Offset    int    `query:"offset" default:"0"`
 	}) (*listOutput, error) {
 		if input.ProductID != 0 {
 			if err := guard.EnforceProduct(ctx, input.ProductID, false); err != nil {

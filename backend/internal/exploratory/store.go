@@ -11,16 +11,16 @@ import (
 )
 
 type Session struct {
-	ID              int64     `json:"id"`
-	ProductID       int64     `json:"product_id"`
-	TestRunID       *int64    `json:"test_run_id,omitempty"`
-	Charter         string    `json:"charter"`
-	TimeboxMinutes  int       `json:"timebox_minutes"`
-	TesterID        *int64    `json:"tester_id,omitempty"`
-	Notes           string    `json:"notes,omitempty"`
-	Findings        string    `json:"findings"` // JSON array
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID             int64     `json:"id"`
+	ProductID      int64     `json:"product_id"`
+	TestRunID      *int64    `json:"test_run_id,omitempty"`
+	Charter        string    `json:"charter"`
+	TimeboxMinutes int       `json:"timebox_minutes"`
+	TesterID       *int64    `json:"tester_id,omitempty"`
+	Notes          string    `json:"notes,omitempty"`
+	Findings       string    `json:"findings"` // JSON array
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 type Store struct {

@@ -28,10 +28,10 @@ import (
 
 // Store keeps issued challenges in memory. Safe for concurrent use.
 type Store struct {
-	mu       sync.Mutex
+	mu         sync.Mutex
 	challenges map[string]challenge
-	ttl      time.Duration
-	minHuman time.Duration
+	ttl        time.Duration
+	minHuman   time.Duration
 }
 
 type challenge struct {

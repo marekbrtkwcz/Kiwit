@@ -154,7 +154,7 @@ type JUnitCase struct {
 	Name      string
 	ClassName string
 	// Status must be one of "passed", "failed", "error", "skipped".
-	Status string
+	Status  string
 	Message string
 }
 

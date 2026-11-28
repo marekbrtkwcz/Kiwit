@@ -1,5 +1,5 @@
-import { ReactNode, useEffect, useRef } from 'react'
 import { AlertTriangle, X } from 'lucide-react'
+import { type ReactNode, useEffect, useRef } from 'react'
 import { useI18n } from '../i18n'
 
 interface ConfirmDialogProps {
@@ -32,7 +32,9 @@ export function ConfirmDialog({
     if (!open) return
     const el = dialogRef.current
     if (!el) return
-    const focusable = el.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
+    const focusable = el.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    )
     focusable[0]?.focus()
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return
@@ -144,7 +146,11 @@ export function EmptyState({ icon, title, description, actionLabel, onAction }: 
 export function LoadingSkeleton({ rows = 5 }: { rows?: number }) {
   const { t } = useI18n()
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }} aria-label={t.common.loading}>
+    <div
+      role="status"
+      style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
+      aria-label={t.common.loading}
+    >
       {Array.from({ length: rows }).map((_, i) => (
         <div
           key={i}

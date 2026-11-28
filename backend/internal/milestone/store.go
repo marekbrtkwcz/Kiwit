@@ -11,18 +11,18 @@ import (
 )
 
 type Milestone struct {
-	ID               int64      `json:"id"`
-	VersionID        int64      `json:"version_id"`
-	Name             string     `json:"name"`
-	Description      string     `json:"description,omitempty"`
-	DueDate          *string    `json:"due_date,omitempty"`
-	Status           string     `json:"status" enum:"planned,in_progress,done"`
-	SignoffDecision  *string    `json:"signoff_decision,omitempty" enum:"go,no-go"`
-	SignoffUserID    *int64     `json:"signoff_user_id,omitempty"`
-	SignoffNote      string     `json:"signoff_note,omitempty"`
-	SignoffAt        *time.Time `json:"signoff_at,omitempty"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
+	ID              int64      `json:"id"`
+	VersionID       int64      `json:"version_id"`
+	Name            string     `json:"name"`
+	Description     string     `json:"description,omitempty"`
+	DueDate         *string    `json:"due_date,omitempty"`
+	Status          string     `json:"status" enum:"planned,in_progress,done"`
+	SignoffDecision *string    `json:"signoff_decision,omitempty" enum:"go,no-go"`
+	SignoffUserID   *int64     `json:"signoff_user_id,omitempty"`
+	SignoffNote     string     `json:"signoff_note,omitempty"`
+	SignoffAt       *time.Time `json:"signoff_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 type Progress struct {

@@ -74,9 +74,11 @@ describe('api client', () => {
     setAuthToken('jwt-test-token')
     expect(getAuthToken()).toBe('jwt-test-token')
 
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ items: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
-    )
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ items: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+      )
     vi.stubGlobal('fetch', fetchMock)
 
     const res = await api.listProducts()

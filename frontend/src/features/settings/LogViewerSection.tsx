@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw, ScrollText, Search, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from '../../api/client'
 import { useI18n } from '../../i18n'
 
@@ -54,7 +54,9 @@ export function LogViewerSection() {
       if (!Number.isNaN(fromTs) && ts < fromTs) return false
       if (!Number.isNaN(toTs) && ts > toTs) return false
       if (terms.length === 0) return true
-      const haystack = `${e.message} ${e.level} ${Object.entries(e.attrs ?? {}).map(([k, v]) => `${k}=${v}`).join(' ')}`.toLowerCase()
+      const haystack = `${e.message} ${e.level} ${Object.entries(e.attrs ?? {})
+        .map(([k, v]) => `${k}=${v}`)
+        .join(' ')}`.toLowerCase()
       return terms.every((term) => haystack.includes(term))
     })
     const dir = sort.desc ? -1 : 1
@@ -80,17 +82,22 @@ export function LogViewerSection() {
       onClick={() => setSort((s) => (s.key === key ? { key, desc: !s.desc } : { key, desc: key !== 'time' }))}
       aria-label={`${t.logs.level === label ? 'Sort by level' : `Sort by ${label}`}`}
     >
-      {label} {sort.key === key ? (sort.desc ? '↓' : '↑') : <span style={{ opacity: 0.4 }}>⇅</span>}
+      {label} {sort.key === key ? sort.desc ? '↓' : '↑' : <span style={{ opacity: 0.4 }}>⇅</span>}
     </button>
   )
 
   return (
     <div className="card">
       <div className="card-header">
-        <h3 className="card-title"><ScrollText size={15} /> {t.logs.title}</h3>
+        <h3 className="card-title">
+          <ScrollText size={15} /> {t.logs.title}
+        </h3>
         <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ position: 'relative' }}>
-            <Search size={13} style={{ position: 'absolute', left: 8, top: 9, color: 'var(--muted)', pointerEvents: 'none' }} />
+            <Search
+              size={13}
+              style={{ position: 'absolute', left: 8, top: 9, color: 'var(--muted)', pointerEvents: 'none' }}
+            />
             <input
               className="input"
               placeholder={t.logs.search}
@@ -101,19 +108,49 @@ export function LogViewerSection() {
             />
           </div>
           <label style={{ fontSize: '0.8rem', display: 'inline-flex', gap: '0.25rem', alignItems: 'center' }}>
-            <input className="input" type="datetime-local" value={from} onChange={(e) => setFrom(e.target.value)} aria-label={t.logs.fromAria} style={{ fontSize: '0.8rem' }} />
+            <input
+              className="input"
+              type="datetime-local"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              aria-label={t.logs.fromAria}
+              style={{ fontSize: '0.8rem' }}
+            />
           </label>
           <label style={{ fontSize: '0.8rem', display: 'inline-flex', gap: '0.25rem', alignItems: 'center' }}>
-            <input className="input" type="datetime-local" value={to} onChange={(e) => setTo(e.target.value)} aria-label={t.logs.toAria} style={{ fontSize: '0.8rem' }} />
+            <input
+              className="input"
+              type="datetime-local"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              aria-label={t.logs.toAria}
+              style={{ fontSize: '0.8rem' }}
+            />
           </label>
           {(from || to) && (
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setFrom(''); setTo('') }} aria-label={t.logs.clearRangeAria}>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                setFrom('')
+                setTo('')
+              }}
+              aria-label={t.logs.clearRangeAria}
+            >
               <X size={13} />
             </button>
           )}
-          <select className="select" value={level} onChange={(e) => setLevel(e.target.value)} style={{ fontSize: '0.8rem' }} aria-label={t.logs.levelAria}>
+          <select
+            className="select"
+            value={level}
+            onChange={(e) => setLevel(e.target.value)}
+            style={{ fontSize: '0.8rem' }}
+            aria-label={t.logs.levelAria}
+          >
             {LEVELS.map((l) => (
-              <option key={l} value={l}>{l}</option>
+              <option key={l} value={l}>
+                {l}
+              </option>
             ))}
           </select>
           <button type="button" className="btn btn-sm" onClick={load} disabled={busy} aria-label={t.logs.refreshAria}>
@@ -139,13 +176,26 @@ export function LogViewerSection() {
             <tbody>
               {filtered.map((e, i) => (
                 <tr key={i}>
-                  <td style={{ whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--muted)' }}>
+                  <td
+                    style={{
+                      whiteSpace: 'nowrap',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.75rem',
+                      color: 'var(--muted)',
+                    }}
+                  >
                     {new Date(e.time).toLocaleString()}
                   </td>
-                  <td><span className={`badge ${LEVEL_BADGE[e.level] ?? ''}`}>{e.level}</span></td>
+                  <td>
+                    <span className={`badge ${LEVEL_BADGE[e.level] ?? ''}`}>{e.level}</span>
+                  </td>
                   <td style={{ fontSize: '0.82rem' }}>{e.message}</td>
                   <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--muted)' }}>
-                    {e.attrs ? Object.entries(e.attrs).map(([k, v]) => `${k}=${v}`).join(' ') : ''}
+                    {e.attrs
+                      ? Object.entries(e.attrs)
+                          .map(([k, v]) => `${k}=${v}`)
+                          .join(' ')
+                      : ''}
                   </td>
                 </tr>
               ))}
@@ -154,7 +204,8 @@ export function LogViewerSection() {
         </div>
       )}
       <p style={{ color: 'var(--muted)', fontSize: '0.75rem', margin: 0 }}>
-        {query ? `${entries.length}${t.logs.showing(filtered.length, entries.length)}` : ''} KIWIT_LOG_FILE / KIWIT_LOG_LEVEL / KIWIT_LOG_FORMAT
+        {query ? `${entries.length}${t.logs.showing(filtered.length, entries.length)}` : ''} KIWIT_LOG_FILE /
+        KIWIT_LOG_LEVEL / KIWIT_LOG_FORMAT
       </p>
     </div>
   )

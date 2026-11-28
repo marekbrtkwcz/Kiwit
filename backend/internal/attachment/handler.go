@@ -1,7 +1,6 @@
 package attachment
 
 import (
-	"strings"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
@@ -12,6 +11,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/kiwit/kiwit/internal/auth"

@@ -94,13 +94,15 @@ npm run dev
 ```bash
 # Backend
 cd backend
+golangci-lint run ./...   # jak w CI (konfig w .golangci.yml); lokalnie: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 go vet ./...
 go test -count=1 ./...
 
 # Frontend
 cd frontend
+npm run check:ci          # biome ci + tsc --noEmit (jak w CI); lokalnie z poprawkami: npm run check
+npm run check:i18n
 npm test
-npx tsc --noEmit
 npx vite build --outDir ../backend/internal/web/dist --emptyOutDir
 
 # Kompilacja pojedynczej binarki Windows

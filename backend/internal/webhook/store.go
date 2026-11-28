@@ -95,7 +95,7 @@ func (s *Store) listActive(ctx context.Context) ([]Webhook, error) {
 
 // Get returns a single webhook by ID.
 func (s *Store) Get(ctx context.Context, id int64) (Webhook, error) {
-	items := []Webhook{}
+	var items []Webhook
 	var err error
 	if s.pgPool != nil {
 		items, err = s.queryList(ctx, `SELECT `+webhookColumns+` FROM webhooks WHERE id = $1`, id)

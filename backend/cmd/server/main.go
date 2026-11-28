@@ -30,11 +30,11 @@ import (
 	"github.com/kiwit/kiwit/internal/campaign"
 	"github.com/kiwit/kiwit/internal/captcha"
 	"github.com/kiwit/kiwit/internal/classification"
-	"github.com/kiwit/kiwit/internal/docs"
 	"github.com/kiwit/kiwit/internal/comment"
 	"github.com/kiwit/kiwit/internal/customfield"
 	"github.com/kiwit/kiwit/internal/dashboard"
 	"github.com/kiwit/kiwit/internal/dataset"
+	"github.com/kiwit/kiwit/internal/docs"
 	"github.com/kiwit/kiwit/internal/environment"
 	"github.com/kiwit/kiwit/internal/exploratory"
 	"github.com/kiwit/kiwit/internal/group"
@@ -193,9 +193,9 @@ func main() {
 	router.Use(web.SecurityHeaders)
 	router.Use(middleware.RequestID)
 	router.Use(web.RequestIDMiddleware)
-	// Rate limiting must run BEFORE middleware.RealIP: RealIP overwrites
-	// r.RemoteAddr with X-Forwarded-For/X-Real-IP unconditionally, which
-	// would let any client spoof the address the limiter keys on.
+	// Rate limiting must run BEFORE RealIP: RealIP overwrites r.RemoteAddr
+	// with forwarded headers (for trusted proxies), and the limiter keys on
+	// the real peer address.
 	rateLimiter := auth.NewRateLimiter(20, time.Minute)
 	for _, cidr := range cfg.TrustedProxies {
 		if cidr = strings.TrimSpace(cidr); cidr != "" {
@@ -203,7 +203,9 @@ func main() {
 		}
 	}
 	router.Use(rateLimiter.LimitAuthRoutes)
-	router.Use(middleware.RealIP)
+	// RealIP only honors forwarded headers from trusted proxies (unlike
+	// chi's deprecated middleware.RealIP, which trusts any peer).
+	router.Use(web.RealIP(web.ParseTrustedCIDRs(cfg.TrustedProxies)))
 	router.Use(middleware.Recoverer)
 	router.Use(requestLogger(logger))
 	if authSvc != nil {

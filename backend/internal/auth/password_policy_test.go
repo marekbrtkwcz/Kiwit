@@ -14,10 +14,10 @@ func TestValidatePassword(t *testing.T) {
 		{"aaaaaaaa", "", "", true},
 		{"myemail123", "myemail@test.com", "", true},
 		{"johnsmith99", "", "johnsmith", true},
-		
-		{"xyxyxyxy", "", "", true},         // repeated pattern
-		{"qwertyuiop1", "", "", true},      // keyboard walk 6+
-		{"Abcdefgh1!x", "", "", false},     // fine
+
+		{"xyxyxyxy", "", "", true},     // repeated pattern
+		{"qwertyuiop1", "", "", true},  // keyboard walk 6+
+		{"Abcdefgh1!x", "", "", false}, // fine
 		{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "", "", true}, // >64
 	}
 	for _, c := range cases {

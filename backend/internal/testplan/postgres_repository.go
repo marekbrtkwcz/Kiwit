@@ -73,7 +73,6 @@ func (r *PostgresRepository) ListFiltered(ctx context.Context, f ListFilter) ([]
 	if f.UserID != nil {
 		where = append(where, fmt.Sprintf("(NOT EXISTS (SELECT 1 FROM product_members pm WHERE pm.product_id = tp.product_id) OR EXISTS (SELECT 1 FROM product_members pm WHERE pm.product_id = tp.product_id AND pm.user_id = $%d))", argIdx))
 		args = append(args, *f.UserID)
-		argIdx++
 	}
 
 	whereClause := ""

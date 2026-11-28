@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
 import { Database, Pencil, Plus, Sparkles, Trash2, X } from 'lucide-react'
-import { api, Dataset } from '../../api/client'
+import { useCallback, useEffect, useState } from 'react'
+import { api, type Dataset } from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 
@@ -98,14 +98,29 @@ export function CaseDatasetsPanel({ caseId }: { caseId: number }) {
     <div style={{ display: 'grid', gap: '0.45rem' }}>
       <strong style={{ fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
         <Database size={14} /> {t.datasets.title}
-        <button type="button" className="btn btn-sm" onClick={generate} disabled={aiBusy} aria-label={t.datasets.aiGenerate}>
+        <button
+          type="button"
+          className="btn btn-sm"
+          onClick={generate}
+          disabled={aiBusy}
+          aria-label={t.datasets.aiGenerate}
+        >
           <Sparkles size={12} /> {aiBusy ? t.datasets.aiGenerating : t.datasets.aiGenerate}
         </button>
       </strong>
       {items.map((d) => (
         <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}>
           <span className="badge">{d.name}</span>
-          <code style={{ color: 'var(--muted)', fontSize: '0.72rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>
+          <code
+            style={{
+              color: 'var(--muted)',
+              fontSize: '0.72rem',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              maxWidth: 260,
+            }}
+          >
             {d.params}
           </code>
           <span style={{ marginLeft: 'auto', display: 'flex', gap: '0.2rem' }}>
@@ -121,33 +136,84 @@ export function CaseDatasetsPanel({ caseId }: { caseId: number }) {
             >
               <Pencil size={12} />
             </button>
-            <button type="button" className="btn btn-sm btn-danger" aria-label={`${t.datasets.deleteAria} ${d.name}`} onClick={() => remove(d.id)}>
+            <button
+              type="button"
+              className="btn btn-sm btn-danger"
+              aria-label={`${t.datasets.deleteAria} ${d.name}`}
+              onClick={() => remove(d.id)}
+            >
               <Trash2 size={12} />
             </button>
           </span>
         </div>
       ))}
       <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        <input className="input" placeholder={t.datasets.namePlaceholder} value={name} onChange={(e) => setName(e.target.value)} style={{ width: 150, fontSize: '0.8rem' }} />
-        <input className="input" placeholder={t.datasets.paramsPlaceholder} value={params} onChange={(e) => setParams(e.target.value)} style={{ flex: 1, minWidth: 180, fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }} />
+        <input
+          className="input"
+          placeholder={t.datasets.namePlaceholder}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          style={{ width: 150, fontSize: '0.8rem' }}
+        />
+        <input
+          className="input"
+          placeholder={t.datasets.paramsPlaceholder}
+          value={params}
+          onChange={(e) => setParams(e.target.value)}
+          style={{ flex: 1, minWidth: 180, fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }}
+        />
         <button type="button" className="btn btn-sm" onClick={save} disabled={!name.trim()}>
-          {editingId ? t.common.save : <><Plus size={13} /> {t.common.add}</>}
+          {editingId ? (
+            t.common.save
+          ) : (
+            <>
+              <Plus size={13} /> {t.common.add}
+            </>
+          )}
         </button>
         {editingId && (
-          <button type="button" className="btn btn-sm" onClick={() => { setEditingId(null); setName(''); setParams('{}') }} aria-label={t.common.cancel}>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => {
+              setEditingId(null)
+              setName('')
+              setParams('{}')
+            }}
+            aria-label={t.common.cancel}
+          >
             <X size={13} />
           </button>
         )}
       </div>
       {proposals && (
         <div className="modal-backdrop" onClick={() => setProposals(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t.datasets.proposals}>
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t.datasets.proposals}
+          >
             <h2>{t.datasets.proposals}</h2>
             <div style={{ display: 'grid', gap: '0.5rem', maxHeight: '50vh', overflowY: 'auto' }}>
               {proposals.map((p, i) => (
-                <label key={i} style={{ display: 'grid', gap: '0.15rem', padding: '0.35rem', border: '1px solid var(--border)', borderRadius: 6 }}>
+                <label
+                  key={i}
+                  style={{
+                    display: 'grid',
+                    gap: '0.15rem',
+                    padding: '0.35rem',
+                    border: '1px solid var(--border)',
+                    borderRadius: 6,
+                  }}
+                >
                   <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}>
-                    <input type="checkbox" checked={!!selected[i]} onChange={(e) => setSelected((s) => ({ ...s, [i]: e.target.checked }))} />
+                    <input
+                      type="checkbox"
+                      checked={!!selected[i]}
+                      onChange={(e) => setSelected((s) => ({ ...s, [i]: e.target.checked }))}
+                    />
                     <strong>{p.name}</strong>
                   </span>
                   <code style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)' }}>{p.params}</code>
@@ -156,8 +222,15 @@ export function CaseDatasetsPanel({ caseId }: { caseId: number }) {
               ))}
             </div>
             <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
-              <button type="button" className="btn" onClick={() => setProposals(null)}>{t.common.cancel}</button>
-              <button type="button" className="btn btn-primary" onClick={saveProposals} disabled={saving || !Object.values(selected).some(Boolean)}>
+              <button type="button" className="btn" onClick={() => setProposals(null)}>
+                {t.common.cancel}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={saveProposals}
+                disabled={saving || !Object.values(selected).some(Boolean)}
+              >
                 {saving ? t.datasets.saving : t.datasets.addSelected}
               </button>
             </div>

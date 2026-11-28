@@ -154,8 +154,8 @@ func RegisterRoutes(api huma.API, store *Store) {
 		Summary:     "Grant a group a role on a product (admin only)",
 		Tags:        []string{"Admin"},
 	}, func(ctx context.Context, input *struct {
-		ID        int64  `path:"id"`
-		ProductID int64  `path:"product_id"`
+		ID        int64 `path:"id"`
+		ProductID int64 `path:"product_id"`
 		Body      struct {
 			Role string `json:"role" enum:"viewer,tester,maintainer"`
 		}

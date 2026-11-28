@@ -1347,7 +1347,7 @@ func verifyHookSignature(t *testing.T, secret, sigHeader string, body []byte) {
 	ts, err := strconv.ParseInt(strings.TrimPrefix(parts[0], "t="), 10, 64)
 	require.NoError(t, err)
 	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write([]byte(fmt.Sprintf("%d.%s", ts, string(body))))
+	_, _ = fmt.Fprintf(mac, "%d.%s", ts, string(body))
 	require.Equal(t, "v1="+hex.EncodeToString(mac.Sum(nil)), parts[1])
 }
 

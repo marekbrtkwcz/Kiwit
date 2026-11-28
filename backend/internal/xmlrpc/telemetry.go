@@ -69,9 +69,9 @@ func (h *Handler) telemetryMatrix(r *http.Request, _ []any) (any, error) {
 	}
 	defer rows.Close()
 	type row struct {
-		CaseID  int64             `json:"case_id"`
-		Summary string            `json:"summary"`
-		Counts  map[string]int64  `json:"counts"`
+		CaseID  int64            `json:"case_id"`
+		Summary string           `json:"summary"`
+		Counts  map[string]int64 `json:"counts"`
 	}
 	m := map[int64]*row{}
 	var order []int64

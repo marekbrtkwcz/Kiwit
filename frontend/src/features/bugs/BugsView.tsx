@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
 import { Bot, Bug, Plus, Save, ScanSearch, Search, Trash2, X } from 'lucide-react'
-import { api, InternalBug } from '../../api/client'
-import { useWorkspace } from '../../context/WorkspaceContext'
+import { useEffect, useState } from 'react'
+import { api, type InternalBug } from '../../api/client'
 import { ExportButton } from '../../components/ExportButton'
+import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 
 export function BugsView() {
@@ -14,7 +14,17 @@ export function BugsView() {
   const [filterSeverity, setFilterSeverity] = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editing, setEditing] = useState<InternalBug | null>(null)
-  const [triage, setTriage] = useState<{ duplicates: { bug_id: number; confidence: number; reason: string }[]; suggested_severity: string; suggested_status: string; triage_note: string; model: string } | 'busy' | null>(null)
+  const [triage, setTriage] = useState<
+    | {
+        duplicates: { bug_id: number; confidence: number; reason: string }[]
+        suggested_severity: string
+        suggested_status: string
+        triage_note: string
+        model: string
+      }
+    | 'busy'
+    | null
+  >(null)
 
   const [productId, setProductId] = useState<number>(activeProductId ?? 1)
   const [summary, setSummary] = useState('')
@@ -98,7 +108,10 @@ export function BugsView() {
 
       <div className="filter-bar">
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-          <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
+          <Search
+            size={14}
+            style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }}
+          />
           <input
             className="input"
             placeholder={t.bugs.searchPlaceholder}
@@ -161,17 +174,27 @@ export function BugsView() {
                     {b.summary}
                   </div>
                   {b.test_execution_id && (
-                    <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{t.bugs.executionLabel(b.test_execution_id)}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+                      {t.bugs.executionLabel(b.test_execution_id)}
+                    </div>
                   )}
                 </td>
-                <td style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{productMap.get(b.product_id) ?? `#${b.product_id}`}</td>
-                <td><span className={`badge pill-${b.severity}`}>{b.severity}</span></td>
+                <td style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
+                  {productMap.get(b.product_id) ?? `#${b.product_id}`}
+                </td>
                 <td>
-                  <span className={`badge ${b.status === 'closed' || b.status === 'resolved' ? 'pill-passed' : b.status === 'in_progress' ? 'pill-running' : 'pill-failed'}`}>
+                  <span className={`badge pill-${b.severity}`}>{b.severity}</span>
+                </td>
+                <td>
+                  <span
+                    className={`badge ${b.status === 'closed' || b.status === 'resolved' ? 'pill-passed' : b.status === 'in_progress' ? 'pill-running' : 'pill-failed'}`}
+                  >
                     {b.status}
                   </span>
                 </td>
-                <td style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>{new Date(b.created_at).toLocaleDateString()}</td>
+                <td style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
+                  {new Date(b.created_at).toLocaleDateString()}
+                </td>
                 <td style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
                   <button
                     type="button"
@@ -228,7 +251,14 @@ export function BugsView() {
 
       {triage && triage !== 'busy' && (
         <div className="modal-backdrop" onClick={() => setTriage(null)}>
-          <div className="modal" style={{ maxWidth: 640, maxHeight: '80vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t.bugs.aiTriageResultAria}>
+          <div
+            className="modal"
+            style={{ maxWidth: 640, maxHeight: '80vh', overflowY: 'auto' }}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t.bugs.aiTriageResultAria}
+          >
             <h2 style={{ marginTop: 0 }}>{t.bugs.aiTriageTitle}</h2>
             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', margin: '0.5rem 0', flexWrap: 'wrap' }}>
               <span className="badge">{t.bugs.suggestedSeverity(triage.suggested_severity)}</span>
@@ -240,12 +270,26 @@ export function BugsView() {
               <div>
                 <strong style={{ fontSize: '0.85rem' }}>{t.bugs.possibleDuplicates}</strong>
                 <table className="table" style={{ margin: '0.4rem 0' }}>
-                  <thead><tr><th>{t.bugs.duplicatesBug}</th><th>{t.bugs.duplicatesConfidence}</th><th>{t.bugs.duplicatesReason}</th></tr></thead>
+                  <thead>
+                    <tr>
+                      <th>{t.bugs.duplicatesBug}</th>
+                      <th>{t.bugs.duplicatesConfidence}</th>
+                      <th>{t.bugs.duplicatesReason}</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {triage.duplicates.map((d) => (
                       <tr key={d.bug_id}>
-                        <td><span className="badge">#{d.bug_id}</span></td>
-                        <td><span className={`badge badge-${d.confidence >= 70 ? 'failed' : d.confidence >= 40 ? 'idle' : 'passed'}`}>{d.confidence}%</span></td>
+                        <td>
+                          <span className="badge">#{d.bug_id}</span>
+                        </td>
+                        <td>
+                          <span
+                            className={`badge badge-${d.confidence >= 70 ? 'failed' : d.confidence >= 40 ? 'idle' : 'passed'}`}
+                          >
+                            {d.confidence}%
+                          </span>
+                        </td>
                         <td style={{ fontSize: '0.82rem' }}>{d.reason}</td>
                       </tr>
                     ))}
@@ -256,7 +300,9 @@ export function BugsView() {
               <div style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>{t.bugs.noDuplicates}</div>
             )}
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
-              <button type="button" className="btn" onClick={() => setTriage(null)}>{t.common.close}</button>
+              <button type="button" className="btn" onClick={() => setTriage(null)}>
+                {t.common.close}
+              </button>
             </div>
           </div>
         </div>
@@ -266,8 +312,15 @@ export function BugsView() {
         <div className="drawer-backdrop" onClick={() => setDrawerOpen(false)}>
           <div className="drawer-panel" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <div className="drawer-header">
-              <h3 style={{ margin: 0, fontSize: '1rem' }}>{editing ? `${t.bugs.title} #${editing.id}` : t.bugs.report}</h3>
-              <button type="button" className="btn btn-ghost btn-icon" onClick={() => setDrawerOpen(false)} aria-label={t.common.close}>
+              <h3 style={{ margin: 0, fontSize: '1rem' }}>
+                {editing ? `${t.bugs.title} #${editing.id}` : t.bugs.report}
+              </h3>
+              <button
+                type="button"
+                className="btn btn-ghost btn-icon"
+                onClick={() => setDrawerOpen(false)}
+                aria-label={t.common.close}
+              >
                 <X size={17} />
               </button>
             </div>
@@ -276,38 +329,54 @@ export function BugsView() {
                 {!editing && (
                   <select className="select" value={productId} onChange={(e) => setProductId(Number(e.target.value))}>
                     {products.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
                     ))}
                   </select>
                 )}
                 <button
-              type="button"
-              className="btn btn-sm"
-              title={t.bugs.aiSuggestHint}
-              onClick={async () => {
-                if (!summary.trim()) return
-                try {
-                  const res = await api.aiSuggestBug({ summary, description: '' })
-                  setSeverity(res.severity as InternalBug['severity'])
-                  if (res.title && !summary.trim()) setSummary(res.title)
-                  notify(t.bugs.aiSuggestToast(res.severity))
-                } catch (err) {
-                  notify(err instanceof Error ? err.message : t.bugs.aiSuggestFailed, 'error')
-                }
-              }}
-            >
-              <Bot size={13} />
-            </button>
-            <input className="input" placeholder={t.bugs.summaryPlaceholder} value={summary} onChange={(e) => setSummary(e.target.value)} required />
+                  type="button"
+                  className="btn btn-sm"
+                  title={t.bugs.aiSuggestHint}
+                  onClick={async () => {
+                    if (!summary.trim()) return
+                    try {
+                      const res = await api.aiSuggestBug({ summary, description: '' })
+                      setSeverity(res.severity as InternalBug['severity'])
+                      if (res.title && !summary.trim()) setSummary(res.title)
+                      notify(t.bugs.aiSuggestToast(res.severity))
+                    } catch (err) {
+                      notify(err instanceof Error ? err.message : t.bugs.aiSuggestFailed, 'error')
+                    }
+                  }}
+                >
+                  <Bot size={13} />
+                </button>
+                <input
+                  className="input"
+                  placeholder={t.bugs.summaryPlaceholder}
+                  value={summary}
+                  onChange={(e) => setSummary(e.target.value)}
+                  required
+                />
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <select className="select" value={severity} onChange={(e) => setSeverity(e.target.value as InternalBug['severity'])}>
+                  <select
+                    className="select"
+                    value={severity}
+                    onChange={(e) => setSeverity(e.target.value as InternalBug['severity'])}
+                  >
                     <option value="low">low</option>
                     <option value="medium">medium</option>
                     <option value="high">high</option>
                     <option value="critical">critical</option>
                   </select>
                   {editing && (
-                    <select className="select" value={status} onChange={(e) => setStatus(e.target.value as InternalBug['status'])}>
+                    <select
+                      className="select"
+                      value={status}
+                      onChange={(e) => setStatus(e.target.value as InternalBug['status'])}
+                    >
                       <option value="open">open</option>
                       <option value="in_progress">in_progress</option>
                       <option value="resolved">resolved</option>
@@ -315,9 +384,25 @@ export function BugsView() {
                     </select>
                   )}
                 </div>
-                <textarea className="textarea" rows={6} placeholder={t.bugs.descPlaceholder} value={description} onChange={(e) => setDescription(e.target.value)} />
+                <textarea
+                  className="textarea"
+                  rows={6}
+                  placeholder={t.bugs.descPlaceholder}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
                 <div>
-                  <button type="submit" className="btn btn-primary">{editing ? <><Save size={14} /> {t.common.saveChanges}</> : <><Plus size={14} /> {t.bugs.create}</>}</button>
+                  <button type="submit" className="btn btn-primary">
+                    {editing ? (
+                      <>
+                        <Save size={14} /> {t.common.saveChanges}
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={14} /> {t.bugs.create}
+                      </>
+                    )}
+                  </button>
                 </div>
               </form>
             </div>

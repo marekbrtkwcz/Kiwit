@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api, TagItem } from '../../api/client'
+import { api, type TagItem } from '../../api/client'
 import { useI18n } from '../../i18n'
 
 interface Props {
@@ -41,20 +41,40 @@ export function EntityTagsBar({ entity, entityId }: Props) {
   }
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.45rem', fontSize: '0.82rem' }}>
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.4rem',
+        flexWrap: 'wrap',
+        marginTop: '0.45rem',
+        fontSize: '0.82rem',
+      }}
+    >
       <span style={{ color: 'var(--muted)' }}>{t.tags.label}</span>
       {attached.map((tg) => (
-        <span key={tg.id} className="badge">{tg.name}</span>
+        <span key={tg.id} className="badge">
+          {tg.name}
+        </span>
       ))}
       {attached.length === 0 && <span style={{ color: 'var(--muted)' }}>—</span>}
       {allTags.length > 0 && (
         <>
-          <select className="select" value={selectedTagId} onChange={(e) => setSelectedTagId(Number(e.target.value))} style={{ padding: '0.18rem 0.4rem', fontSize: '0.8rem' }}>
+          <select
+            className="select"
+            value={selectedTagId}
+            onChange={(e) => setSelectedTagId(Number(e.target.value))}
+            style={{ padding: '0.18rem 0.4rem', fontSize: '0.8rem' }}
+          >
             {allTags.map((tg) => (
-              <option key={tg.id} value={tg.id}>{tg.name}</option>
+              <option key={tg.id} value={tg.id}>
+                {tg.name}
+              </option>
             ))}
           </select>
-          <button type="button" className="btn btn-sm" onClick={() => void handleAttach()}>{t.tags.add}</button>
+          <button type="button" className="btn btn-sm" onClick={() => void handleAttach()}>
+            {t.tags.add}
+          </button>
         </>
       )}
       {err && <span style={{ color: 'var(--danger)' }}>{err}</span>}

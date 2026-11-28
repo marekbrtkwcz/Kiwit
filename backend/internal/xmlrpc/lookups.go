@@ -219,7 +219,7 @@ func quoteIdent(s string) string {
 }
 
 var (
-	colRefRe = regexp.MustCompile(`\bt\.([A-Za-z_][A-Za-z0-9_]*)\b`)
+	colRefRe  = regexp.MustCompile(`\bt\.([A-Za-z_][A-Za-z0-9_]*)\b`)
 	bareColRe = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)$`)
 )
 

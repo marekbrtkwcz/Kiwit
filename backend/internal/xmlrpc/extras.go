@@ -133,13 +133,13 @@ func (h *Handler) bugReport(r *http.Request, args []any) (any, error) {
 	// Emit bug.created webhook event (EXTERNAL_ISSUE_POST_PROCESSORS equivalent)
 	if h.webhooks != nil {
 		data := map[string]any{
-			"bug_id":        id,
-			"execution_id":  execID,
-			"tracker_id":    trackerID,
-			"url":           url,
-			"summary":       summary,
-			"description":   description,
-			"external_key":  argStr(m["external_key"]),
+			"bug_id":       id,
+			"execution_id": execID,
+			"tracker_id":   trackerID,
+			"url":          url,
+			"summary":      summary,
+			"description":  description,
+			"external_key": argStr(m["external_key"]),
 		}
 		// Look up tracker name and reporter if available
 		if trackerID > 0 {

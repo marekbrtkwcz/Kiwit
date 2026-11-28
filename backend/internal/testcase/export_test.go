@@ -9,8 +9,8 @@ import (
 func TestRenderCasesFeature(t *testing.T) {
 	items := []TestCase{
 		{ID: 1, Format: "gherkin", GherkinBody: "Feature: Login\n  Scenario: Successful login"},
-		{ID: 2, Format: "steps", GherkinBody: "ignored"},       // non-gherkin: skipped
-		{ID: 3, Format: "gherkin", GherkinBody: "   "},          // empty body: skipped
+		{ID: 2, Format: "steps", GherkinBody: "ignored"}, // non-gherkin: skipped
+		{ID: 3, Format: "gherkin", GherkinBody: "   "},   // empty body: skipped
 		{ID: 4, Format: "gherkin", GherkinBody: "Feature: Logout"},
 	}
 	rec := httptest.NewRecorder()

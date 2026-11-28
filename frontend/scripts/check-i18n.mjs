@@ -1,28 +1,52 @@
 // check-i18n: finds hardcoded user-facing strings in TSX that should use the i18n dictionary.
 // Run: npm run check:i18n — exits 1 with file:line findings when untranslated UI text is found.
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const SRC = join(fileURLToPath(new URL('..', import.meta.url)), 'src')
 
 // Technical or brand strings that are intentionally not translated.
 // Keep this list short: every entry should have a reason.
 const ALLOW = new Set([
-  'AI', 'API', 'CSV', 'HTML', 'JSON', 'SUS', 'TL;DR', 'URL', 'XML',
-  'DS:', 'AI:', '×', '↓', '↑', '⇅', '…', '—', '•',
+  'AI',
+  'API',
+  'CSV',
+  'HTML',
+  'JSON',
+  'SUS',
+  'TL;DR',
+  'URL',
+  'XML',
+  'DS:',
+  'AI:',
+  '×',
+  '↓',
+  '↑',
+  '⇅',
+  '…',
+  '—',
+  '•',
   'All', // select option value in filters, kept per convention
   // brand names shown as-is in both languages (issue tracker providers)
-  'GitHub', 'GitLab', 'Bugzilla', 'Azure Boards', 'Jira',
+  'GitHub',
+  'GitLab',
+  'Bugzilla',
+  'Azure Boards',
+  'Jira',
   // keyboard shortcut labels (kbd spans) and key names
-  'P', 'F', 'B', 'S', 'ESC', 'Ctrl+Enter',
+  'P',
+  'F',
+  'B',
+  'S',
+  'ESC',
+  'Ctrl+Enter',
   // TS type leaking into the text-node regex (fn: () => Promise<void>)
   'Promise',
 ])
 
 // placeholder values that are technical samples, not UI copy
-const isTechnicalPlaceholder = (v) =>
-  /^https?:\/\//.test(v) || v.includes('@example.') || v === 'https://...'
+const isTechnicalPlaceholder = (v) => /^https?:\/\//.test(v) || v.includes('@example.') || v === 'https://...'
 
 const findings = []
 
@@ -75,7 +99,9 @@ for (const file of files) {
 }
 
 if (findings.length > 0) {
-  console.error(`check-i18n: ${findings.length} hardcoded UI string(s) found (move them to src/i18n/index.tsx or extend the allowlist with a reason):`)
+  console.error(
+    `check-i18n: ${findings.length} hardcoded UI string(s) found (move them to src/i18n/index.tsx or extend the allowlist with a reason):`,
+  )
   for (const f of findings) console.error('  ' + f)
   process.exit(1)
 }

@@ -141,8 +141,6 @@ func (s *Store) ExpandDatasets(ctx context.Context, runID, caseID int64) (int, e
 			WHERE te.test_run_id = ? AND te.test_case_id = ? AND te.dataset_id = d.id
 		)`
 	if s.pg != nil {
-		q = strings.NewReplacer("?", "$1").Replace(q)
-		// rebuild placeholders properly
 		q = `INSERT INTO test_executions (test_run_id, test_case_id, dataset_id, status)
 			SELECT $1, $2, d.id, 'idle' FROM test_case_datasets d
 			WHERE d.test_case_id = $2

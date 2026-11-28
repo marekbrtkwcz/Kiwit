@@ -1,5 +1,3 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
   Activity,
   AlertTriangle,
@@ -14,6 +12,8 @@ import {
   Sparkles,
   Users,
 } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Bar,
   BarChart,
@@ -29,18 +29,18 @@ import {
 } from 'recharts'
 import {
   api,
-  CaseHealth,
-  DashboardSnapshot,
-  ExecutionDashboard,
-  MatrixRow,
-  TelemetryBreakdown,
-  TelemetrySummary,
-  TrendPoint,
-  UXMetricRow,
+  type CaseHealth,
+  type DashboardSnapshot,
+  type ExecutionDashboard,
+  type MatrixRow,
+  type TelemetryBreakdown,
+  type TelemetrySummary,
+  type TrendPoint,
+  type UXMetricRow,
 } from '../../api/client'
+import { ExportButton } from '../../components/ExportButton'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
-import { ExportButton } from '../../components/ExportButton'
 
 const PIE_COLORS = ['#6366f1', '#94a3b8']
 
@@ -117,7 +117,10 @@ export function DashboardView() {
   }, [activeProductId, from, to, t.errors.authFailed])
 
   useEffect(() => {
-    void api.getDashboard().then(setDash).catch(() => setDash(null))
+    void api
+      .getDashboard()
+      .then(setDash)
+      .catch(() => setDash(null))
   }, [])
 
   const trendSeries = useMemo(() => {
@@ -151,7 +154,8 @@ export function DashboardView() {
 
   const total = summary.executions.total || 1
   const pct = (n: number) => `${Math.round((n / total) * 100)}%`
-  const passRate = summary.executions.total > 0 ? Math.round((summary.executions.passed / summary.executions.total) * 100) : 0
+  const passRate =
+    summary.executions.total > 0 ? Math.round((summary.executions.passed / summary.executions.total) * 100) : 0
 
   return (
     <section style={{ display: 'grid', gap: '1.15rem' }}>
@@ -201,7 +205,16 @@ export function DashboardView() {
             {(dash.recent_activity ?? []).length === 0 ? (
               <p style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>{t.dashboard.noActivity}</p>
             ) : (
-              <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '0.4rem', fontSize: '0.85rem' }}>
+              <ul
+                style={{
+                  listStyle: 'none',
+                  margin: 0,
+                  padding: 0,
+                  display: 'grid',
+                  gap: '0.4rem',
+                  fontSize: '0.85rem',
+                }}
+              >
                 {(dash.recent_activity ?? []).map((a) => (
                   <li key={a.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
                     <span>
@@ -239,7 +252,12 @@ export function DashboardView() {
           <Sparkles size={14} />
           {tldrBusy ? t.dashboard.aiTldrBusy : t.dashboard.aiTldr}
         </button>
-        <select className="select" value={dataset} onChange={(e) => setDataset(e.target.value)} title={t.common.exportDataset}>
+        <select
+          className="select"
+          value={dataset}
+          onChange={(e) => setDataset(e.target.value)}
+          title={t.common.exportDataset}
+        >
           <option value="summary">summary</option>
           <option value="trends">trends</option>
           <option value="matrix">matrix</option>
@@ -310,17 +328,39 @@ export function DashboardView() {
           </span>
         </div>
         <div className="progress-bar" style={{ height: 14 }}>
-          <div style={{ width: pct(summary.executions.passed), background: '#16a34a' }} title={`${t.dashboard.passed}: ${summary.executions.passed}`} />
-          <div style={{ width: pct(summary.executions.failed), background: '#dc2626' }} title={`${t.dashboard.failed}: ${summary.executions.failed}`} />
-          <div style={{ width: pct(summary.executions.blocked), background: '#d97706' }} title={`${t.dashboard.blocked}: ${summary.executions.blocked}`} />
-          <div style={{ width: pct(summary.executions.skipped), background: '#64748b' }} title={`${t.dashboard.skipped}: ${summary.executions.skipped}`} />
+          <div
+            style={{ width: pct(summary.executions.passed), background: '#16a34a' }}
+            title={`${t.dashboard.passed}: ${summary.executions.passed}`}
+          />
+          <div
+            style={{ width: pct(summary.executions.failed), background: '#dc2626' }}
+            title={`${t.dashboard.failed}: ${summary.executions.failed}`}
+          />
+          <div
+            style={{ width: pct(summary.executions.blocked), background: '#d97706' }}
+            title={`${t.dashboard.blocked}: ${summary.executions.blocked}`}
+          />
+          <div
+            style={{ width: pct(summary.executions.skipped), background: '#64748b' }}
+            title={`${t.dashboard.skipped}: ${summary.executions.skipped}`}
+          />
         </div>
         <div style={{ display: 'flex', gap: '1.25rem', marginTop: '0.65rem', fontSize: '0.82rem', flexWrap: 'wrap' }}>
-          <span className="badge pill-passed">{t.dashboard.passed}: {summary.executions.passed}</span>
-          <span className="badge pill-failed">{t.dashboard.failed}: {summary.executions.failed}</span>
-          <span className="badge pill-blocked">{t.dashboard.blocked}: {summary.executions.blocked}</span>
-          <span className="badge pill-skipped">{t.dashboard.skipped}: {summary.executions.skipped}</span>
-          <span className="badge pill-idle">{t.dashboard.idle}: {summary.executions.idle}</span>
+          <span className="badge pill-passed">
+            {t.dashboard.passed}: {summary.executions.passed}
+          </span>
+          <span className="badge pill-failed">
+            {t.dashboard.failed}: {summary.executions.failed}
+          </span>
+          <span className="badge pill-blocked">
+            {t.dashboard.blocked}: {summary.executions.blocked}
+          </span>
+          <span className="badge pill-skipped">
+            {t.dashboard.skipped}: {summary.executions.skipped}
+          </span>
+          <span className="badge pill-idle">
+            {t.dashboard.idle}: {summary.executions.idle}
+          </span>
         </div>
       </div>
 
@@ -366,11 +406,21 @@ export function DashboardView() {
                       </div>
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      <span className="badge pill-passed" title={`${t.dashboard.passed}: ${r.passed}`}>{r.passed}</span>{' '}
-                      <span className="badge pill-failed" title={`${t.dashboard.failed}: ${r.failed}`}>{r.failed}</span>{' '}
-                      <span className="badge pill-blocked" title={`${t.dashboard.blocked}: ${r.blocked}`}>{r.blocked}</span>{' '}
-                      <span className="badge pill-skipped" title={`${t.dashboard.skipped}: ${r.skipped}`}>{r.skipped}</span>{' '}
-                      <span className="badge pill-idle" title={`${t.dashboard.idle}: ${r.idle}`}>{r.idle}</span>
+                      <span className="badge pill-passed" title={`${t.dashboard.passed}: ${r.passed}`}>
+                        {r.passed}
+                      </span>{' '}
+                      <span className="badge pill-failed" title={`${t.dashboard.failed}: ${r.failed}`}>
+                        {r.failed}
+                      </span>{' '}
+                      <span className="badge pill-blocked" title={`${t.dashboard.blocked}: ${r.blocked}`}>
+                        {r.blocked}
+                      </span>{' '}
+                      <span className="badge pill-skipped" title={`${t.dashboard.skipped}: ${r.skipped}`}>
+                        {r.skipped}
+                      </span>{' '}
+                      <span className="badge pill-idle" title={`${t.dashboard.idle}: ${r.idle}`}>
+                        {r.idle}
+                      </span>
                     </td>
                     <td>{new Date(r.started_at).toLocaleDateString()}</td>
                     <td>
@@ -461,7 +511,9 @@ export function DashboardView() {
                       <td>{w.passed}</td>
                       <td>{w.failed}</td>
                       <td>
-                        <span className={`badge ${w.pass_rate >= 0.8 ? 'pill-passed' : w.pass_rate >= 0.5 ? 'pill-blocked' : 'pill-failed'}`}>
+                        <span
+                          className={`badge ${w.pass_rate >= 0.8 ? 'pill-passed' : w.pass_rate >= 0.5 ? 'pill-blocked' : 'pill-failed'}`}
+                        >
                           {Math.round(w.pass_rate * 100)}%
                         </span>
                       </td>
@@ -525,7 +577,14 @@ export function DashboardView() {
               <div style={{ width: '100%', height: 210 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={autoPieData} dataKey="value" nameKey="name" innerRadius={48} outerRadius={78} paddingAngle={3}>
+                    <Pie
+                      data={autoPieData}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={48}
+                      outerRadius={78}
+                      paddingAngle={3}
+                    >
                       {autoPieData.map((_, idx) => (
                         <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
                       ))}
@@ -544,7 +603,15 @@ export function DashboardView() {
               </div>
               <div style={{ display: 'grid', gap: '0.65rem' }}>
                 <div>
-                  <div style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--muted)', marginBottom: '0.3rem', textTransform: 'uppercase' }}>
+                  <div
+                    style={{
+                      fontSize: '0.74rem',
+                      fontWeight: 600,
+                      color: 'var(--muted)',
+                      marginBottom: '0.3rem',
+                      textTransform: 'uppercase',
+                    }}
+                  >
                     {t.common.priority}
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
@@ -556,7 +623,15 @@ export function DashboardView() {
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.74rem', fontWeight: 600, color: 'var(--muted)', marginBottom: '0.3rem', textTransform: 'uppercase' }}>
+                  <div
+                    style={{
+                      fontSize: '0.74rem',
+                      fontWeight: 600,
+                      color: 'var(--muted)',
+                      marginBottom: '0.3rem',
+                      textTransform: 'uppercase',
+                    }}
+                  >
                     {t.dashboard.categories}
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
@@ -598,10 +673,14 @@ export function DashboardView() {
                   {health.slice(0, 10).map((h) => (
                     <tr key={h.test_case_id} className="clickable" onClick={() => navigate(`/cases/${h.test_case_id}`)}>
                       <td>
-                        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--muted)', marginRight: 6 }}>#{h.test_case_id}</span>
+                        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--muted)', marginRight: 6 }}>
+                          #{h.test_case_id}
+                        </span>
                         {h.summary}
                       </td>
-                      <td>{h.failed} / {h.total}</td>
+                      <td>
+                        {h.failed} / {h.total}
+                      </td>
                       <td>
                         <span className={`badge ${h.fail_rate > 0 ? 'pill-failed' : 'pill-passed'}`}>
                           {Math.round(h.fail_rate * 100)}%
@@ -633,9 +712,15 @@ export function DashboardView() {
                 </thead>
                 <tbody>
                   {matrix.slice(0, 12).map((m, i) => (
-                    <tr key={`${m.test_case_id}-${m.status}-${i}`} className="clickable" onClick={() => navigate(`/cases/${m.test_case_id}`)}>
+                    <tr
+                      key={`${m.test_case_id}-${m.status}-${i}`}
+                      className="clickable"
+                      onClick={() => navigate(`/cases/${m.test_case_id}`)}
+                    >
                       <td>
-                        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--muted)', marginRight: 6 }}>#{m.test_case_id}</span>
+                        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--muted)', marginRight: 6 }}>
+                          #{m.test_case_id}
+                        </span>
                         {m.summary}
                       </td>
                       <td>
@@ -657,18 +742,28 @@ export function DashboardView() {
           </div>
           <table className="table">
             <thead>
-              <tr><th>{t.dashboard.products}</th><th>{t.dashboard.sessions}</th><th>{t.dashboard.avgSus}</th><th>{t.dashboard.avgTaskTime}</th><th>{t.dashboard.avgErrors}</th></tr>
+              <tr>
+                <th>{t.dashboard.products}</th>
+                <th>{t.dashboard.sessions}</th>
+                <th>{t.dashboard.avgSus}</th>
+                <th>{t.dashboard.avgTaskTime}</th>
+                <th>{t.dashboard.avgErrors}</th>
+              </tr>
             </thead>
             <tbody>
-              {uxMetrics.filter((u) => u.sessions > 0).map((u) => (
-                <tr key={u.product_id}>
-                  <td>{u.product_name}</td>
-                  <td>{u.sessions}</td>
-                  <td><strong>{u.avg_sus.toFixed(1)}</strong></td>
-                  <td>{u.avg_task_time_sec.toFixed(0)}</td>
-                  <td>{u.avg_errors.toFixed(1)}</td>
-                </tr>
-              ))}
+              {uxMetrics
+                .filter((u) => u.sessions > 0)
+                .map((u) => (
+                  <tr key={u.product_id}>
+                    <td>{u.product_name}</td>
+                    <td>{u.sessions}</td>
+                    <td>
+                      <strong>{u.avg_sus.toFixed(1)}</strong>
+                    </td>
+                    <td>{u.avg_task_time_sec.toFixed(0)}</td>
+                    <td>{u.avg_errors.toFixed(1)}</td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>

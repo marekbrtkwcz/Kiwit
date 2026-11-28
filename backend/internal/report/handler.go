@@ -111,32 +111,32 @@ func renderHTML(rep MultiReport) string {
 	b.WriteString("<style>body{font-family:system-ui,sans-serif;margin:2rem;color:#111}table{border-collapse:collapse;width:100%;margin:1rem 0}th,td{border:1px solid #ccc;padding:6px 10px;text-align:left;font-size:14px}th{background:#f3f4f6}h1{font-size:22px}h2{font-size:17px;margin-top:1.6rem}.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px}.go{background:#dcfce7}.nogo{background:#fee2e2}.muted{color:#666}@media print{button{display:none}}</style>")
 	b.WriteString("</head><body>")
 	b.WriteString("<h1>Kiwit — Multi-Milestone Report</h1>")
-	b.WriteString(fmt.Sprintf("<p class=muted>Generated: %s</p>", html.EscapeString(rep.GeneratedAt)))
+	fmt.Fprintf(&b, "<p class=muted>Generated: %s</p>", html.EscapeString(rep.GeneratedAt))
 
 	t := rep.Totals
 	b.WriteString("<h2>Totals</h2><table><tr><th>Executions</th><th>Passed</th><th>Failed</th><th>Blocked</th><th>Skipped</th><th>Idle/Running</th><th>Open bugs</th></tr>")
-	b.WriteString(fmt.Sprintf("<tr><td>%d</td><td>%d (%s)</td><td>%d (%s)</td><td>%d</td><td>%d</td><td>%d/%d</td><td>%d</td></tr>",
-		t.Total, t.Passed, pct(t.Passed, t.Total), t.Failed, pct(t.Failed, t.Total), t.Blocked, t.Skipped, t.Idle, t.Running, t.OpenBugs))
+	fmt.Fprintf(&b, "<tr><td>%d</td><td>%d (%s)</td><td>%d (%s)</td><td>%d</td><td>%d</td><td>%d/%d</td><td>%d</td></tr>",
+		t.Total, t.Passed, pct(t.Passed, t.Total), t.Failed, pct(t.Failed, t.Total), t.Blocked, t.Skipped, t.Idle, t.Running, t.OpenBugs)
 	b.WriteString("</table>")
 
 	for _, m := range rep.Milestones {
 		b.WriteString("<h2>")
-		b.WriteString(html.EscapeString(fmt.Sprintf("#%d %s — %s %s (%s)", m.ID, m.Name, m.ProductName, m.Version, m.Status)))
+		fmt.Fprintf(&b, "#%d %s — %s %s (%s)", m.ID, html.EscapeString(m.Name), html.EscapeString(m.ProductName), html.EscapeString(m.Version), html.EscapeString(m.Status))
 		b.WriteString("</h2>")
 		if m.SignoffDecision != nil {
 			cls := "go"
 			if *m.SignoffDecision == "no-go" {
 				cls = "nogo"
 			}
-			b.WriteString(fmt.Sprintf("<p>Signoff: <span class='badge %s'>%s</span> %s</p>", cls, html.EscapeString(*m.SignoffDecision), html.EscapeString(deref(m.SignoffAt))))
+			fmt.Fprintf(&b, "<p>Signoff: <span class='badge %s'>%s</span> %s</p>", cls, html.EscapeString(*m.SignoffDecision), html.EscapeString(deref(m.SignoffAt)))
 		}
 		b.WriteString("<table><tr><th>Executions</th><th>Passed</th><th>Failed</th><th>Blocked</th><th>Skipped</th><th>Idle/Running</th><th>Open bugs</th><th>Runs</th></tr>")
 		runs := make([]string, len(m.Runs))
 		for i, r := range m.Runs {
 			runs[i] = fmt.Sprintf("#%d", r)
 		}
-		b.WriteString(fmt.Sprintf("<tr><td>%d</td><td>%d (%s)</td><td>%d (%s)</td><td>%d</td><td>%d</td><td>%d/%d</td><td>%d</td><td>%s</td></tr>",
-			m.Total, m.Passed, pct(m.Passed, m.Total), m.Failed, pct(m.Failed, m.Total), m.Blocked, m.Skipped, m.Idle, m.Running, m.OpenBugs, html.EscapeString(strings.Join(runs, ", "))))
+		fmt.Fprintf(&b, "<tr><td>%d</td><td>%d (%s)</td><td>%d (%s)</td><td>%d</td><td>%d</td><td>%d/%d</td><td>%d</td><td>%s</td></tr>",
+			m.Total, m.Passed, pct(m.Passed, m.Total), m.Failed, pct(m.Failed, m.Total), m.Blocked, m.Skipped, m.Idle, m.Running, m.OpenBugs, html.EscapeString(strings.Join(runs, ", ")))
 		b.WriteString("</table>")
 	}
 	b.WriteString("</body></html>")

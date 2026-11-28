@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext, useState } from 'react'
+import { createContext, type ReactNode, useContext, useState } from 'react'
 
 export type Lang = 'pl' | 'en'
 
@@ -167,7 +167,8 @@ export const dict = {
       saveInstance: 'Zapisz ustawienia',
       instanceSaved: 'Ustawienia instancji zapisane',
       webhooksTitle: 'Webhooki (podpisane HMAC)',
-      webhooksHint: 'Każdy webhook odbiera wybrane zdarzenia jako JSON z podpisem HMAC-SHA256 w nagłówku X-Kiwit-Signature.',
+      webhooksHint:
+        'Każdy webhook odbiera wybrane zdarzenia jako JSON z podpisem HMAC-SHA256 w nagłówku X-Kiwit-Signature.',
       webhookNamePlaceholder: 'Nazwa (np. CI Hook)',
       webhookSecretPlaceholder: 'Sekret HMAC (opcjonalnie)',
       webhookEvents: 'Zdarzenia',
@@ -280,9 +281,11 @@ export const dict = {
       bulkUpdatedToast: (n: number) => `Zaktualizowano ${n} scenariusz(-ów)`,
       importCases: 'Importuj',
       importFailed: 'Nie udało się zaimportować pliku',
-      importHint: 'Plik CSV z nagłówkiem (kolumny: summary, preconditions, format, priority, status, is_automated, script, arguments, steps, gherkin_body; kroki jako „akcja => wynik ;; akcja => wynik”) albo JSON — tablica obiektów jak w API. Docelowy produkt: aktualnie wybrany.',
+      importHint:
+        'Plik CSV z nagłówkiem (kolumny: summary, preconditions, format, priority, status, is_automated, script, arguments, steps, gherkin_body; kroki jako „akcja => wynik ;; akcja => wynik”) albo JSON — tablica obiektów jak w API. Docelowy produkt: aktualnie wybrany.',
       importToast: (n: number) => `Zaimportowano ${n} scenariusz(-ów)`,
-      importPartial: (ok: number, fail: number) => `Zaimportowano ${ok}, odrzucono ${fail} — popraw wiersze z listy i spróbuj ponownie`,
+      importPartial: (ok: number, fail: number) =>
+        `Zaimportowano ${ok}, odrzucono ${fail} — popraw wiersze z listy i spróbuj ponownie`,
       importRowError: (row: number, err: string) => `Wiersz ${row}: ${err}`,
       trash: 'Kosz',
       trashTitle: (n: number) => `Kosz (${n})`,
@@ -291,7 +294,8 @@ export const dict = {
       restoredToast: (id: number) => `Przywrócono #${id} z kosza`,
       purge: 'Usuń trwale',
       purgeConfirmTitle: 'Usuń trwale',
-      purgeConfirmMessage: (id: number, summary: string) => `Trwale usunąć #${id} „${summary}” z kosza? Tej operacji nie można cofnąć.`,
+      purgeConfirmMessage: (id: number, summary: string) =>
+        `Trwale usunąć #${id} „${summary}” z kosza? Tej operacji nie można cofnąć.`,
       purgedToast: (id: number) => `Trwale usunięto #${id}`,
       clonedToast: (id: number) => `Sklonowano #${id}`,
       deletedToast: (id: number) => `Usunięto #${id}`,
@@ -305,7 +309,8 @@ export const dict = {
       formatMarkdown: 'Markdown',
       formatChecklist: 'Checklista',
       checklistPlaceholder: 'Jedno sprawdzenie na linię',
-      gherkinPlaceholder: 'Funkcjonalność: Logowanie\n  Scenariusz: Poprawne dane logowania\n    Zakładając, że użytkownik jest na /login\n    Kiedy użytkownik wpisze poprawne dane logowania\n    Wtedy użytkownik zobaczy dashboard',
+      gherkinPlaceholder:
+        'Funkcjonalność: Logowanie\n  Scenariusz: Poprawne dane logowania\n    Zakładając, że użytkownik jest na /login\n    Kiedy użytkownik wpisze poprawne dane logowania\n    Wtedy użytkownik zobaczy dashboard',
       summaryChanged: 'zmieniono tytuł',
       priorityChanged: (from: string, to: string) => `priorytet: ${from} → ${to}`,
       statusChanged: (from: string, to: string) => `status: ${from} → ${to}`,
@@ -950,7 +955,8 @@ export const dict = {
       saveInstance: 'Save settings',
       instanceSaved: 'Instance settings saved',
       webhooksTitle: 'Webhooks (HMAC-signed)',
-      webhooksHint: 'Each webhook receives the selected events as JSON with an HMAC-SHA256 signature in the X-Kiwit-Signature header.',
+      webhooksHint:
+        'Each webhook receives the selected events as JSON with an HMAC-SHA256 signature in the X-Kiwit-Signature header.',
       webhookNamePlaceholder: 'Name (e.g. CI Hook)',
       webhookSecretPlaceholder: 'HMAC secret (optional)',
       webhookEvents: 'Events',
@@ -1063,9 +1069,11 @@ export const dict = {
       bulkUpdatedToast: (n: number) => `Updated ${n} test case(s)`,
       importCases: 'Import',
       importFailed: 'Import failed',
-      importHint: 'A CSV file with a header row (columns: summary, preconditions, format, priority, status, is_automated, script, arguments, steps, gherkin_body; steps as "action => result ;; action => result") or a JSON array of case objects as in the API. Target product: the currently selected one.',
+      importHint:
+        'A CSV file with a header row (columns: summary, preconditions, format, priority, status, is_automated, script, arguments, steps, gherkin_body; steps as "action => result ;; action => result") or a JSON array of case objects as in the API. Target product: the currently selected one.',
       importToast: (n: number) => `Imported ${n} test case(s)`,
-      importPartial: (ok: number, fail: number) => `Imported ${ok}, rejected ${fail} — fix the listed rows and try again`,
+      importPartial: (ok: number, fail: number) =>
+        `Imported ${ok}, rejected ${fail} — fix the listed rows and try again`,
       importRowError: (row: number, err: string) => `Row ${row}: ${err}`,
       trash: 'Trash',
       trashTitle: (n: number) => `Trash (${n})`,
@@ -1074,7 +1082,8 @@ export const dict = {
       restoredToast: (id: number) => `Restored #${id} from the trash`,
       purge: 'Delete permanently',
       purgeConfirmTitle: 'Delete permanently',
-      purgeConfirmMessage: (id: number, summary: string) => `Permanently delete #${id} "${summary}" from the trash? This cannot be undone.`,
+      purgeConfirmMessage: (id: number, summary: string) =>
+        `Permanently delete #${id} "${summary}" from the trash? This cannot be undone.`,
       purgedToast: (id: number) => `Permanently deleted #${id}`,
       clonedToast: (id: number) => `Cloned #${id}`,
       deletedToast: (id: number) => `Deleted #${id}`,
@@ -1088,12 +1097,14 @@ export const dict = {
       formatMarkdown: 'Markdown',
       formatChecklist: 'Checklist',
       checklistPlaceholder: 'One check per line',
-      gherkinPlaceholder: 'Feature: Login\n  Scenario: Valid credentials\n    Given user is on /login\n    When user submits valid credentials\n    Then user sees dashboard',
+      gherkinPlaceholder:
+        'Feature: Login\n  Scenario: Valid credentials\n    Given user is on /login\n    When user submits valid credentials\n    Then user sees dashboard',
       summaryChanged: 'summary changed',
       priorityChanged: (from: string, to: string) => `priority: ${from} → ${to}`,
       statusChanged: (from: string, to: string) => `status: ${from} → ${to}`,
       confirmDelete: 'Delete test case?',
-      confirmDeleteMessage: (id: number, summary: string) => `Test Case #${id} "${summary}" will be permanently deleted.`,
+      confirmDeleteMessage: (id: number, summary: string) =>
+        `Test Case #${id} "${summary}" will be permanently deleted.`,
     },
     testplans: {
       title: 'Test Plans',
@@ -1593,11 +1604,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     setLangState(next)
   }
 
-  return (
-    <I18nContext.Provider value={{ lang, setLang, t: dict[lang] as Dict }}>
-      {children}
-    </I18nContext.Provider>
-  )
+  return <I18nContext.Provider value={{ lang, setLang, t: dict[lang] as Dict }}>{children}</I18nContext.Provider>
 }
 
 export function useI18n() {

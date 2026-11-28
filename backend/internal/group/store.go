@@ -19,8 +19,8 @@ type Group struct {
 }
 
 type Store struct {
-	db  *sql.DB
-	pg  *pgxpool.Pool
+	db *sql.DB
+	pg *pgxpool.Pool
 }
 
 func NewStore(db *sql.DB, pg *pgxpool.Pool) *Store {

@@ -158,7 +158,7 @@ func pgWhere(where string, args []any) (string, []any) {
 	for i, p := range parts {
 		b.WriteString(p)
 		if i < len(parts)-1 {
-			b.WriteString(fmt.Sprintf("$%d", i+1))
+			fmt.Fprintf(&b, "$%d", i+1)
 		}
 	}
 	return b.String(), args

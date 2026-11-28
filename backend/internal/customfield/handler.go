@@ -31,12 +31,24 @@ type valueOutput struct {
 }
 
 var entityTypes = map[string]func(*auth.AccessGuard, context.Context, int64, bool) error{
-	"test_case":      func(g *auth.AccessGuard, c context.Context, id int64, w bool) error { return g.EnforceTestCase(c, id, w) },
-	"test_plan":      func(g *auth.AccessGuard, c context.Context, id int64, w bool) error { return g.EnforceTestPlan(c, id, w) },
-	"test_run":       func(g *auth.AccessGuard, c context.Context, id int64, w bool) error { return g.EnforceTestRun(c, id, w) },
-	"test_execution": func(g *auth.AccessGuard, c context.Context, id int64, w bool) error { return g.EnforceExecution(c, id, w) },
-	"requirement":    func(g *auth.AccessGuard, c context.Context, id int64, w bool) error { return g.EnforceRequirement(c, id, w) },
-	"milestone":      func(g *auth.AccessGuard, c context.Context, id int64, w bool) error { return g.EnforceMilestone(c, id, w) },
+	"test_case": func(g *auth.AccessGuard, c context.Context, id int64, w bool) error {
+		return g.EnforceTestCase(c, id, w)
+	},
+	"test_plan": func(g *auth.AccessGuard, c context.Context, id int64, w bool) error {
+		return g.EnforceTestPlan(c, id, w)
+	},
+	"test_run": func(g *auth.AccessGuard, c context.Context, id int64, w bool) error {
+		return g.EnforceTestRun(c, id, w)
+	},
+	"test_execution": func(g *auth.AccessGuard, c context.Context, id int64, w bool) error {
+		return g.EnforceExecution(c, id, w)
+	},
+	"requirement": func(g *auth.AccessGuard, c context.Context, id int64, w bool) error {
+		return g.EnforceRequirement(c, id, w)
+	},
+	"milestone": func(g *auth.AccessGuard, c context.Context, id int64, w bool) error {
+		return g.EnforceMilestone(c, id, w)
+	},
 }
 
 // RegisterRoutes mounts custom field definition and value APIs.

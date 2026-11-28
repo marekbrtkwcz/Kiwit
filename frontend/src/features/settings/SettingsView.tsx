@@ -1,21 +1,37 @@
+import {
+  AtSign,
+  Bell,
+  Boxes,
+  Bug,
+  CircleDot,
+  FileCode2,
+  Flag,
+  Layers,
+  Mail,
+  Plus,
+  Save,
+  ScrollText,
+  Send,
+  Sliders,
+  Webhook as WebhookIcon,
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { AtSign, Bell, Boxes, Bug, CircleDot, FileCode2, Flag, Layers, Mail, Plus, Save, ScrollText, Send, Sliders, Webhook as WebhookIcon } from 'lucide-react'
 import {
   api,
-  EmailSettingsItem,
-  EnvironmentItem,
-  ExecutionStatusItem,
+  type EmailSettingsItem,
+  type EnvironmentItem,
+  type ExecutionStatusItem,
   getUserRole,
-  IssueTrackerItem,
-  NotificationEventPreference,
-  PriorityItem,
-  TemplateItem,
-  WebhookItem,
+  type IssueTrackerItem,
+  type NotificationEventPreference,
+  type PriorityItem,
+  type TemplateItem,
+  type WebhookItem,
 } from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
-import { CustomFieldDefsSection } from './CustomFieldDefsSection'
 import { AIServersSection } from './AIServersSection'
+import { CustomFieldDefsSection } from './CustomFieldDefsSection'
 import { LogViewerSection } from './LogViewerSection'
 
 function parseProperties(raw: string): Record<string, string> {
@@ -160,7 +176,11 @@ export function SettingsView() {
       {error && <p className="alert-error">{error}</p>}
 
       <div className="tabs-bar" style={{ marginBottom: 0 }}>
-        <button type="button" className={`tab-btn ${tab === 'trackers' ? 'active' : ''}`} onClick={() => setTab('trackers')}>
+        <button
+          type="button"
+          className={`tab-btn ${tab === 'trackers' ? 'active' : ''}`}
+          onClick={() => setTab('trackers')}
+        >
           <Bug size={15} /> {t.settings.tabTrackers} ({trackers.length})
         </button>
         <button type="button" className={`tab-btn ${tab === 'env' ? 'active' : ''}`} onClick={() => setTab('env')}>
@@ -169,11 +189,19 @@ export function SettingsView() {
         <button type="button" className={`tab-btn ${tab === 'dicts' ? 'active' : ''}`} onClick={() => setTab('dicts')}>
           <Sliders size={15} /> {t.settings.tabDicts}
         </button>
-        <button type="button" className={`tab-btn ${tab === 'notify' ? 'active' : ''}`} onClick={() => setTab('notify')}>
+        <button
+          type="button"
+          className={`tab-btn ${tab === 'notify' ? 'active' : ''}`}
+          onClick={() => setTab('notify')}
+        >
           <Bell size={15} /> {t.settings.tabNotify}
         </button>
         {isAdmin && (
-          <button type="button" className={`tab-btn ${tab === 'webhooks' ? 'active' : ''}`} onClick={() => setTab('webhooks')}>
+          <button
+            type="button"
+            className={`tab-btn ${tab === 'webhooks' ? 'active' : ''}`}
+            onClick={() => setTab('webhooks')}
+          >
             <WebhookIcon size={15} /> {t.settings.tabWebhooks} ({webhooks.length})
           </button>
         )}
@@ -183,7 +211,11 @@ export function SettingsView() {
           </button>
         )}
         {isAdmin && (
-          <button type="button" className={`tab-btn ${tab === 'instance' ? 'active' : ''}`} onClick={() => setTab('instance')}>
+          <button
+            type="button"
+            className={`tab-btn ${tab === 'instance' ? 'active' : ''}`}
+            onClick={() => setTab('instance')}
+          >
             <AtSign size={15} /> {t.settings.tabInstance}
           </button>
         )}
@@ -191,44 +223,83 @@ export function SettingsView() {
 
       {isAdmin && tab === 'instance' && (
         <div className="card" style={{ display: 'grid', gap: '0.85rem' }}>
-          <h3 className="card-title"><AtSign size={15} /> {t.settings.instanceTitle}</h3>
+          <h3 className="card-title">
+            <AtSign size={15} /> {t.settings.instanceTitle}
+          </h3>
           <p style={{ color: 'var(--muted)', fontSize: '0.8rem', margin: 0 }}>{t.settings.instanceHint}</p>
           <div style={{ display: 'grid', gap: '0.6rem', maxWidth: 560 }}>
             <label style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
               <span>{t.settings.domainLabel}</span>
-              <input className="input" value={inst.domain ?? ''} onChange={(e) => setInstField('domain', e.target.value)} />
+              <input
+                className="input"
+                value={inst.domain ?? ''}
+                onChange={(e) => setInstField('domain', e.target.value)}
+              />
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
-              <input type="checkbox" checked={inst.allow_registration === 'true'} onChange={(e) => setInstField('allow_registration', String(e.target.checked))} />
+              <input
+                type="checkbox"
+                checked={inst.allow_registration === 'true'}
+                onChange={(e) => setInstField('allow_registration', String(e.target.checked))}
+              />
               <span>{t.settings.allowRegistrationLabel}</span>
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
-              <input type="checkbox" checked={inst.captcha_enabled === 'true'} onChange={(e) => setInstField('captcha_enabled', String(e.target.checked))} />
+              <input
+                type="checkbox"
+                checked={inst.captcha_enabled === 'true'}
+                onChange={(e) => setInstField('captcha_enabled', String(e.target.checked))}
+              />
               <span>{t.settings.captchaEnabledLabel}</span>
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
-              <input type="checkbox" checked={inst.anonymous_access === 'true'} onChange={(e) => setInstField('anonymous_access', String(e.target.checked))} />
+              <input
+                type="checkbox"
+                checked={inst.anonymous_access === 'true'}
+                onChange={(e) => setInstField('anonymous_access', String(e.target.checked))}
+              />
               <span>{t.settings.anonymousAccessLabel}</span>
             </label>
             <label style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
               <span>{t.settings.smtpHostLabel}</span>
-              <input className="input" value={inst.smtp_host ?? ''} onChange={(e) => setInstField('smtp_host', e.target.value)} />
+              <input
+                className="input"
+                value={inst.smtp_host ?? ''}
+                onChange={(e) => setInstField('smtp_host', e.target.value)}
+              />
             </label>
             <label style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
               <span>{t.settings.smtpPortLabel}</span>
-              <input className="input" value={inst.smtp_port ?? ''} onChange={(e) => setInstField('smtp_port', e.target.value)} />
+              <input
+                className="input"
+                value={inst.smtp_port ?? ''}
+                onChange={(e) => setInstField('smtp_port', e.target.value)}
+              />
             </label>
             <label style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
               <span>{t.settings.smtpUserLabel}</span>
-              <input className="input" value={inst.smtp_user ?? ''} onChange={(e) => setInstField('smtp_user', e.target.value)} />
+              <input
+                className="input"
+                value={inst.smtp_user ?? ''}
+                onChange={(e) => setInstField('smtp_user', e.target.value)}
+              />
             </label>
             <label style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
               <span>{t.settings.smtpPassLabel}</span>
-              <input className="input" type="password" value={inst.smtp_pass ?? ''} onChange={(e) => setInstField('smtp_pass', e.target.value)} />
+              <input
+                className="input"
+                type="password"
+                value={inst.smtp_pass ?? ''}
+                onChange={(e) => setInstField('smtp_pass', e.target.value)}
+              />
             </label>
             <label style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
               <span>{t.settings.smtpFromLabel}</span>
-              <input className="input" value={inst.smtp_from ?? ''} onChange={(e) => setInstField('smtp_from', e.target.value)} />
+              <input
+                className="input"
+                value={inst.smtp_from ?? ''}
+                onChange={(e) => setInstField('smtp_from', e.target.value)}
+              />
             </label>
             <div>
               <button type="button" className="btn btn-primary btn-sm" onClick={saveInstance}>
@@ -241,7 +312,9 @@ export function SettingsView() {
 
       {tab === 'trackers' && (
         <div className="card" style={{ display: 'grid', gap: '0.85rem' }}>
-          <h3 className="card-title"><Bug size={15} /> {t.settings.trackersTitle}</h3>
+          <h3 className="card-title">
+            <Bug size={15} /> {t.settings.trackersTitle}
+          </h3>
           <form
             onSubmit={(e) => {
               e.preventDefault()
@@ -260,17 +333,44 @@ export function SettingsView() {
             }}
             style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}
           >
-            <input className="input" placeholder={t.settings.trackerNamePlaceholder} value={trackerName} onChange={(e) => setTrackerName(e.target.value)} required />
-            <select className="select" value={trackerProvider} onChange={(e) => setTrackerProvider(e.target.value as 'github' | 'gitlab' | 'jira' | 'bugzilla' | 'azure')}>
+            <input
+              className="input"
+              placeholder={t.settings.trackerNamePlaceholder}
+              value={trackerName}
+              onChange={(e) => setTrackerName(e.target.value)}
+              required
+            />
+            <select
+              className="select"
+              value={trackerProvider}
+              onChange={(e) =>
+                setTrackerProvider(e.target.value as 'github' | 'gitlab' | 'jira' | 'bugzilla' | 'azure')
+              }
+            >
               <option value="github">GitHub</option>
               <option value="gitlab">GitLab</option>
               <option value="jira">Jira</option>
               <option value="bugzilla">Bugzilla</option>
               <option value="azure">Azure Boards</option>
             </select>
-            <input className="input" placeholder="https://api.github.com/repos/org/repo" value={trackerURL} onChange={(e) => setTrackerURL(e.target.value)} required style={{ flex: 1, minWidth: 220 }} />
-            <input className="input" placeholder={t.settings.trackerUserPlaceholder} value={trackerUsername} onChange={(e) => setTrackerUsername(e.target.value)} style={{ minWidth: 200 }} />
-            <button type="submit" className="btn btn-primary btn-sm"><Plus size={13} /> {t.settings.addTracker}</button>
+            <input
+              className="input"
+              placeholder="https://api.github.com/repos/org/repo"
+              value={trackerURL}
+              onChange={(e) => setTrackerURL(e.target.value)}
+              required
+              style={{ flex: 1, minWidth: 220 }}
+            />
+            <input
+              className="input"
+              placeholder={t.settings.trackerUserPlaceholder}
+              value={trackerUsername}
+              onChange={(e) => setTrackerUsername(e.target.value)}
+              style={{ minWidth: 200 }}
+            />
+            <button type="submit" className="btn btn-primary btn-sm">
+              <Plus size={13} /> {t.settings.addTracker}
+            </button>
           </form>
           {trackers.length > 0 && (
             <div className="table-wrap">
@@ -288,7 +388,9 @@ export function SettingsView() {
                     <tr key={tr.id}>
                       <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--muted)' }}>#{tr.id}</td>
                       <td>{tr.name}</td>
-                      <td><span className="badge">{tr.provider}</span></td>
+                      <td>
+                        <span className="badge">{tr.provider}</span>
+                      </td>
                       <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>{tr.base_url}</td>
                     </tr>
                   ))}
@@ -302,33 +404,68 @@ export function SettingsView() {
       {tab === 'env' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1rem' }}>
           <div className="card" style={{ display: 'grid', gap: '0.7rem', alignContent: 'start' }}>
-            <h3 className="card-title"><Boxes size={15} /> {t.settings.environmentsTitle}</h3>
+            <h3 className="card-title">
+              <Boxes size={15} /> {t.settings.environmentsTitle}
+            </h3>
             <form
               onSubmit={(e) => {
                 e.preventDefault()
                 if (!envName.trim()) return
                 void runAction(async () => {
-                  await api.createEnvironment({ name: envName.trim(), description: envDesc.trim(), properties: parseProperties(envProps) })
+                  await api.createEnvironment({
+                    name: envName.trim(),
+                    description: envDesc.trim(),
+                    properties: parseProperties(envProps),
+                  })
                   setEnvName('')
                   setEnvDesc('')
                 }, `${t.settings.addEnvironment}: OK`)
               }}
               style={{ display: 'grid', gap: '0.45rem' }}
             >
-              <input className="input" placeholder={t.settings.envNamePlaceholder} value={envName} onChange={(e) => setEnvName(e.target.value)} required />
-              <input className="input" placeholder={t.settings.envDescPlaceholder} value={envDesc} onChange={(e) => setEnvDesc(e.target.value)} />
-              <textarea className="textarea" rows={3} placeholder={t.settings.envPropsPlaceholder} value={envProps} onChange={(e) => setEnvProps(e.target.value)} />
+              <input
+                className="input"
+                placeholder={t.settings.envNamePlaceholder}
+                value={envName}
+                onChange={(e) => setEnvName(e.target.value)}
+                required
+              />
+              <input
+                className="input"
+                placeholder={t.settings.envDescPlaceholder}
+                value={envDesc}
+                onChange={(e) => setEnvDesc(e.target.value)}
+              />
+              <textarea
+                className="textarea"
+                rows={3}
+                placeholder={t.settings.envPropsPlaceholder}
+                value={envProps}
+                onChange={(e) => setEnvProps(e.target.value)}
+              />
               <div>
-                <button type="submit" className="btn btn-primary btn-sm"><Plus size={13} /> {t.settings.addEnvironment}</button>
+                <button type="submit" className="btn btn-primary btn-sm">
+                  <Plus size={13} /> {t.settings.addEnvironment}
+                </button>
               </div>
             </form>
             {environments.map((env) => (
-              <div key={env.id} style={{ padding: '0.6rem', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-subtle)' }}>
+              <div
+                key={env.id}
+                style={{
+                  padding: '0.6rem',
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  background: 'var(--bg-subtle)',
+                }}
+              >
                 <strong>{env.name}</strong>
                 {env.description && <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{env.description}</div>}
                 <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.35rem' }}>
                   {Object.entries(env.properties).map(([k, v]) => (
-                    <span key={k} className="badge">{k}={v}</span>
+                    <span key={k} className="badge">
+                      {k}={v}
+                    </span>
                   ))}
                 </div>
               </div>
@@ -336,7 +473,9 @@ export function SettingsView() {
           </div>
 
           <div className="card" style={{ display: 'grid', gap: '0.7rem', alignContent: 'start' }}>
-            <h3 className="card-title"><FileCode2 size={15} /> {t.settings.templatesTitle}</h3>
+            <h3 className="card-title">
+              <FileCode2 size={15} /> {t.settings.templatesTitle}
+            </h3>
             <form
               onSubmit={(e) => {
                 e.preventDefault()
@@ -349,16 +488,43 @@ export function SettingsView() {
               }}
               style={{ display: 'grid', gap: '0.45rem' }}
             >
-              <input className="input" placeholder={t.settings.tplNamePlaceholder} value={tplName} onChange={(e) => setTplName(e.target.value)} required />
-              <textarea className="textarea" rows={4} placeholder={t.settings.tplBodyPlaceholder} value={tplBody} onChange={(e) => setTplBody(e.target.value)} required />
+              <input
+                className="input"
+                placeholder={t.settings.tplNamePlaceholder}
+                value={tplName}
+                onChange={(e) => setTplName(e.target.value)}
+                required
+              />
+              <textarea
+                className="textarea"
+                rows={4}
+                placeholder={t.settings.tplBodyPlaceholder}
+                value={tplBody}
+                onChange={(e) => setTplBody(e.target.value)}
+                required
+              />
               <div>
-                <button type="submit" className="btn btn-primary btn-sm"><Plus size={13} /> {t.settings.addTemplate}</button>
+                <button type="submit" className="btn btn-primary btn-sm">
+                  <Plus size={13} /> {t.settings.addTemplate}
+                </button>
               </div>
             </form>
             {templates.map((tpl) => (
-              <div key={tpl.id} style={{ padding: '0.6rem', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-subtle)' }}>
+              <div
+                key={tpl.id}
+                style={{
+                  padding: '0.6rem',
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  background: 'var(--bg-subtle)',
+                }}
+              >
                 <strong>{tpl.name}</strong>
-                <pre style={{ margin: '0.3rem 0 0', fontSize: '0.78rem', whiteSpace: 'pre-wrap', color: 'var(--muted)' }}>{tpl.body}</pre>
+                <pre
+                  style={{ margin: '0.3rem 0 0', fontSize: '0.78rem', whiteSpace: 'pre-wrap', color: 'var(--muted)' }}
+                >
+                  {tpl.body}
+                </pre>
               </div>
             ))}
           </div>
@@ -368,7 +534,9 @@ export function SettingsView() {
       {tab === 'dicts' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1rem' }}>
           <div className="card" style={{ display: 'grid', gap: '0.65rem', alignContent: 'start' }}>
-            <h3 className="card-title"><Flag size={15} /> {t.settings.prioritiesTitle}</h3>
+            <h3 className="card-title">
+              <Flag size={15} /> {t.settings.prioritiesTitle}
+            </h3>
             <form
               onSubmit={(e) => {
                 e.preventDefault()
@@ -380,37 +548,79 @@ export function SettingsView() {
               }}
               style={{ display: 'flex', gap: '0.4rem' }}
             >
-              <input className="input" placeholder={t.settings.priorityPlaceholder} value={newPriority} onChange={(e) => setNewPriority(e.target.value)} style={{ flex: 1 }} required />
-              <button type="submit" className="btn btn-primary btn-sm">{t.common.add}</button>
+              <input
+                className="input"
+                placeholder={t.settings.priorityPlaceholder}
+                value={newPriority}
+                onChange={(e) => setNewPriority(e.target.value)}
+                style={{ flex: 1 }}
+                required
+              />
+              <button type="submit" className="btn btn-primary btn-sm">
+                {t.common.add}
+              </button>
             </form>
             <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
               {priorities.map((p) => (
-                <span key={p.id} className="badge">{p.value}</span>
+                <span key={p.id} className="badge">
+                  {p.value}
+                </span>
               ))}
             </div>
           </div>
 
           <div className="card" style={{ display: 'grid', gap: '0.65rem', alignContent: 'start' }}>
-            <h3 className="card-title"><CircleDot size={15} /> {t.settings.statusesTitle}</h3>
+            <h3 className="card-title">
+              <CircleDot size={15} /> {t.settings.statusesTitle}
+            </h3>
             <form
               onSubmit={(e) => {
                 e.preventDefault()
                 if (!newStatusName.trim()) return
                 void runAction(async () => {
-                  await api.createExecutionStatus({ name: newStatusName.trim(), color: newStatusColor, weight: newStatusWeight })
+                  await api.createExecutionStatus({
+                    name: newStatusName.trim(),
+                    color: newStatusColor,
+                    weight: newStatusWeight,
+                  })
                   setNewStatusName('')
                 }, `${t.settings.statusesTitle}: OK`)
               }}
               style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}
             >
-              <input className="input" placeholder={t.settings.statusPlaceholder} value={newStatusName} onChange={(e) => setNewStatusName(e.target.value)} style={{ flex: 1 }} required />
-              <input type="color" value={newStatusColor} onChange={(e) => setNewStatusColor(e.target.value)} style={{ width: 38, height: 34, padding: 2, border: '1px solid var(--border-strong)', borderRadius: 6 }} />
-              <input className="input" type="number" value={newStatusWeight} onChange={(e) => setNewStatusWeight(Number(e.target.value))} style={{ width: 72 }} placeholder={t.settings.weightPlaceholder} />
-              <button type="submit" className="btn btn-primary btn-sm">{t.common.add}</button>
+              <input
+                className="input"
+                placeholder={t.settings.statusPlaceholder}
+                value={newStatusName}
+                onChange={(e) => setNewStatusName(e.target.value)}
+                style={{ flex: 1 }}
+                required
+              />
+              <input
+                type="color"
+                value={newStatusColor}
+                onChange={(e) => setNewStatusColor(e.target.value)}
+                style={{ width: 38, height: 34, padding: 2, border: '1px solid var(--border-strong)', borderRadius: 6 }}
+              />
+              <input
+                className="input"
+                type="number"
+                value={newStatusWeight}
+                onChange={(e) => setNewStatusWeight(Number(e.target.value))}
+                style={{ width: 72 }}
+                placeholder={t.settings.weightPlaceholder}
+              />
+              <button type="submit" className="btn btn-primary btn-sm">
+                {t.common.add}
+              </button>
             </form>
             <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
               {statuses.map((s) => (
-                <span key={s.id} className="badge" style={{ background: s.color, color: '#fff', borderColor: 'transparent' }}>
+                <span
+                  key={s.id}
+                  className="badge"
+                  style={{ background: s.color, color: '#fff', borderColor: 'transparent' }}
+                >
                   {s.name} ({s.weight})
                 </span>
               ))}
@@ -424,7 +634,10 @@ export function SettingsView() {
           <form
             onSubmit={(e) => {
               e.preventDefault()
-              const cc = emailCC.split(',').map((s) => s.trim()).filter(Boolean)
+              const cc = emailCC
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean)
               void runAction(async () => {
                 await api.upsertEmailSettings({
                   entity_type: emailEntityType,
@@ -437,13 +650,26 @@ export function SettingsView() {
             className="card"
             style={{ display: 'grid', gap: '0.6rem', alignContent: 'start' }}
           >
-            <h3 className="card-title"><AtSign size={15} /> {t.settings.ccListTitle}</h3>
+            <h3 className="card-title">
+              <AtSign size={15} /> {t.settings.ccListTitle}
+            </h3>
             <div style={{ display: 'flex', gap: '0.4rem' }}>
-              <select className="select" value={emailEntityType} onChange={(e) => setEmailEntityType(e.target.value as 'test_case' | 'test_plan')}>
+              <select
+                className="select"
+                value={emailEntityType}
+                onChange={(e) => setEmailEntityType(e.target.value as 'test_case' | 'test_plan')}
+              >
                 <option value="test_case">test_case</option>
                 <option value="test_plan">test_plan</option>
               </select>
-              <input className="input" type="number" min={1} value={emailEntityId} onChange={(e) => setEmailEntityId(Number(e.target.value))} style={{ width: 90 }} />
+              <input
+                className="input"
+                type="number"
+                min={1}
+                value={emailEntityId}
+                onChange={(e) => setEmailEntityId(Number(e.target.value))}
+                style={{ width: 90 }}
+              />
               <button
                 type="button"
                 className="btn btn-sm"
@@ -465,9 +691,16 @@ export function SettingsView() {
               <input type="checkbox" checked={emailNotify} onChange={(e) => setEmailNotify(e.target.checked)} />
               {t.settings.notifyOnUpdate}
             </label>
-            <input className="input" placeholder="qa@example.com, lead@example.com" value={emailCC} onChange={(e) => setEmailCC(e.target.value)} />
+            <input
+              className="input"
+              placeholder="qa@example.com, lead@example.com"
+              value={emailCC}
+              onChange={(e) => setEmailCC(e.target.value)}
+            />
             <div>
-              <button type="submit" className="btn btn-primary btn-sm"><Save size={13} /> {t.settings.saveEmailSettings}</button>
+              <button type="submit" className="btn btn-primary btn-sm">
+                <Save size={13} /> {t.settings.saveEmailSettings}
+              </button>
             </div>
           </form>
 
@@ -481,17 +714,24 @@ export function SettingsView() {
             className="card"
             style={{ display: 'grid', gap: '0.6rem', alignContent: 'start' }}
           >
-            <h3 className="card-title"><Send size={15} /> {t.settings.webhookTitle}</h3>
+            <h3 className="card-title">
+              <Send size={15} /> {t.settings.webhookTitle}
+            </h3>
             <input className="input" value={webhookMsg} onChange={(e) => setWebhookMsg(e.target.value)} required />
             <div>
-              <button type="submit" className="btn btn-sm"><Send size={13} /> {t.settings.sendWebhook}</button>
+              <button type="submit" className="btn btn-sm">
+                <Send size={13} /> {t.settings.sendWebhook}
+              </button>
             </div>
           </form>
 
           <form
             onSubmit={(e) => {
               e.preventDefault()
-              const recipients = testEmailTo.split(',').map((s) => s.trim()).filter(Boolean)
+              const recipients = testEmailTo
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean)
               if (recipients.length === 0) return
               void runAction(async () => {
                 await api.sendTestEmail({ to: recipients, subject: testEmailSubject, body: testEmailBody })
@@ -500,12 +740,34 @@ export function SettingsView() {
             className="card"
             style={{ display: 'grid', gap: '0.6rem', alignContent: 'start' }}
           >
-            <h3 className="card-title"><Mail size={15} /> {t.settings.smtpTitle}</h3>
-            <input className="input" placeholder={t.settings.smtpRecipientsPlaceholder} value={testEmailTo} onChange={(e) => setTestEmailTo(e.target.value)} required />
-            <input className="input" placeholder={t.settings.smtpSubjectPlaceholder} value={testEmailSubject} onChange={(e) => setTestEmailSubject(e.target.value)} required />
-            <input className="input" placeholder={t.settings.smtpBodyPlaceholder} value={testEmailBody} onChange={(e) => setTestEmailBody(e.target.value)} required />
+            <h3 className="card-title">
+              <Mail size={15} /> {t.settings.smtpTitle}
+            </h3>
+            <input
+              className="input"
+              placeholder={t.settings.smtpRecipientsPlaceholder}
+              value={testEmailTo}
+              onChange={(e) => setTestEmailTo(e.target.value)}
+              required
+            />
+            <input
+              className="input"
+              placeholder={t.settings.smtpSubjectPlaceholder}
+              value={testEmailSubject}
+              onChange={(e) => setTestEmailSubject(e.target.value)}
+              required
+            />
+            <input
+              className="input"
+              placeholder={t.settings.smtpBodyPlaceholder}
+              value={testEmailBody}
+              onChange={(e) => setTestEmailBody(e.target.value)}
+              required
+            />
             <div>
-              <button type="submit" className="btn btn-sm"><Send size={13} /> {t.settings.sendEmail}</button>
+              <button type="submit" className="btn btn-sm">
+                <Send size={13} /> {t.settings.sendEmail}
+              </button>
             </div>
           </form>
 
@@ -519,7 +781,9 @@ export function SettingsView() {
             className="card"
             style={{ display: 'grid', gap: '0.6rem', alignContent: 'start' }}
           >
-            <h3 className="card-title"><Bell size={15} /> {t.notifications.eventsTitle}</h3>
+            <h3 className="card-title">
+              <Bell size={15} /> {t.notifications.eventsTitle}
+            </h3>
             <p style={{ color: 'var(--muted)', fontSize: '0.8rem', margin: 0 }}>{t.notifications.eventsHint}</p>
             <div className="table-wrap">
               <table className="data-table">
@@ -556,7 +820,9 @@ export function SettingsView() {
               </table>
             </div>
             <div>
-              <button type="submit" className="btn btn-primary btn-sm"><Save size={13} /> {t.notifications.savePrefs}</button>
+              <button type="submit" className="btn btn-primary btn-sm">
+                <Save size={13} /> {t.notifications.savePrefs}
+              </button>
             </div>
           </form>
         </div>
@@ -566,7 +832,9 @@ export function SettingsView() {
 
       {isAdmin && tab === 'webhooks' && (
         <div className="card" style={{ display: 'grid', gap: '0.85rem' }}>
-          <h3 className="card-title"><WebhookIcon size={15} /> {t.settings.webhooksTitle}</h3>
+          <h3 className="card-title">
+            <WebhookIcon size={15} /> {t.settings.webhooksTitle}
+          </h3>
           <p style={{ color: 'var(--muted)', fontSize: '0.8rem', margin: 0 }}>{t.settings.webhooksHint}</p>
 
           <form
@@ -590,16 +858,41 @@ export function SettingsView() {
             }}
             style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}
           >
-            <input className="input" placeholder={t.settings.webhookNamePlaceholder} value={hookName} onChange={(e) => setHookName(e.target.value)} required style={{ minWidth: 140 }} />
-            <input className="input" placeholder="https://hooks.example.com/..." value={hookURL} onChange={(e) => setHookURL(e.target.value)} required style={{ flex: 1, minWidth: 240 }} />
-            <input className="input" placeholder={t.settings.webhookSecretPlaceholder} value={hookSecret} onChange={(e) => setHookSecret(e.target.value)} style={{ minWidth: 140 }} />
+            <input
+              className="input"
+              placeholder={t.settings.webhookNamePlaceholder}
+              value={hookName}
+              onChange={(e) => setHookName(e.target.value)}
+              required
+              style={{ minWidth: 140 }}
+            />
+            <input
+              className="input"
+              placeholder="https://hooks.example.com/..."
+              value={hookURL}
+              onChange={(e) => setHookURL(e.target.value)}
+              required
+              style={{ flex: 1, minWidth: 240 }}
+            />
+            <input
+              className="input"
+              placeholder={t.settings.webhookSecretPlaceholder}
+              value={hookSecret}
+              onChange={(e) => setHookSecret(e.target.value)}
+              style={{ minWidth: 140 }}
+            />
             <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
               {Object.keys(eventLabels).map((ev) => (
-                <label key={ev} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem' }}>
+                <label
+                  key={ev}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem' }}
+                >
                   <input
                     type="checkbox"
                     checked={hookEvents.includes(ev)}
-                    onChange={(e) => setHookEvents((prev) => (e.target.checked ? [...prev, ev] : prev.filter((x) => x !== ev)))}
+                    onChange={(e) =>
+                      setHookEvents((prev) => (e.target.checked ? [...prev, ev] : prev.filter((x) => x !== ev)))
+                    }
                   />
                   {eventLabels[ev]}
                 </label>
@@ -609,7 +902,9 @@ export function SettingsView() {
                 {t.settings.webhookActive}
               </label>
             </div>
-            <button type="submit" className="btn btn-primary btn-sm"><Plus size={13} /> {t.settings.addWebhook}</button>
+            <button type="submit" className="btn btn-primary btn-sm">
+              <Plus size={13} /> {t.settings.addWebhook}
+            </button>
           </form>
 
           {webhooks.length > 0 && (
@@ -634,7 +929,9 @@ export function SettingsView() {
                       <td>
                         <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
                           {h.events.map((ev) => (
-                            <span key={ev} className="badge">{eventLabels[ev] ?? ev}</span>
+                            <span key={ev} className="badge">
+                              {eventLabels[ev] ?? ev}
+                            </span>
                           ))}
                         </div>
                       </td>
@@ -681,8 +978,8 @@ export function SettingsView() {
           )}
         </div>
       )}
-          <CustomFieldDefsSection />
-          <AIServersSection />
+      <CustomFieldDefsSection />
+      <AIServersSection />
     </section>
   )
 }

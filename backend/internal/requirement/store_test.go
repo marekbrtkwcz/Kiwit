@@ -55,12 +55,12 @@ func TestRequirementCRUD(t *testing.T) {
 		t.Fatalf("List q=login: total=%d len=%d err=%v", total, len(reqs), err)
 	}
 	// Filter by status
-	reqs, total, err = s.List(ctx, filter{status: "draft"}, 10, 0)
-	if err != nil || total != 0 || len(reqs) != 0 {
+	_, total, err = s.List(ctx, filter{status: "draft"}, 10, 0)
+	if err != nil || total != 0 {
 		t.Fatalf("List status=draft after update: total=%d err=%v", total, err)
 	}
 	reqs, total, err = s.List(ctx, filter{status: "approved"}, 10, 0)
-	if err != nil || total != 1 {
+	if err != nil || total != 1 || len(reqs) != 1 {
 		t.Fatalf("List status=approved: total=%d err=%v", total, err)
 	}
 

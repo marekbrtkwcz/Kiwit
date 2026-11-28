@@ -116,7 +116,6 @@ func RegisterExportRoutes(r chi.Router, repo Repository, guard *auth.AccessGuard
 	})
 }
 
-
 func caseTable(items []TestCase) export.Table {
 	t := export.Table{Columns: []string{
 		"id", "product_id", "category_id", "summary", "format", "priority",

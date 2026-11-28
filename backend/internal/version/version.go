@@ -15,11 +15,11 @@ var VERSION = "0.2.0"
 // Info describes the running build. Commit and build time are read from
 // Go build info (vcs stamping) when available.
 type Info struct {
-	Version    string `json:"version"`
-	Commit     string `json:"commit,omitempty"`
-	Dirty      bool   `json:"dirty,omitempty"`
-	BuildTime  string `json:"build_time,omitempty"`
-	GoVersion  string `json:"go_version,omitempty"`
+	Version   string `json:"version"`
+	Commit    string `json:"commit,omitempty"`
+	Dirty     bool   `json:"dirty,omitempty"`
+	BuildTime string `json:"build_time,omitempty"`
+	GoVersion string `json:"go_version,omitempty"`
 }
 
 // Get returns the version info of the running binary.

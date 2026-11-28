@@ -11,15 +11,15 @@ import (
 )
 
 type Entry struct {
-	ID         int64           `json:"id"`
-	EntityType string          `json:"entity_type"`
-	EntityID   int64           `json:"entity_id"`
-	Action     string          `json:"action"`
-	ActorID    *int64          `json:"actor_id,omitempty"`
-	ActorName  string          `json:"actor_name"`
-	OldValues  map[string]any  `json:"old_values"`
-	NewValues  map[string]any  `json:"new_values"`
-	CreatedAt  time.Time       `json:"created_at"`
+	ID         int64          `json:"id"`
+	EntityType string         `json:"entity_type"`
+	EntityID   int64          `json:"entity_id"`
+	Action     string         `json:"action"`
+	ActorID    *int64         `json:"actor_id,omitempty"`
+	ActorName  string         `json:"actor_name"`
+	OldValues  map[string]any `json:"old_values"`
+	NewValues  map[string]any `json:"new_values"`
+	CreatedAt  time.Time      `json:"created_at"`
 }
 
 type Store struct {

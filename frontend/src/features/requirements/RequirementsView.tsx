@@ -1,5 +1,3 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
   Bot,
   ChevronDown,
@@ -13,15 +11,11 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import {
-  api,
-  CoverageEntry,
-  Product,
-  Requirement,
-  TestCase,
-} from '../../api/client'
-import { ConfirmDialog, EmptyState, LoadingSkeleton } from '../../components/UiPrimitives'
+import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { api, type CoverageEntry, type Product, type Requirement, type TestCase } from '../../api/client'
 import { ExportButton } from '../../components/ExportButton'
+import { ConfirmDialog, EmptyState, LoadingSkeleton } from '../../components/UiPrimitives'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 
@@ -211,19 +205,38 @@ export function RequirementsView() {
 
       <div className="filters" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
         <div style={{ position: 'relative' }}>
-          <Search size={14} style={{ position: 'absolute', left: '0.5rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
-          <input className="input" placeholder={t.requirements.searchPlaceholder} value={q} onChange={(e) => setQ(e.target.value)} style={{ paddingLeft: '1.7rem' }} />
+          <Search
+            size={14}
+            style={{
+              position: 'absolute',
+              left: '0.5rem',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: 'var(--muted)',
+            }}
+          />
+          <input
+            className="input"
+            placeholder={t.requirements.searchPlaceholder}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            style={{ paddingLeft: '1.7rem' }}
+          />
         </div>
         <select className="select" value={productId} onChange={(e) => setProductId(Number(e.target.value))}>
           <option value={0}>{t.shell.allProducts}</option>
           {products.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
           ))}
         </select>
         <select className="select" value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">{t.requirements.allStatuses}</option>
           {STATUSES.map((s) => (
-            <option key={s} value={s}>{s}</option>
+            <option key={s} value={s}>
+              {s}
+            </option>
           ))}
         </select>
         <ExportButton
@@ -261,14 +274,27 @@ export function RequirementsView() {
             {items.map((r) => (
               <>
                 <tr key={r.id}>
-                  <td><code>{r.key}</code></td>
+                  <td>
+                    <code>{r.key}</code>
+                  </td>
                   <td>{r.name}</td>
                   <td>{r.version}</td>
-                  <td><span className={`badge badge-${r.status === 'approved' ? 'passed' : r.status === 'obsolete' ? 'failed' : 'idle'}`}>{r.status}</span></td>
+                  <td>
+                    <span
+                      className={`badge badge-${r.status === 'approved' ? 'passed' : r.status === 'obsolete' ? 'failed' : 'idle'}`}
+                    >
+                      {r.status}
+                    </span>
+                  </td>
                   <td>{r.priority}</td>
                   <td>{r.category || '—'}</td>
                   <td style={{ display: 'flex', gap: '0.25rem' }}>
-                    <button type="button" className="btn btn-sm" title={t.requirements.coverage} onClick={() => toggleExpand(r.id)}>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      title={t.requirements.coverage}
+                      onClick={() => toggleExpand(r.id)}
+                    >
                       {expandedId === r.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                     </button>
                     <button
@@ -322,10 +348,20 @@ export function RequirementsView() {
                     >
                       <Crosshair size={14} />
                     </button>
-                    <button type="button" className="btn btn-sm" title={t.requirements.editAria} onClick={() => openEdit(r)}>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      title={t.requirements.editAria}
+                      onClick={() => openEdit(r)}
+                    >
                       <Pencil size={14} />
                     </button>
-                    <button type="button" className="btn btn-sm btn-danger" title={t.common.delete} onClick={() => setConfirmDelete(r)}>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-danger"
+                      title={t.common.delete}
+                      onClick={() => setConfirmDelete(r)}
+                    >
                       <Trash2 size={14} />
                     </button>
                   </td>
@@ -334,32 +370,69 @@ export function RequirementsView() {
                   <tr key={`${r.id}-cov`}>
                     <td colSpan={7}>
                       <div style={{ padding: '0.5rem 0' }}>
-                        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+                        <div
+                          style={{
+                            display: 'flex',
+                            gap: '0.4rem',
+                            alignItems: 'center',
+                            marginBottom: '0.5rem',
+                            flexWrap: 'wrap',
+                          }}
+                        >
                           <Link2 size={14} />
                           <strong>{t.requirements.coverage}</strong>
-                          <select className="select" value={linkCaseId} onChange={(e) => setLinkCaseId(Number(e.target.value))} style={{ padding: '0.2rem 0.45rem', fontSize: '0.8rem' }}>
+                          <select
+                            className="select"
+                            value={linkCaseId}
+                            onChange={(e) => setLinkCaseId(Number(e.target.value))}
+                            style={{ padding: '0.2rem 0.45rem', fontSize: '0.8rem' }}
+                          >
                             {cases.map((c) => (
-                              <option key={c.id} value={c.id}>#{c.id} {c.summary}</option>
+                              <option key={c.id} value={c.id}>
+                                #{c.id} {c.summary}
+                              </option>
                             ))}
                           </select>
-                          <button type="button" className="btn btn-sm" onClick={doLink}>{t.requirements.link}</button>
+                          <button type="button" className="btn btn-sm" onClick={doLink}>
+                            {t.requirements.link}
+                          </button>
                         </div>
                         {coverage.length === 0 ? (
                           <div style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>{t.requirements.noCases}</div>
                         ) : (
                           <table className="table">
                             <thead>
-                              <tr><th>{t.requirements.testCase}</th><th>{t.requirements.caseStatus}</th><th>{t.requirements.latestExecution}</th><th>{t.requirements.run}</th><th></th></tr>
+                              <tr>
+                                <th>{t.requirements.testCase}</th>
+                                <th>{t.requirements.caseStatus}</th>
+                                <th>{t.requirements.latestExecution}</th>
+                                <th>{t.requirements.run}</th>
+                                <th></th>
+                              </tr>
                             </thead>
                             <tbody>
                               {coverage.map((c) => (
                                 <tr key={c.test_case_id}>
-                                  <td>#{c.test_case_id} {c.summary}</td>
+                                  <td>
+                                    #{c.test_case_id} {c.summary}
+                                  </td>
                                   <td>{c.status}</td>
-                                  <td>{c.latest_execution_status ? <span className={`badge badge-${c.latest_execution_status}`}>{c.latest_execution_status}</span> : '—'}</td>
+                                  <td>
+                                    {c.latest_execution_status ? (
+                                      <span className={`badge badge-${c.latest_execution_status}`}>
+                                        {c.latest_execution_status}
+                                      </span>
+                                    ) : (
+                                      '—'
+                                    )}
+                                  </td>
                                   <td>{c.latest_run_id ? `#${c.latest_run_id}` : '—'}</td>
                                   <td>
-                                    <button type="button" className="btn btn-sm btn-danger" onClick={() => doUnlink(c.test_case_id)}>
+                                    <button
+                                      type="button"
+                                      className="btn btn-sm btn-danger"
+                                      onClick={() => doUnlink(c.test_case_id)}
+                                    >
                                       <X size={14} />
                                     </button>
                                   </td>
@@ -377,39 +450,98 @@ export function RequirementsView() {
           </tbody>
         </table>
       )}
-      <div style={{ color: 'var(--muted)', fontSize: '0.8rem', marginTop: '0.5rem' }}>{t.requirements.countLabel(total)}</div>
+      <div style={{ color: 'var(--muted)', fontSize: '0.8rem', marginTop: '0.5rem' }}>
+        {t.requirements.countLabel(total)}
+      </div>
 
       {showForm && (
         <div className="modal-backdrop" onClick={() => setShowForm(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t.requirements.formAria}>
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t.requirements.formAria}
+          >
             <h2>{editing ? t.requirements.editRequirement : t.requirements.newRequirement}</h2>
             <div style={{ display: 'grid', gap: '0.5rem' }}>
-              <select className="select" value={form.product_id} onChange={(e) => setForm({ ...form, product_id: Number(e.target.value) })}>
+              <select
+                className="select"
+                value={form.product_id}
+                onChange={(e) => setForm({ ...form, product_id: Number(e.target.value) })}
+              >
                 {products.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
                 ))}
               </select>
-              <input className="input" placeholder={t.requirements.keyPlaceholder} value={form.key} onChange={(e) => setForm({ ...form, key: e.target.value })} />
-              <input className="input" placeholder={t.common.name} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              <textarea className="input" placeholder={t.common.description} rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+              <input
+                className="input"
+                placeholder={t.requirements.keyPlaceholder}
+                value={form.key}
+                onChange={(e) => setForm({ ...form, key: e.target.value })}
+              />
+              <input
+                className="input"
+                placeholder={t.common.name}
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+              <textarea
+                className="input"
+                placeholder={t.common.description}
+                rows={3}
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+              />
               <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <input className="input" placeholder={t.requirements.version} value={form.version} onChange={(e) => setForm({ ...form, version: e.target.value })} />
-                <select className="select" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                <input
+                  className="input"
+                  placeholder={t.requirements.version}
+                  value={form.version}
+                  onChange={(e) => setForm({ ...form, version: e.target.value })}
+                />
+                <select
+                  className="select"
+                  value={form.status}
+                  onChange={(e) => setForm({ ...form, status: e.target.value })}
+                >
                   {STATUSES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
                   ))}
                 </select>
-                <select className="select" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+                <select
+                  className="select"
+                  value={form.priority}
+                  onChange={(e) => setForm({ ...form, priority: e.target.value })}
+                >
                   {PRIORITIES.map((p) => (
-                    <option key={p} value={p}>{p}</option>
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
                   ))}
                 </select>
-                <input className="input" placeholder={t.common.category} value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
+                <input
+                  className="input"
+                  placeholder={t.common.category}
+                  value={form.category}
+                  onChange={(e) => setForm({ ...form, category: e.target.value })}
+                />
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.75rem' }}>
-              <button type="button" className="btn" onClick={() => setShowForm(false)}>{t.common.cancel}</button>
-              <button type="button" className="btn btn-primary" onClick={submit} disabled={!form.key || !form.name || !form.product_id}>
+              <button type="button" className="btn" onClick={() => setShowForm(false)}>
+                {t.common.cancel}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={submit}
+                disabled={!form.key || !form.name || !form.product_id}
+              >
                 {editing ? t.common.save : t.requirements.create}
               </button>
             </div>
@@ -427,74 +559,144 @@ export function RequirementsView() {
 
       {aiPanel && aiPanel !== 'busy' && (
         <div className="modal-backdrop" onClick={() => setAiPanel(null)}>
-          <div className="modal" style={{ maxWidth: 720, maxHeight: '80vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t.requirements.aiResultAria}>
-            {aiPanel.kind === 'quality' ? (() => {
-              const d = aiPanel.data as { quality_score: number; verdict: string; summary: string; issues: { type: string; severity: string; description: string }[]; suggestions: string[]; model: string }
-              return (
-                <>
-                  <h2>{t.requirements.aiQualityTitle(aiPanel.req.key)}</h2>
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', margin: '0.5rem 0' }}>
-                    <span className={`badge badge-${d.verdict === 'good' ? 'passed' : d.verdict === 'poor' ? 'failed' : 'idle'}`}>{d.verdict}</span>
-                    <span className="badge">{d.quality_score}/100</span>
-                    <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>{d.model}</span>
-                  </div>
-                  <p style={{ fontSize: '0.9rem' }}>{d.summary}</p>
-                  {d.issues.length > 0 && (
-                    <div style={{ margin: '0.5rem 0' }}>
-                      <strong style={{ fontSize: '0.85rem' }}>{t.requirements.problems}</strong>
-                      <ul style={{ margin: '0.3rem 0', paddingLeft: '1.1rem', fontSize: '0.85rem' }}>
-                        {d.issues.map((i, idx) => (
-                          <li key={idx}><span className={`badge badge-${i.severity === 'high' ? 'failed' : i.severity === 'medium' ? 'idle' : 'passed'}`}>{i.type}/{i.severity}</span> {i.description}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {d.suggestions.length > 0 && (
-                    <div>
-                      <strong style={{ fontSize: '0.85rem' }}>{t.requirements.suggestions}</strong>
-                      <ul style={{ margin: '0.3rem 0', paddingLeft: '1.1rem', fontSize: '0.85rem' }}>
-                        {d.suggestions.map((s, idx) => (<li key={idx}>{s}</li>))}
-                      </ul>
-                    </div>
-                  )}
-                </>
-              )
-            })() : (() => {
-              const d = aiPanel.data as { summary: string; retest: { case_id: number; summary: string; reason: string; priority: string }[]; risks: string[]; gaps: string[]; model: string }
-              return (
-                <>
-                  <h2>{t.requirements.aiRegressionTitle(aiPanel.req.key)}</h2>
-                  <p style={{ fontSize: '0.9rem' }}>{d.summary}</p>
-                  {d.retest.length > 0 && (
-                    <table className="table" style={{ margin: '0.5rem 0' }}>
-                      <thead><tr><th>{t.requirements.case}</th><th>{t.common.priority}</th><th>{t.requirements.reason}</th></tr></thead>
-                      <tbody>
-                        {d.retest.map((rt) => (
-                          <tr key={rt.case_id}>
-                            <td><button type="button" className="btn btn-sm" onClick={() => { setAiPanel(null); navigate(`/cases/${rt.case_id}`) }}>#{rt.case_id} {rt.summary}</button></td>
-                            <td><span className={`badge badge-${rt.priority === 'high' ? 'failed' : rt.priority === 'medium' ? 'idle' : 'passed'}`}>{rt.priority}</span></td>
-                            <td style={{ fontSize: '0.82rem' }}>{rt.reason}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                  {d.risks.length > 0 && (
-                    <div><strong style={{ fontSize: '0.85rem' }}>{t.requirements.risks}</strong>
-                      <ul style={{ margin: '0.3rem 0', paddingLeft: '1.1rem', fontSize: '0.85rem' }}>{d.risks.map((x, i) => (<li key={i}>{x}</li>))}</ul>
-                    </div>
-                  )}
-                  {d.gaps.length > 0 && (
-                    <div><strong style={{ fontSize: '0.85rem' }}>{t.requirements.gaps}</strong>
-                      <ul style={{ margin: '0.3rem 0', paddingLeft: '1.1rem', fontSize: '0.85rem' }}>{d.gaps.map((x, i) => (<li key={i}>{x}</li>))}</ul>
-                    </div>
-                  )}
-                  <div style={{ color: 'var(--muted)', fontSize: '0.75rem' }}>{d.model}</div>
-                </>
-              )
-            })()}
+          <div
+            className="modal"
+            style={{ maxWidth: 720, maxHeight: '80vh', overflowY: 'auto' }}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t.requirements.aiResultAria}
+          >
+            {aiPanel.kind === 'quality'
+              ? (() => {
+                  const d = aiPanel.data as {
+                    quality_score: number
+                    verdict: string
+                    summary: string
+                    issues: { type: string; severity: string; description: string }[]
+                    suggestions: string[]
+                    model: string
+                  }
+                  return (
+                    <>
+                      <h2>{t.requirements.aiQualityTitle(aiPanel.req.key)}</h2>
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', margin: '0.5rem 0' }}>
+                        <span
+                          className={`badge badge-${d.verdict === 'good' ? 'passed' : d.verdict === 'poor' ? 'failed' : 'idle'}`}
+                        >
+                          {d.verdict}
+                        </span>
+                        <span className="badge">{d.quality_score}/100</span>
+                        <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>{d.model}</span>
+                      </div>
+                      <p style={{ fontSize: '0.9rem' }}>{d.summary}</p>
+                      {d.issues.length > 0 && (
+                        <div style={{ margin: '0.5rem 0' }}>
+                          <strong style={{ fontSize: '0.85rem' }}>{t.requirements.problems}</strong>
+                          <ul style={{ margin: '0.3rem 0', paddingLeft: '1.1rem', fontSize: '0.85rem' }}>
+                            {d.issues.map((i, idx) => (
+                              <li key={idx}>
+                                <span
+                                  className={`badge badge-${i.severity === 'high' ? 'failed' : i.severity === 'medium' ? 'idle' : 'passed'}`}
+                                >
+                                  {i.type}/{i.severity}
+                                </span>{' '}
+                                {i.description}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {d.suggestions.length > 0 && (
+                        <div>
+                          <strong style={{ fontSize: '0.85rem' }}>{t.requirements.suggestions}</strong>
+                          <ul style={{ margin: '0.3rem 0', paddingLeft: '1.1rem', fontSize: '0.85rem' }}>
+                            {d.suggestions.map((s, idx) => (
+                              <li key={idx}>{s}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </>
+                  )
+                })()
+              : (() => {
+                  const d = aiPanel.data as {
+                    summary: string
+                    retest: { case_id: number; summary: string; reason: string; priority: string }[]
+                    risks: string[]
+                    gaps: string[]
+                    model: string
+                  }
+                  return (
+                    <>
+                      <h2>{t.requirements.aiRegressionTitle(aiPanel.req.key)}</h2>
+                      <p style={{ fontSize: '0.9rem' }}>{d.summary}</p>
+                      {d.retest.length > 0 && (
+                        <table className="table" style={{ margin: '0.5rem 0' }}>
+                          <thead>
+                            <tr>
+                              <th>{t.requirements.case}</th>
+                              <th>{t.common.priority}</th>
+                              <th>{t.requirements.reason}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {d.retest.map((rt) => (
+                              <tr key={rt.case_id}>
+                                <td>
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm"
+                                    onClick={() => {
+                                      setAiPanel(null)
+                                      navigate(`/cases/${rt.case_id}`)
+                                    }}
+                                  >
+                                    #{rt.case_id} {rt.summary}
+                                  </button>
+                                </td>
+                                <td>
+                                  <span
+                                    className={`badge badge-${rt.priority === 'high' ? 'failed' : rt.priority === 'medium' ? 'idle' : 'passed'}`}
+                                  >
+                                    {rt.priority}
+                                  </span>
+                                </td>
+                                <td style={{ fontSize: '0.82rem' }}>{rt.reason}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                      {d.risks.length > 0 && (
+                        <div>
+                          <strong style={{ fontSize: '0.85rem' }}>{t.requirements.risks}</strong>
+                          <ul style={{ margin: '0.3rem 0', paddingLeft: '1.1rem', fontSize: '0.85rem' }}>
+                            {d.risks.map((x, i) => (
+                              <li key={i}>{x}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {d.gaps.length > 0 && (
+                        <div>
+                          <strong style={{ fontSize: '0.85rem' }}>{t.requirements.gaps}</strong>
+                          <ul style={{ margin: '0.3rem 0', paddingLeft: '1.1rem', fontSize: '0.85rem' }}>
+                            {d.gaps.map((x, i) => (
+                              <li key={i}>{x}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      <div style={{ color: 'var(--muted)', fontSize: '0.75rem' }}>{d.model}</div>
+                    </>
+                  )
+                })()}
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.75rem' }}>
-              <button type="button" className="btn" onClick={() => setAiPanel(null)}>{t.common.close}</button>
+              <button type="button" className="btn" onClick={() => setAiPanel(null)}>
+                {t.common.close}
+              </button>
             </div>
           </div>
         </div>

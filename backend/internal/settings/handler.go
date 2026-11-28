@@ -31,22 +31,22 @@ func NewStore(db *sql.DB, pg *pgxpool.Pool) *Store {
 
 // Known setting keys (editable at runtime via admin API).
 const (
-	KeyDomain              = "domain"
-	KeySMTPHost            = "smtp_host"
-	KeySMTPPort            = "smtp_port"
-	KeySMTPUser            = "smtp_user"
-	KeySMTPPass            = "smtp_pass"
-	KeySMTPFrom            = "smtp_from"
-	KeyAllowRegistration   = "allow_registration"
-	KeyCaptchaEnabled      = "captcha_enabled"
-	KeyAnonymousAccess     = "anonymous_access"
+	KeyDomain            = "domain"
+	KeySMTPHost          = "smtp_host"
+	KeySMTPPort          = "smtp_port"
+	KeySMTPUser          = "smtp_user"
+	KeySMTPPass          = "smtp_pass"
+	KeySMTPFrom          = "smtp_from"
+	KeyAllowRegistration = "allow_registration"
+	KeyCaptchaEnabled    = "captcha_enabled"
+	KeyAnonymousAccess   = "anonymous_access"
 )
 
 // SettingDef describes an editable setting: its key, whether it is public
 // (readable without auth), and an optional normalizer.
 type SettingDef struct {
-	Key     string
-	Public  bool // readable via GET /api/v1/settings/{key} without auth
+	Key       string
+	Public    bool // readable via GET /api/v1/settings/{key} without auth
 	Normalize func(string) string
 }
 
@@ -197,11 +197,12 @@ func OnChange(key string, fn func(string)) {
 }
 
 // Register mounts the settings API:
-//   GET  /api/v1/settings            — public: all public settings
-//   GET  /api/v1/settings/{key}      — public if def.Public, else admin
-//   GET  /api/v1/admin/settings      — admin: all settings (password masked)
-//   PUT  /api/v1/admin/settings/{key} — admin: update one setting
-//   POST /api/v1/admin/settings       — admin: bulk update {"settings": {"key": "val"}}
+//
+//	GET  /api/v1/settings            — public: all public settings
+//	GET  /api/v1/settings/{key}      — public if def.Public, else admin
+//	GET  /api/v1/admin/settings      — admin: all settings (password masked)
+//	PUT  /api/v1/admin/settings/{key} — admin: update one setting
+//	POST /api/v1/admin/settings       — admin: bulk update {"settings": {"key": "val"}}
 func Register(r chi.Router, s *Store) {
 	// Public list — returns effective values (DB value, else env default)
 	r.Get("/api/v1/settings", func(w http.ResponseWriter, req *http.Request) {

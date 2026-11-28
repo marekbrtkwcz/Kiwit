@@ -73,7 +73,7 @@ func (g *AccessGuard) CheckProductAccess(ctx context.Context, productID, userID 
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return false, err
 		}
-		if err == nil && !(requireWrite && role == "viewer") {
+		if err == nil && (!requireWrite || role != "viewer") {
 			return true, nil
 		}
 		// Fall back to group-based permissions (best role across the user's groups).
@@ -110,7 +110,7 @@ func (g *AccessGuard) CheckProductAccess(ctx context.Context, productID, userID 
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return false, err
 	}
-	if err == nil && !(requireWrite && role == "viewer") {
+	if err == nil && (!requireWrite || role != "viewer") {
 		return true, nil
 	}
 	var groupRole string

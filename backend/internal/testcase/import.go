@@ -27,19 +27,19 @@ const maxImportRecords = 1000
 
 // ImportRecord is one row of an import file, mapped onto UpsertParams.
 type ImportRecord struct {
-	Summary       string  `json:"summary"`
-	Preconditions string  `json:"preconditions"`
-	Requirement   string  `json:"requirement"`
-	ExtraLink     string  `json:"extra_link"`
-	Notes         string  `json:"notes"`
-	Format        string  `json:"format"`
-	GherkinBody   string  `json:"gherkin_body"`
-	Priority      string  `json:"priority"`
-	Status        string  `json:"status"`
-	IsAutomated   bool    `json:"is_automated"`
-	Script        string  `json:"script"`
-	Arguments     string  `json:"arguments"`
-	Steps         []Step  `json:"steps"`
+	Summary       string `json:"summary"`
+	Preconditions string `json:"preconditions"`
+	Requirement   string `json:"requirement"`
+	ExtraLink     string `json:"extra_link"`
+	Notes         string `json:"notes"`
+	Format        string `json:"format"`
+	GherkinBody   string `json:"gherkin_body"`
+	Priority      string `json:"priority"`
+	Status        string `json:"status"`
+	IsAutomated   bool   `json:"is_automated"`
+	Script        string `json:"script"`
+	Arguments     string `json:"arguments"`
+	Steps         []Step `json:"steps"`
 }
 
 // importStepJSON accepts both expected_result and expected keys.
@@ -147,19 +147,19 @@ func normalizeImportRecord(r *ImportRecord) error {
 // importCaseJSON is the wire shape of one imported case; steps accept both
 // expected_result and expected keys.
 type importCaseJSON struct {
-	Summary       string            `json:"summary"`
-	Preconditions string            `json:"preconditions"`
-	Requirement   string            `json:"requirement"`
-	ExtraLink     string            `json:"extra_link"`
-	Notes         string            `json:"notes"`
-	Format        string            `json:"format"`
-	GherkinBody   string            `json:"gherkin_body"`
-	Priority      string            `json:"priority"`
-	Status        string            `json:"status"`
-	IsAutomated   importBool        `json:"is_automated"`
-	Script        string            `json:"script"`
-	Arguments     string            `json:"arguments"`
-	Steps         json.RawMessage   `json:"steps"`
+	Summary       string          `json:"summary"`
+	Preconditions string          `json:"preconditions"`
+	Requirement   string          `json:"requirement"`
+	ExtraLink     string          `json:"extra_link"`
+	Notes         string          `json:"notes"`
+	Format        string          `json:"format"`
+	GherkinBody   string          `json:"gherkin_body"`
+	Priority      string          `json:"priority"`
+	Status        string          `json:"status"`
+	IsAutomated   importBool      `json:"is_automated"`
+	Script        string          `json:"script"`
+	Arguments     string          `json:"arguments"`
+	Steps         json.RawMessage `json:"steps"`
 }
 
 // parseImportJSON decodes an array of case objects (same shape as the API

@@ -25,7 +25,11 @@ func RegisterRoutes(api huma.API, store *Store, guard *auth.AccessGuard) {
 			Items []Property `json:"items"`
 		}
 	}, error) {
-		if input.EntityType == "environment" { if _, ok := auth.UserFromContext(ctx); !ok { return nil, huma.Error401Unauthorized("unauthorized") } } else if err := guard.EnforceEntity(ctx, input.EntityType, input.EntityID, false); err != nil {
+		if input.EntityType == "environment" {
+			if _, ok := auth.UserFromContext(ctx); !ok {
+				return nil, huma.Error401Unauthorized("unauthorized")
+			}
+		} else if err := guard.EnforceEntity(ctx, input.EntityType, input.EntityID, false); err != nil {
 			return nil, huma.Error403Forbidden("no access")
 		}
 		items, err := store.List(ctx, input.EntityType, input.EntityID)
@@ -56,7 +60,11 @@ func RegisterRoutes(api huma.API, store *Store, guard *auth.AccessGuard) {
 			Value      string `json:"value" maxLength:"4000"`
 		}
 	}) (*struct{ Body Property }, error) {
-		if input.Body.EntityType == "environment" { if _, ok := auth.UserFromContext(ctx); !ok { return nil, huma.Error401Unauthorized("unauthorized") } } else if err := guard.EnforceEntity(ctx, input.Body.EntityType, input.Body.EntityID, true); err != nil {
+		if input.Body.EntityType == "environment" {
+			if _, ok := auth.UserFromContext(ctx); !ok {
+				return nil, huma.Error401Unauthorized("unauthorized")
+			}
+		} else if err := guard.EnforceEntity(ctx, input.Body.EntityType, input.Body.EntityID, true); err != nil {
 			return nil, huma.Error403Forbidden("no write access")
 		}
 		p, err := store.Set(ctx, input.Body.EntityType, input.Body.EntityID, input.Body.Name, input.Body.Value)
@@ -78,7 +86,11 @@ func RegisterRoutes(api huma.API, store *Store, guard *auth.AccessGuard) {
 		EntityID   int64  `query:"entity_id" minimum:"1"`
 		Name       string `query:"name" minLength:"1"`
 	}) (*struct{}, error) {
-		if input.EntityType == "environment" { if _, ok := auth.UserFromContext(ctx); !ok { return nil, huma.Error401Unauthorized("unauthorized") } } else if err := guard.EnforceEntity(ctx, input.EntityType, input.EntityID, true); err != nil {
+		if input.EntityType == "environment" {
+			if _, ok := auth.UserFromContext(ctx); !ok {
+				return nil, huma.Error401Unauthorized("unauthorized")
+			}
+		} else if err := guard.EnforceEntity(ctx, input.EntityType, input.EntityID, true); err != nil {
 			return nil, huma.Error403Forbidden("no write access")
 		}
 		if err := store.Delete(ctx, input.EntityType, input.EntityID, input.Name); err != nil {

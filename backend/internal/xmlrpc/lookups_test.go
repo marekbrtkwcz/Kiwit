@@ -162,9 +162,9 @@ func TestJoinsForQuery(t *testing.T) {
 		"author":  {joinSQL: "JOIN users u ON u.id = t.author_id", alias: "u"},
 	}
 	joins := joinsForQuery(map[string]any{
-		"product__name": "X",
+		"product__name":                "X",
 		"author__username__startswith": "ad",
-		"summary": "test",
+		"summary":                      "test",
 	}, relations)
 	if len(joins) != 2 {
 		t.Errorf("expected 2 joins, got %d: %v", len(joins), joins)

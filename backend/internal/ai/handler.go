@@ -39,11 +39,11 @@ func RegisterRoutes(api huma.API, servers *llm.ServerStore, tcRepo testcase.Repo
 		Tags:        []string{"AI"},
 	}, func(ctx context.Context, input *struct {
 		Body struct {
-			ProductID      int64  `json:"product_id"`
-			RequirementID  int64  `json:"requirement_id,omitempty" doc:"Use this requirement's text as input and link results"`
-			Text           string `json:"text,omitempty" doc:"Free-form requirement text (used when requirement_id is 0)"`
-			MaxScenarios   int    `json:"max_scenarios,omitempty" default:"5"`
-			ServerID       int64  `json:"server_id,omitempty" doc:"AI server to use (0 = default)"`
+			ProductID     int64  `json:"product_id"`
+			RequirementID int64  `json:"requirement_id,omitempty" doc:"Use this requirement's text as input and link results"`
+			Text          string `json:"text,omitempty" doc:"Free-form requirement text (used when requirement_id is 0)"`
+			MaxScenarios  int    `json:"max_scenarios,omitempty" default:"5"`
+			ServerID      int64  `json:"server_id,omitempty" doc:"AI server to use (0 = default)"`
 		}
 	}) (*generateOutput, error) {
 		if err := auth.CheckWriteRole(ctx, "admin", "tester"); err != nil {

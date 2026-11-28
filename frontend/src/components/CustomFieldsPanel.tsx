@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
 import { Settings2 } from 'lucide-react'
-import { api, CustomFieldWithValue } from '../api/client'
+import { useCallback, useEffect, useState } from 'react'
+import { api, type CustomFieldWithValue } from '../api/client'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useI18n } from '../i18n'
 
@@ -44,29 +44,75 @@ export function CustomFieldsPanel({ entityType, entityId }: { entityType: string
     switch (f.field_type) {
       case 'boolean':
         return (
-          <select className="select" value={val || 'false'} onChange={(e) => { set(e.target.value); }} style={{ fontSize: '0.8rem' }}>
+          <select
+            id={`cf-${f.id}`}
+            className="select"
+            value={val || 'false'}
+            onChange={(e) => {
+              set(e.target.value)
+            }}
+            style={{ fontSize: '0.8rem' }}
+          >
             <option value="false">false</option>
             <option value="true">true</option>
           </select>
         )
       case 'date':
-        return <input className="input" type="date" value={val} onChange={(e) => set(e.target.value)} style={{ fontSize: '0.8rem' }} />
+        return (
+          <input
+            id={`cf-${f.id}`}
+            className="input"
+            type="date"
+            value={val}
+            onChange={(e) => set(e.target.value)}
+            style={{ fontSize: '0.8rem' }}
+          />
+        )
       case 'list': {
         let opts: string[] = []
-        try { opts = JSON.parse(f.options || '[]') } catch { opts = [] }
+        try {
+          opts = JSON.parse(f.options || '[]')
+        } catch {
+          opts = []
+        }
         return (
-          <select className="select" value={val} onChange={(e) => set(e.target.value)} style={{ fontSize: '0.8rem' }}>
+          <select
+            id={`cf-${f.id}`}
+            className="select"
+            value={val}
+            onChange={(e) => set(e.target.value)}
+            style={{ fontSize: '0.8rem' }}
+          >
             <option value="">—</option>
             {opts.map((o) => (
-              <option key={o} value={o}>{o}</option>
+              <option key={o} value={o}>
+                {o}
+              </option>
             ))}
           </select>
         )
       }
       case 'number':
-        return <input className="input" type="number" value={val} onChange={(e) => set(e.target.value)} style={{ fontSize: '0.8rem' }} />
+        return (
+          <input
+            id={`cf-${f.id}`}
+            className="input"
+            type="number"
+            value={val}
+            onChange={(e) => set(e.target.value)}
+            style={{ fontSize: '0.8rem' }}
+          />
+        )
       default:
-        return <input className="input" value={val} onChange={(e) => set(e.target.value)} style={{ fontSize: '0.8rem' }} />
+        return (
+          <input
+            id={`cf-${f.id}`}
+            className="input"
+            value={val}
+            onChange={(e) => set(e.target.value)}
+            style={{ fontSize: '0.8rem' }}
+          />
+        )
     }
   }
 
@@ -77,8 +123,20 @@ export function CustomFieldsPanel({ entityType, entityId }: { entityType: string
       </strong>
       {fields.map((f) => (
         <div key={f.id} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-          <label style={{ width: 140, fontSize: '0.8rem', color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={f.name}>
-            {f.name}{f.required ? ' *' : ''}
+          <label
+            style={{
+              width: 140,
+              fontSize: '0.8rem',
+              color: 'var(--muted)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+            title={f.name}
+            htmlFor={`cf-${f.id}`}
+          >
+            {f.name}
+            {f.required ? ' *' : ''}
           </label>
           <div style={{ flex: 1 }}>{renderInput(f)}</div>
           <button type="button" className="btn btn-sm" onClick={() => save(f.id)}>

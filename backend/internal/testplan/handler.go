@@ -92,10 +92,11 @@ func RegisterRoutes(api huma.API, repo Repository, emailSettings *notify.Setting
 		Q         string `query:"q" doc:"Filter by name substring"`
 	}) (*ListTestPlansOutput, error) {
 		var isActive *bool
-		if input.IsActive == "true" {
+		switch input.IsActive {
+		case "true":
 			v := true
 			isActive = &v
-		} else if input.IsActive == "false" {
+		case "false":
 			v := false
 			isActive = &v
 		}

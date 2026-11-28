@@ -1,7 +1,15 @@
-import { useEffect, useState } from 'react'
 import { KeyRound, LogIn, LogOut, Mail, Plus } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { api, ApiTokenInfo, getAuthToken, setAuthToken, setUserRole, User, UserGroup } from '../../api/client'
+import {
+  type ApiTokenInfo,
+  api,
+  getAuthToken,
+  setAuthToken,
+  setUserRole,
+  type User,
+  type UserGroup,
+} from '../../api/client'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 import { generatePassword } from '../../utils/password'
@@ -61,18 +69,20 @@ export function AuthView() {
 
   useEffect(() => {
     fetch('/api/v1/auth/sso/config')
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => {
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
         if (d?.enabled) {
           setSsoEnabled(true)
           setSsoProvider(d.provider || 'SSO')
         }
       })
       .catch(() => {})
-    api.authMethods()
-      .then(d => setLdapEnabled(!!d.ldap))
+    api
+      .authMethods()
+      .then((d) => setLdapEnabled(!!d.ldap))
       .catch(() => {})
-    api.getPublicSettings()
+    api
+      .getPublicSettings()
       .then(setPubSettings)
       .catch(() => setPubSettings(null))
   }, [])
@@ -88,7 +98,8 @@ export function AuthView() {
   // Fetch a fresh captcha challenge when entering the register form.
   useEffect(() => {
     if (mode === 'register' && captchaRequired && !captcha) {
-      api.getCaptcha()
+      api
+        .getCaptcha()
         .then(setCaptcha)
         .catch(() => setCaptcha(null))
     }
@@ -140,7 +151,9 @@ export function AuthView() {
     try {
       const gRes = await api.listGroups()
       setGroups(gRes.items ?? [])
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   const handleCreateGroup = async (e: React.FormEvent) => {
@@ -151,19 +164,36 @@ export function AuthView() {
       await api.createGroup(name)
       setNewGroupName('')
       await reloadGroups()
-    } catch { setError(t.settings.opFailed) }
+    } catch {
+      setError(t.settings.opFailed)
+    }
   }
 
   const handleDeleteGroup = async (id: number) => {
-    try { await api.deleteGroup(id); await reloadGroups() } catch { setError(t.settings.opFailed) }
+    try {
+      await api.deleteGroup(id)
+      await reloadGroups()
+    } catch {
+      setError(t.settings.opFailed)
+    }
   }
 
   const handleAddMember = async (groupId: number, userId: number) => {
-    try { await api.addGroupMember(groupId, userId); await reloadGroups() } catch { setError(t.settings.opFailed) }
+    try {
+      await api.addGroupMember(groupId, userId)
+      await reloadGroups()
+    } catch {
+      setError(t.settings.opFailed)
+    }
   }
 
   const handleRemoveMember = async (groupId: number, userId: number) => {
-    try { await api.removeGroupMember(groupId, userId); await reloadGroups() } catch { setError(t.settings.opFailed) }
+    try {
+      await api.removeGroupMember(groupId, userId)
+      await reloadGroups()
+    } catch {
+      setError(t.settings.opFailed)
+    }
   }
 
   useEffect(() => {
@@ -332,7 +362,11 @@ export function AuthView() {
 
       {!jwt || inResetContext ? (
         mode === 'reset-request' ? (
-          <form onSubmit={handleResetRequest} className="card" style={{ maxWidth: 460, display: 'grid', gap: '0.65rem' }}>
+          <form
+            onSubmit={handleResetRequest}
+            className="card"
+            style={{ maxWidth: 460, display: 'grid', gap: '0.65rem' }}
+          >
             <div style={{ display: 'flex', gap: '0.5rem' }}>
               <h3 style={{ margin: 0 }}>{t.auth.resetRequestTitle}</h3>
             </div>
@@ -353,7 +387,9 @@ export function AuthView() {
                 required
               />
             </label>
-            <button type="submit" className="btn btn-primary"><Mail size={14} /> {t.auth.resetRequestSubmit}</button>
+            <button type="submit" className="btn btn-primary">
+              <Mail size={14} /> {t.auth.resetRequestSubmit}
+            </button>
             <button
               type="button"
               className="btn btn-sm"
@@ -368,7 +404,11 @@ export function AuthView() {
           </form>
         ) : mode === 'reset-confirm' ? (
           searchParams.get('token') ? (
-            <form onSubmit={handleResetConfirm} className="card" style={{ maxWidth: 460, display: 'grid', gap: '0.65rem' }}>
+            <form
+              onSubmit={handleResetConfirm}
+              className="card"
+              style={{ maxWidth: 460, display: 'grid', gap: '0.65rem' }}
+            >
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <h3 style={{ margin: 0 }}>{t.auth.resetConfirmTitle}</h3>
               </div>
@@ -392,12 +432,20 @@ export function AuthView() {
                   type="button"
                   className="btn btn-sm"
                   style={{ marginTop: '0.25rem' }}
-                  onClick={() => { const p = generatePassword(); setResetPassword(p); setResetPasswordRepeat(p); setShowConfirmPassword(true) }}
+                  onClick={() => {
+                    const p = generatePassword()
+                    setResetPassword(p)
+                    setResetPasswordRepeat(p)
+                    setShowConfirmPassword(true)
+                  }}
                 >
                   {t.auth.generatePassword}
                 </button>
               </label>
-              <label htmlFor="reset-new-password-repeat" style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
+              <label
+                htmlFor="reset-new-password-repeat"
+                style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}
+              >
                 <span>{t.auth.resetNewPasswordRepeat}</span>
                 <input
                   id="reset-new-password-repeat"
@@ -421,7 +469,9 @@ export function AuthView() {
               >
                 {showConfirmPassword ? t.common.hide : t.common.show}
               </button>
-              <button type="submit" className="btn btn-primary"><KeyRound size={14} /> {t.auth.resetConfirmSubmit}</button>
+              <button type="submit" className="btn btn-primary">
+                <KeyRound size={14} /> {t.auth.resetConfirmSubmit}
+              </button>
               <button
                 type="button"
                 className="btn btn-sm"
@@ -437,7 +487,9 @@ export function AuthView() {
             </form>
           ) : (
             <div className="card" style={{ maxWidth: 460, display: 'grid', gap: '0.65rem' }}>
-              <p className="alert-error" style={{ margin: 0 }}>{t.auth.resetTokenInvalid}</p>
+              <p className="alert-error" style={{ margin: 0 }}>
+                {t.auth.resetTokenInvalid}
+              </p>
               <button
                 type="button"
                 className="btn btn-sm"
@@ -454,165 +506,223 @@ export function AuthView() {
           )
         ) : (
           <form onSubmit={handleAuth} className="card" style={{ maxWidth: 460, display: 'grid', gap: '0.65rem' }}>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button type="button" onClick={() => setMode('login')} className={mode === 'login' ? 'btn btn-primary btn-sm' : 'btn btn-sm'}>
-              {t.auth.login}
-            </button>
-            {registrationAllowed && (
-              <button type="button" onClick={() => setMode('register')} className={mode === 'register' ? 'btn btn-primary btn-sm' : 'btn btn-sm'}>
-                {t.auth.register}
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={() => setMode('login')}
+                className={mode === 'login' ? 'btn btn-primary btn-sm' : 'btn btn-sm'}
+              >
+                {t.auth.login}
               </button>
+              {registrationAllowed && (
+                <button
+                  type="button"
+                  onClick={() => setMode('register')}
+                  className={mode === 'register' ? 'btn btn-primary btn-sm' : 'btn btn-sm'}
+                >
+                  {t.auth.register}
+                </button>
+              )}
+            </div>
+            {mode === 'register' && !registrationAllowed && (
+              <p className="alert-error" style={{ margin: 0 }}>
+                {t.auth.registrationDisabled}
+              </p>
             )}
-          </div>
-          {mode === 'register' && !registrationAllowed && (
-            <p className="alert-error" style={{ margin: 0 }}>{t.auth.registrationDisabled}</p>
-          )}
-          <label htmlFor="auth-email" style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
-            <span>{t.common.email}</span>
-            <input
-              id="auth-email"
-              name="email"
-              className="input"
-              type="email"
-              autoComplete="username"
-              spellCheck={false}
-              enterKeyHint="next"
-              placeholder={t.common.email}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </label>
-          {mode === 'register' && (
-            <label htmlFor="auth-username" style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
-              <span>{t.auth.usernamePlaceholder}</span>
+            <label htmlFor="auth-email" style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
+              <span>{t.common.email}</span>
               <input
-                id="auth-username"
-                name="username"
+                id="auth-email"
+                name="email"
                 className="input"
-                autoComplete="nickname"
+                type="email"
+                autoComplete="username"
                 spellCheck={false}
-                autoCapitalize="none"
-                {...({ autocorrect: 'off' } as Record<string, string>)}
                 enterKeyHint="next"
-                placeholder={t.auth.usernamePlaceholder}
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                placeholder={t.common.email}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
               />
             </label>
-          )}
-          {mode === 'register' && captchaRequired && captcha && (
-            <label htmlFor="auth-captcha" style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
-              <span>{t.auth.captchaLabel}: {captcha.question}</span>
+            {mode === 'register' && (
+              <label htmlFor="auth-username" style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
+                <span>{t.auth.usernamePlaceholder}</span>
+                <input
+                  id="auth-username"
+                  name="username"
+                  className="input"
+                  autoComplete="nickname"
+                  spellCheck={false}
+                  autoCapitalize="none"
+                  {...({ autocorrect: 'off' } as Record<string, string>)}
+                  enterKeyHint="next"
+                  placeholder={t.auth.usernamePlaceholder}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required
+                />
+              </label>
+            )}
+            {mode === 'register' && captchaRequired && captcha && (
+              <label htmlFor="auth-captcha" style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
+                <span>
+                  {t.auth.captchaLabel}: {captcha.question}
+                </span>
+                <input
+                  id="auth-captcha"
+                  name="captcha_answer"
+                  className="input"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder={t.auth.captchaPlaceholder}
+                  title={t.auth.captchaHint}
+                  value={captchaAnswer}
+                  onChange={(e) => setCaptchaAnswer(e.target.value)}
+                  required
+                />
+              </label>
+            )}
+            {mode === 'register' && (
               <input
-                id="auth-captcha"
-                name="captcha_answer"
-                className="input"
-                inputMode="numeric"
+                type="text"
+                name="website"
                 autoComplete="off"
-                placeholder={t.auth.captchaPlaceholder}
-                title={t.auth.captchaHint}
-                value={captchaAnswer}
-                onChange={(e) => setCaptchaAnswer(e.target.value)}
-                required
+                tabIndex={-1}
+                aria-hidden="true"
+                style={{ position: 'absolute', left: -9999, width: 1, height: 1, opacity: 0 }}
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
               />
-            </label>
-          )}
-          {mode === 'register' && (
-            <input
-              type="text"
-              name="website"
-              autoComplete="off"
-              tabIndex={-1}
-              aria-hidden="true"
-              style={{ position: 'absolute', left: -9999, width: 1, height: 1, opacity: 0 }}
-              value={website}
-              onChange={(e) => setWebsite(e.target.value)}
-            />
-          )}
-          <label htmlFor="auth-password" style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
-            <span>{t.auth.passwordPlaceholder}</span>
-            <div style={{ display: 'flex', gap: '0.4rem' }}>
-              <input
-                id="auth-password"
-                name="password"
-                className="input"
-                type={showPassword ? 'text' : 'password'}
-                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                enterKeyHint="done"
-                placeholder={t.auth.passwordPlaceholder}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={8}
-                style={{ flex: 1 }}
-              />
-              {mode !== 'login' && (
+            )}
+            <label htmlFor="auth-password" style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
+              <span>{t.auth.passwordPlaceholder}</span>
+              <div style={{ display: 'flex', gap: '0.4rem' }}>
+                <input
+                  id="auth-password"
+                  name="password"
+                  className="input"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                  enterKeyHint="done"
+                  placeholder={t.auth.passwordPlaceholder}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={8}
+                  style={{ flex: 1 }}
+                />
+                {mode !== 'login' && (
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    title={t.auth.generatePassword}
+                    onClick={() => {
+                      const p = generatePassword()
+                      setPassword(p)
+                      setShowPassword(true)
+                    }}
+                  >
+                    {t.auth.generatePassword}
+                  </button>
+                )}
                 <button
                   type="button"
                   className="btn btn-sm"
-                  title={t.auth.generatePassword}
-                  onClick={() => { const p = generatePassword(); setPassword(p); setShowPassword(true) }}
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-pressed={showPassword}
                 >
-                  {t.auth.generatePassword}
+                  {showPassword ? t.common.hide : t.common.show}
                 </button>
-              )}
-              <button
-                type="button"
-                className="btn btn-sm"
-                onClick={() => setShowPassword((v) => !v)}
-                aria-pressed={showPassword}
+              </div>
+            </label>
+            <button type="submit" className="btn btn-primary">
+              {mode === 'login' ? t.auth.submitLogin : t.auth.submitRegister}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                setMode('reset-request')
+                setError(null)
+                setNotice(null)
+              }}
+            >
+              {t.auth.forgotPassword}
+            </button>
+            {ssoEnabled && mode === 'login' && (
+              <a href="/api/v1/auth/sso/login" className="btn btn-sm" style={{ textAlign: 'center' }}>
+                {t.auth.ssoLogin} {ssoProvider}
+              </a>
+            )}
+            {ldapEnabled && mode === 'login' && (
+              <form
+                onSubmit={handleLdapLogin}
+                style={{ display: 'grid', gap: '0.5rem', borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}
               >
-                {showPassword ? t.common.hide : t.common.show}
-              </button>
-            </div>
-          </label>
-          <button type="submit" className="btn btn-primary">
-            {mode === 'login' ? t.auth.submitLogin : t.auth.submitRegister}
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={() => {
-              setMode('reset-request')
-              setError(null)
-              setNotice(null)
-            }}
-          >
-            {t.auth.forgotPassword}
-          </button>
-          {ssoEnabled && mode === 'login' && (
-            <a href="/api/v1/auth/sso/login" className="btn btn-sm" style={{ textAlign: 'center' }}>
-              {t.auth.ssoLogin} {ssoProvider}
-            </a>
-          )}
-          {ldapEnabled && mode === 'login' && (
-            <form onSubmit={handleLdapLogin} style={{ display: 'grid', gap: '0.5rem', borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
-              <strong>{t.auth.ldapLogin}</strong>
-              <input className="input" placeholder={t.auth.usernamePlaceholder} value={ldapUsername} onChange={(e) => setLdapUsername(e.target.value)} required />
-              <input className="input" type="password" placeholder={t.auth.passwordPlaceholder} value={ldapPassword} onChange={(e) => setLdapPassword(e.target.value)} required />
-              <button type="submit" className="btn btn-primary btn-sm"><LogIn size={13} /> {t.auth.submitLogin}</button>
-            </form>
-          )}
+                <strong>{t.auth.ldapLogin}</strong>
+                <input
+                  className="input"
+                  placeholder={t.auth.usernamePlaceholder}
+                  value={ldapUsername}
+                  onChange={(e) => setLdapUsername(e.target.value)}
+                  required
+                />
+                <input
+                  className="input"
+                  type="password"
+                  placeholder={t.auth.passwordPlaceholder}
+                  value={ldapPassword}
+                  onChange={(e) => setLdapPassword(e.target.value)}
+                  required
+                />
+                <button type="submit" className="btn btn-primary btn-sm">
+                  <LogIn size={13} /> {t.auth.submitLogin}
+                </button>
+              </form>
+            )}
           </form>
         )
       ) : (
         <div style={{ display: 'grid', gap: '1rem' }}>
           <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>{t.auth.loggedIn}</span>
-            <button type="button" onClick={handleLogout} className="btn btn-sm"><LogOut size={13} /> {t.auth.logout}</button>
+            <button type="button" onClick={handleLogout} className="btn btn-sm">
+              <LogOut size={13} /> {t.auth.logout}
+            </button>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem' }}>
-            <form onSubmit={handleCreateToken} className="card" style={{ display: 'grid', gap: '0.6rem', alignContent: 'start' }}>
+            <form
+              onSubmit={handleCreateToken}
+              className="card"
+              style={{ display: 'grid', gap: '0.6rem', alignContent: 'start' }}
+            >
               <strong>{t.auth.tokenTitle}</strong>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <input className="input" placeholder={t.auth.tokenPlaceholder} value={tokenName} onChange={(e) => setTokenName(e.target.value)} style={{ flex: 1 }} />
-                <button type="submit" className="btn btn-primary btn-sm"><KeyRound size={13} /> {t.auth.generate}</button>
+                <input
+                  className="input"
+                  placeholder={t.auth.tokenPlaceholder}
+                  value={tokenName}
+                  onChange={(e) => setTokenName(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                <button type="submit" className="btn btn-primary btn-sm">
+                  <KeyRound size={13} /> {t.auth.generate}
+                </button>
               </div>
               {generatedToken && (
-                <div style={{ padding: '0.55rem', background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: '0.8rem', wordBreak: 'break-all' }}>
+                <div
+                  style={{
+                    padding: '0.55rem',
+                    background: 'var(--bg-subtle)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 8,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.8rem',
+                    wordBreak: 'break-all',
+                  }}
+                >
                   {generatedToken}
                 </div>
               )}
@@ -629,9 +739,15 @@ export function AuthView() {
                     {tokens.map((tok) => (
                       <tr key={tok.id}>
                         <td>{tok.name}</td>
-                        <td style={{ color: 'var(--muted)' }}>{tok.last_used_at ? new Date(tok.last_used_at).toLocaleDateString() : t.auth.never}</td>
+                        <td style={{ color: 'var(--muted)' }}>
+                          {tok.last_used_at ? new Date(tok.last_used_at).toLocaleDateString() : t.auth.never}
+                        </td>
                         <td style={{ textAlign: 'right' }}>
-                          <button type="button" className="btn btn-danger btn-sm" onClick={() => void handleRevokeToken(tok.id)}>
+                          <button
+                            type="button"
+                            className="btn btn-danger btn-sm"
+                            onClick={() => void handleRevokeToken(tok.id)}
+                          >
                             {t.auth.revoke}
                           </button>
                         </td>
@@ -642,7 +758,11 @@ export function AuthView() {
               )}
             </form>
 
-            <form onSubmit={handleChangePassword} className="card" style={{ display: 'grid', gap: '0.6rem', alignContent: 'start' }}>
+            <form
+              onSubmit={handleChangePassword}
+              className="card"
+              style={{ display: 'grid', gap: '0.6rem', alignContent: 'start' }}
+            >
               <strong>{t.auth.changePassword}</strong>
               <label htmlFor="current-password" style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
                 <span>{t.auth.currentPassword}</span>
@@ -684,13 +804,17 @@ export function AuthView() {
                   {t.auth.generatePassword}
                 </button>
               </label>
-              <button type="submit" className="btn btn-primary btn-sm"><KeyRound size={13} /> {t.auth.updatePassword}</button>
+              <button type="submit" className="btn btn-primary btn-sm">
+                <KeyRound size={13} /> {t.auth.updatePassword}
+              </button>
             </form>
           </div>
 
           {isAdmin && (
             <div className="card" style={{ display: 'grid', gap: '0.6rem' }}>
-              <strong>{t.auth.adminUsers} ({users.length})</strong>
+              <strong>
+                {t.auth.adminUsers} ({users.length})
+              </strong>
               <table className="data-table">
                 <thead>
                   <tr>
@@ -711,7 +835,13 @@ export function AuthView() {
                         <select
                           className="select"
                           value={u.role}
-                          onChange={(e) => void handleUpdateUser(u, e.target.value as 'viewer' | 'tester' | 'admin', u.is_active ?? true)}
+                          onChange={(e) =>
+                            void handleUpdateUser(
+                              u,
+                              e.target.value as 'viewer' | 'tester' | 'admin',
+                              u.is_active ?? true,
+                            )
+                          }
                         >
                           <option value="viewer">viewer</option>
                           <option value="tester">tester</option>
@@ -722,7 +852,9 @@ export function AuthView() {
                         <button
                           type="button"
                           className={u.is_active ? 'btn btn-sm' : 'btn btn-danger btn-sm'}
-                          onClick={() => void handleUpdateUser(u, u.role as 'viewer' | 'tester' | 'admin', !(u.is_active ?? true))}
+                          onClick={() =>
+                            void handleUpdateUser(u, u.role as 'viewer' | 'tester' | 'admin', !(u.is_active ?? true))
+                          }
                         >
                           {u.is_active ? t.auth.active : t.auth.disabled}
                         </button>
@@ -735,24 +867,53 @@ export function AuthView() {
           )}
           {isAdmin && (
             <div className="card" style={{ display: 'grid', gap: '0.6rem' }}>
-              <strong>{t.auth.adminGroups} ({groups.length})</strong>
+              <strong>
+                {t.auth.adminGroups} ({groups.length})
+              </strong>
               <form onSubmit={handleCreateGroup} style={{ display: 'flex', gap: '0.5rem' }}>
-                <input className="input" placeholder={t.auth.groupNamePlaceholder} value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} style={{ flex: 1 }} />
-                <button type="submit" className="btn btn-primary btn-sm"><Plus size={13} /> {t.auth.addGroup}</button>
+                <input
+                  className="input"
+                  placeholder={t.auth.groupNamePlaceholder}
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                <button type="submit" className="btn btn-primary btn-sm">
+                  <Plus size={13} /> {t.auth.addGroup}
+                </button>
               </form>
               {groups.map((g) => (
-                <div key={g.id} style={{ display: 'grid', gap: '0.4rem', borderTop: '1px solid var(--border)', paddingTop: '0.5rem' }}>
+                <div
+                  key={g.id}
+                  style={{ display: 'grid', gap: '0.4rem', borderTop: '1px solid var(--border)', paddingTop: '0.5rem' }}
+                >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <strong>{g.name}</strong>
-                    <button type="button" className="btn btn-danger btn-sm" onClick={() => void handleDeleteGroup(g.id)}>{t.common.delete}</button>
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      onClick={() => void handleDeleteGroup(g.id)}
+                    >
+                      {t.common.delete}
+                    </button>
                   </div>
                   <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                     {(g.members ?? []).map((uid) => {
                       const u = users.find((x) => x.id === uid)
                       return (
-                        <span key={uid} className="badge" style={{ display: 'inline-flex', gap: '0.3rem', alignItems: 'center' }}>
+                        <span
+                          key={uid}
+                          className="badge"
+                          style={{ display: 'inline-flex', gap: '0.3rem', alignItems: 'center' }}
+                        >
                           {u?.username ?? `#${uid}`}
-                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => void handleRemoveMember(g.id, uid)}>×</button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => void handleRemoveMember(g.id, uid)}
+                          >
+                            ×
+                          </button>
                         </span>
                       )
                     })}
@@ -760,12 +921,19 @@ export function AuthView() {
                   <select
                     className="select"
                     value=""
-                    onChange={(e) => { const uid = Number(e.target.value); if (uid) void handleAddMember(g.id, uid) }}
+                    onChange={(e) => {
+                      const uid = Number(e.target.value)
+                      if (uid) void handleAddMember(g.id, uid)
+                    }}
                   >
                     <option value="">{t.products.assignMember}</option>
-                    {users.filter((u) => !(g.members ?? []).includes(u.id)).map((u) => (
-                      <option key={u.id} value={u.id}>{u.username}</option>
-                    ))}
+                    {users
+                      .filter((u) => !(g.members ?? []).includes(u.id))
+                      .map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.username}
+                        </option>
+                      ))}
                   </select>
                 </div>
               ))}

@@ -74,7 +74,7 @@ func (h *SSOHandler) Register(r chi.Router) {
 
 func (h *SSOHandler) handleConfig(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write([]byte(fmt.Sprintf(`{"enabled":true,"provider":"%s","login_url":"/api/v1/auth/sso/login"}`, h.cfg.ProviderName)))
+	_, _ = fmt.Fprintf(w, `{"enabled":true,"provider":"%s","login_url":"/api/v1/auth/sso/login"}`, h.cfg.ProviderName)
 }
 
 func (h *SSOHandler) handleLogin(w http.ResponseWriter, r *http.Request) {

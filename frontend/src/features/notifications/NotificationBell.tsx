@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
 import { Bell } from 'lucide-react'
-import { api, getAuthToken, NotificationItem } from '../../api/client'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { api, getAuthToken, type NotificationItem } from '../../api/client'
 import { useI18n } from '../../i18n'
 
 function timeAgo(iso: string, labels: { justNow: string; minAgo: string; hourAgo: string; dayAgo: string }): string {
@@ -67,9 +67,7 @@ export function NotificationBell() {
   const markRead = async (id: number) => {
     const before = items.find((n) => n.id === id)
     if (before?.read_at) return
-    setItems((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read_at: n.read_at ?? new Date().toISOString() } : n))
-    )
+    setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read_at: n.read_at ?? new Date().toISOString() } : n)))
     setUnread((u) => Math.max(0, u - 1))
     try {
       await api.readNotification(id)

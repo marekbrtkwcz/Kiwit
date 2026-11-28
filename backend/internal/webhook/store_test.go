@@ -34,7 +34,7 @@ func TestWebhookSign(t *testing.T) {
 	body := []byte(`{"a":1}`)
 
 	mac := hmac.New(sha256.New, []byte("secret"))
-	mac.Write([]byte(fmt.Sprintf("%d.%s", ts, string(body))))
+	_, _ = fmt.Fprintf(mac, "%d.%s", ts, string(body))
 	expected := fmt.Sprintf("t=%d,v1=%s", ts, hex.EncodeToString(mac.Sum(nil)))
 
 	require.Equal(t, expected, webhook.Sign("secret", ts, body))

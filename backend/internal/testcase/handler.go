@@ -106,10 +106,11 @@ func RegisterRoutes(api huma.API, repo Repository, emailSettings *notify.Setting
 		Offset      int    `query:"offset" default:"0" minimum:"0"`
 	}) (*ListTestCasesOutput, error) {
 		var isAuto *bool
-		if input.IsAutomated == "true" {
+		switch input.IsAutomated {
+		case "true":
 			v := true
 			isAuto = &v
-		} else if input.IsAutomated == "false" {
+		case "false":
 			v := false
 			isAuto = &v
 		}
@@ -338,8 +339,8 @@ func RegisterRoutes(api huma.API, repo Repository, emailSettings *notify.Setting
 		Summary:     "Soft-delete a test case to the trash (purge=true removes it permanently)",
 		Tags:        []string{"TestCases"},
 	}, func(ctx context.Context, input *struct {
-		ID     int64  `path:"id"`
-		Purge  string `query:"purge" enum:",true,false,1,0" doc:"true/1: permanently delete instead of moving to the trash"`
+		ID    int64  `path:"id"`
+		Purge string `query:"purge" enum:",true,false,1,0" doc:"true/1: permanently delete instead of moving to the trash"`
 	}) (*struct{}, error) {
 		if err := auth.CheckRole(ctx, "tester"); err != nil {
 			return nil, err

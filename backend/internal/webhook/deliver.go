@@ -8,11 +8,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/kiwit/kiwit/internal/platform/secrets"
 	"log/slog"
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/kiwit/kiwit/internal/platform/secrets"
 )
 
 // Payload is the JSON body delivered to every webhook target.
@@ -35,7 +36,7 @@ func Sign(secret string, t int64, body []byte) string {
 		return ""
 	}
 	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write([]byte(fmt.Sprintf("%d.%s", t, body)))
+	_, _ = fmt.Fprintf(mac, "%d.%s", t, body)
 	return fmt.Sprintf("t=%d,v1=%s", t, hex.EncodeToString(mac.Sum(nil)))
 }
 

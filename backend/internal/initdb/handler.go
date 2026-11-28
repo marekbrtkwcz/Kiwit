@@ -211,7 +211,6 @@ func (s *Store) seedDictionaries(ctx context.Context) error {
 	return nil
 }
 
-
 // seedTemplatesAndFields inserts built-in test templates (OWASP security audit)
 // and UX metric custom fields for test executions.
 // seedTemplatesAndFields inserts built-in test templates (OWASP security audit)

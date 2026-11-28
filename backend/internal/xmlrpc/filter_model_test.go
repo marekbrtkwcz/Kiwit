@@ -1,6 +1,7 @@
 package xmlrpc
 
 import (
+	"context"
 	"reflect"
 	"testing"
 )
@@ -35,11 +36,11 @@ func TestRebindPlaceholders(t *testing.T) {
 }
 
 func TestFilterModelWhitelist(t *testing.T) {
-	if _, err := FilterModel(nil, nil, nil, "nope", nil, 0); err == nil {
+	if _, err := FilterModel(context.Background(), nil, nil, "nope", nil, 0); err == nil {
 		t.Error("expected error for unknown model")
 	}
 	for m := range FilterModels {
-		if _, err := FilterModel(nil, nil, nil, m, nil, 0); err == nil {
+		if _, err := FilterModel(context.Background(), nil, nil, m, nil, 0); err == nil {
 			t.Errorf("model %s: expected error with nil DBs", m)
 		}
 	}

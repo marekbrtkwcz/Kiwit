@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api, AttachmentItem } from '../../api/client'
+import { type AttachmentItem, api } from '../../api/client'
 import { useI18n } from '../../i18n'
 
 interface Props {
@@ -49,7 +49,16 @@ export function AttachmentsPanel({ entityType, entityId }: Props) {
       </div>
       {error && <div style={{ color: '#b91c1c' }}>{error}</div>}
       {items.length > 0 && (
-        <ul style={{ listStyle: 'none', padding: 0, margin: '0.25rem 0 0', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+        <ul
+          style={{
+            listStyle: 'none',
+            padding: 0,
+            margin: '0.25rem 0 0',
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '0.5rem',
+          }}
+        >
           {items.map((a) => (
             <li key={a.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
               <button
@@ -62,7 +71,15 @@ export function AttachmentsPanel({ entityType, entityId }: Props) {
                     setError(err instanceof Error ? err.message : t.errors.uploadAttachment)
                   }
                 }}
-                style={{ background: 'none', border: 'none', padding: 0, color: '#111827', textDecoration: 'underline', cursor: 'pointer', fontSize: 'inherit' }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  color: '#111827',
+                  textDecoration: 'underline',
+                  cursor: 'pointer',
+                  fontSize: 'inherit',
+                }}
               >
                 {a.filename} ({Math.ceil(a.size_bytes / 1024)} KB)
               </button>
@@ -77,7 +94,14 @@ export function AttachmentsPanel({ entityType, entityId }: Props) {
                     setError(err instanceof Error ? err.message : t.errors.uploadAttachment)
                   }
                 }}
-                style={{ background: 'none', border: 'none', padding: '0 0.2rem', color: '#b91c1c', cursor: 'pointer', fontSize: '0.85rem' }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: '0 0.2rem',
+                  color: '#b91c1c',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                }}
               >
                 ×
               </button>

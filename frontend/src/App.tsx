@@ -1,14 +1,12 @@
-import { useEffect, useState } from 'react'
-import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom'
 import {
   Bug,
   CheckCircle2,
   ClipboardList,
   Compass,
   FileCheck2,
-  FolderTree,
   Flag,
   FolderKanban,
+  FolderTree,
   LayoutDashboard,
   Menu,
   Moon,
@@ -22,23 +20,25 @@ import {
   UserCircle2,
   X,
 } from 'lucide-react'
-import { getAuthToken, menuApi, MenuResponse } from './api/client'
+import { useEffect, useState } from 'react'
+import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom'
+import { getAuthToken, type MenuResponse, menuApi } from './api/client'
 import { CommandPalette } from './components/CommandPalette'
 import { useWorkspace, WorkspaceProvider } from './context/WorkspaceContext'
 import { AuthView } from './features/auth/AuthView'
 import { BugsView } from './features/bugs/BugsView'
 import { CampaignsView } from './features/campaigns/CampaignsView'
-import { MilestonesView } from './features/milestones/MilestonesView'
+import { ExploratoryView } from './features/exploratory/ExploratoryView'
 import { ProductsView } from './features/management/ProductsView'
-import { RequirementsView } from './features/requirements/RequirementsView'
+import { MilestonesView } from './features/milestones/MilestonesView'
 import { NotificationBell } from './features/notifications/NotificationBell'
+import { RequirementsView } from './features/requirements/RequirementsView'
 import { SettingsView } from './features/settings/SettingsView'
 import { DashboardView } from './features/telemetry/DashboardView'
-import { ExploratoryView } from './features/exploratory/ExploratoryView'
 import { TestCasesView } from './features/testcases/TestCasesView'
 import { TestPlansView } from './features/testplans/TestPlansView'
 import { TestRunsView } from './features/testruns/TestRunsView'
-import { I18nProvider, Lang, useI18n } from './i18n'
+import { I18nProvider, type Lang, useI18n } from './i18n'
 
 // iconMap maps backend icon names (lucide kebab-case) to components.
 const iconMap: Record<string, typeof LayoutDashboard> = {
@@ -100,7 +100,10 @@ function AppShell() {
   const location = useLocation()
 
   useEffect(() => {
-    menuApi.get().then(setMenu).catch(() => setMenu(null))
+    menuApi
+      .get()
+      .then(setMenu)
+      .catch(() => setMenu(null))
   }, [])
 
   const navLinks = flattenMenu(menu, t)
@@ -110,7 +113,9 @@ function AppShell() {
 
   return (
     <div className="layout-root">
-      <a href="#main-content" className="skip-link">Skip to main content</a>
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
       {mobileOpen && (
         <div
           className="drawer-backdrop"
@@ -204,7 +209,10 @@ function AppShell() {
             </button>
             <h1 className="topbar-title">{pageTitle}</h1>
             {activeProductId && (
-              <span className="badge" style={{ background: 'var(--primary-soft)', color: 'var(--primary-text)', borderColor: 'transparent' }}>
+              <span
+                className="badge"
+                style={{ background: 'var(--primary-soft)', color: 'var(--primary-text)', borderColor: 'transparent' }}
+              >
                 {products.find((p) => p.id === activeProductId)?.name ?? `#${activeProductId}`}
               </span>
             )}
@@ -229,7 +237,14 @@ function AppShell() {
 
             <NotificationBell />
 
-            <div style={{ display: 'inline-flex', border: '1px solid var(--border-strong)', borderRadius: 8, overflow: 'hidden' }}>
+            <div
+              style={{
+                display: 'inline-flex',
+                border: '1px solid var(--border-strong)',
+                borderRadius: 8,
+                overflow: 'hidden',
+              }}
+            >
               {(['pl', 'en'] as Lang[]).map((l) => (
                 <button
                   key={l}

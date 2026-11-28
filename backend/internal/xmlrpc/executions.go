@@ -12,8 +12,8 @@ import (
 func (h *Handler) registerExecutionMethods() {
 	// TestExecution
 	h.register("TestExecution.filter", h.filterRows("test_executions", []string{"t.id", "t.test_run_id AS run_id", "t.test_case_id AS case_id", "t.status", "COALESCE(t.assignee_id,0) AS assignee_id", "COALESCE(t.tested_by_id,0) AS tested_by_id"}, map[string]relationJoin{
-		"run":    {joinSQL: "JOIN test_runs tr ON tr.id = t.test_run_id", alias: "tr"},
-		"case":   {joinSQL: "JOIN test_cases tc ON tc.id = t.test_case_id", alias: "tc"},
+		"run":      {joinSQL: "JOIN test_runs tr ON tr.id = t.test_run_id", alias: "tr"},
+		"case":     {joinSQL: "JOIN test_cases tc ON tc.id = t.test_case_id", alias: "tc"},
 		"assignee": {joinSQL: "JOIN users ua ON ua.id = t.assignee_id", alias: "ua"},
 	}))
 	h.register("TestExecution.update", h.execUpdate)

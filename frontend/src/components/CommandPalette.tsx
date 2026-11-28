@@ -1,5 +1,3 @@
-import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
   Bug,
   FileCheck2,
@@ -12,7 +10,9 @@ import {
   Sparkles,
   UserCircle2,
 } from 'lucide-react'
-import { api, getAuthToken, TestCase } from '../api/client'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { api, getAuthToken, type TestCase } from '../api/client'
 import { useWorkspace } from '../context/WorkspaceContext'
 import { useI18n } from '../i18n'
 
@@ -153,17 +153,38 @@ export function CommandPalette() {
 
           {aiRes && (
             <div style={{ marginBottom: '0.4rem' }}>
-              <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)', padding: '0.35rem 0.7rem', textTransform: 'uppercase' }}>
+              <div
+                style={{
+                  fontSize: '0.7rem',
+                  fontWeight: 600,
+                  color: 'var(--muted)',
+                  padding: '0.35rem 0.7rem',
+                  textTransform: 'uppercase',
+                }}
+              >
                 {t.shell.cmdkAIResults} ({aiRes.model})
               </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--muted)', padding: '0 0.7rem 0.35rem' }}>{aiRes.explanation}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--muted)', padding: '0 0.7rem 0.35rem' }}>
+                {aiRes.explanation}
+              </div>
               {aiRes.items.length === 0 && (
-                <div style={{ padding: '0.5rem 0.7rem', color: 'var(--muted)', fontSize: '0.8rem' }}>{t.shell.cmdkEmpty}</div>
+                <div style={{ padding: '0.5rem 0.7rem', color: 'var(--muted)', fontSize: '0.8rem' }}>
+                  {t.shell.cmdkEmpty}
+                </div>
               )}
-              {aiRes.items.slice(0, 12).map((hit, i) => {
+              {aiRes.items.slice(0, 12).map((hit) => {
                 const path = hitPath(hit)
                 const content = (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <span
+                    key="hit-content"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
                     <span className="badge" style={{ fontFamily: 'var(--font-mono)' }}>
                       {hit.type} #{String(hit.row.id ?? '?')}
                     </span>
@@ -171,12 +192,21 @@ export function CommandPalette() {
                   </span>
                 )
                 return path ? (
-                  <button key={i} type="button" className="cmdk-item" onClick={() => go(path)}>
+                  <button
+                    key={`${hit.type}-${String(hit.row.id ?? hit.title)}`}
+                    type="button"
+                    className="cmdk-item"
+                    onClick={() => go(path)}
+                  >
                     {content}
                     <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{t.shell.cmdkAIOpen}</span>
                   </button>
                 ) : (
-                  <div key={i} className="cmdk-item" style={{ cursor: 'default' }}>
+                  <div
+                    key={`${hit.type}-${String(hit.row.id ?? hit.title)}-static`}
+                    className="cmdk-item"
+                    style={{ cursor: 'default' }}
+                  >
                     {content}
                   </div>
                 )
@@ -186,7 +216,15 @@ export function CommandPalette() {
 
           {filteredNav.length > 0 && (
             <div style={{ marginBottom: '0.4rem' }}>
-              <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)', padding: '0.35rem 0.7rem', textTransform: 'uppercase' }}>
+              <div
+                style={{
+                  fontSize: '0.7rem',
+                  fontWeight: 600,
+                  color: 'var(--muted)',
+                  padding: '0.35rem 0.7rem',
+                  textTransform: 'uppercase',
+                }}
+              >
                 {t.shell.cmdkNavigation}
               </div>
               {filteredNav.map((item) => {
@@ -206,13 +244,31 @@ export function CommandPalette() {
 
           {filteredCases.length > 0 && (
             <div>
-              <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)', padding: '0.35rem 0.7rem', textTransform: 'uppercase' }}>
+              <div
+                style={{
+                  fontSize: '0.7rem',
+                  fontWeight: 600,
+                  color: 'var(--muted)',
+                  padding: '0.35rem 0.7rem',
+                  textTransform: 'uppercase',
+                }}
+              >
                 {t.shell.cmdkTestCases}
               </div>
               {filteredCases.map((tc) => (
                 <button key={tc.id} type="button" className="cmdk-item" onClick={() => go(`/cases/${tc.id}`)}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    <span className="badge" style={{ fontFamily: 'var(--font-mono)' }}>#{tc.id}</span>
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    <span className="badge" style={{ fontFamily: 'var(--font-mono)' }}>
+                      #{tc.id}
+                    </span>
                     <span>{tc.summary}</span>
                   </span>
                   <span className={`badge pill-${tc.priority}`}>{tc.priority}</span>

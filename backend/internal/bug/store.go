@@ -348,11 +348,11 @@ func RegisterRoutes(api huma.API, store *Store, guard *auth.AccessGuard, webhook
 		// Emit bug.created webhook (EXTERNAL_ISSUE_POST_PROCESSORS equivalent)
 		if len(webhooks) > 0 && webhooks[0] != nil {
 			data := map[string]any{
-				"bug_id":   b.ID,
-				"url":      fmt.Sprintf("/bugs/%d", b.ID),
-				"summary":  b.Summary,
-				"status":   b.Status,
-				"severity": b.Severity,
+				"bug_id":     b.ID,
+				"url":        fmt.Sprintf("/bugs/%d", b.ID),
+				"summary":    b.Summary,
+				"status":     b.Status,
+				"severity":   b.Severity,
 				"product_id": b.ProductID,
 			}
 			if b.TestExecutionID != nil {

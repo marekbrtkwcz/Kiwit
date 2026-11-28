@@ -73,7 +73,8 @@ func TestDomainEndpoint(t *testing.T) {
 	db := setupTestDB(t)
 	r := chi.NewRouter()
 	changed := ""
-	Register(r, NewStore(db, nil)); OnChange(KeyDomain, func(d string) { changed = d })
+	Register(r, NewStore(db, nil))
+	OnChange(KeyDomain, func(d string) { changed = d })
 
 	// PUT as admin
 	body := `{"domain": "kiwit.example.com"}`

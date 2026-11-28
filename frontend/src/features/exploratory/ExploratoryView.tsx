@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
 import { Compass, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react'
-import { api, ExploratorySession, Product } from '../../api/client'
+import { useCallback, useEffect, useState } from 'react'
+import { api, type ExploratorySession, type Product } from '../../api/client'
 import { ConfirmDialog, EmptyState, LoadingSkeleton } from '../../components/UiPrimitives'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
@@ -23,16 +23,19 @@ export function ExploratoryView() {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<ExploratorySession | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<ExploratorySession | null>(null)
-  const [form, setForm] = useState<FormState>({ product_id: 0, charter: '', timebox_minutes: 60, notes: '', findings: '[]' })
+  const [form, setForm] = useState<FormState>({
+    product_id: 0,
+    charter: '',
+    timebox_minutes: 60,
+    notes: '',
+    findings: '[]',
+  })
   const [aiBusy, setAiBusy] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [res, prods] = await Promise.all([
-        api.listExploratory(productId || undefined),
-        api.listProducts(),
-      ])
+      const [res, prods] = await Promise.all([api.listExploratory(productId || undefined), api.listProducts()])
       setItems(res.items ?? [])
       setProducts(prods.items ?? [])
     } catch {
@@ -48,13 +51,25 @@ export function ExploratoryView() {
 
   const openCreate = () => {
     setEditing(null)
-    setForm({ product_id: productId || (products[0]?.id ?? 0), charter: '', timebox_minutes: 60, notes: '', findings: '[]' })
+    setForm({
+      product_id: productId || (products[0]?.id ?? 0),
+      charter: '',
+      timebox_minutes: 60,
+      notes: '',
+      findings: '[]',
+    })
     setShowForm(true)
   }
 
   const openEdit = (s: ExploratorySession) => {
     setEditing(s)
-    setForm({ product_id: s.product_id, charter: s.charter, timebox_minutes: s.timebox_minutes, notes: s.notes ?? '', findings: s.findings || '[]' })
+    setForm({
+      product_id: s.product_id,
+      charter: s.charter,
+      timebox_minutes: s.timebox_minutes,
+      notes: s.notes ?? '',
+      findings: s.findings || '[]',
+    })
     setShowForm(true)
   }
 
@@ -99,7 +114,9 @@ export function ExploratoryView() {
         <select className="select" value={productId} onChange={(e) => setProductId(Number(e.target.value))}>
           <option value={0}>{t.shell.allProducts}</option>
           {products.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
           ))}
         </select>
       </div>
@@ -118,7 +135,11 @@ export function ExploratoryView() {
         <div style={{ display: 'grid', gap: '0.6rem' }}>
           {items.map((s) => {
             let findings: string[] = []
-            try { findings = JSON.parse(s.findings || '[]') } catch { findings = [] }
+            try {
+              findings = JSON.parse(s.findings || '[]')
+            } catch {
+              findings = []
+            }
             return (
               <div key={s.id} className="card" style={{ display: 'grid', gap: '0.35rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -127,8 +148,22 @@ export function ExploratoryView() {
                   <span className="badge">{t.exploratory.minutesBadge(s.timebox_minutes)}</span>
                   {s.test_run_id ? <span className="badge">{t.exploratory.runBadge(s.test_run_id)}</span> : null}
                   <span style={{ marginLeft: 'auto', display: 'flex', gap: '0.25rem' }}>
-                    <button type="button" className="btn btn-sm" onClick={() => openEdit(s)} aria-label={t.exploratory.editAria}><Pencil size={13} /></button>
-                    <button type="button" className="btn btn-sm btn-danger" onClick={() => setConfirmDelete(s)} aria-label={t.exploratory.deleteAria}><Trash2 size={13} /></button>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() => openEdit(s)}
+                      aria-label={t.exploratory.editAria}
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-danger"
+                      onClick={() => setConfirmDelete(s)}
+                      aria-label={t.exploratory.deleteAria}
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </span>
                 </div>
                 {s.notes && <div style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>{s.notes}</div>}
@@ -139,7 +174,9 @@ export function ExploratoryView() {
                     ))}
                   </ul>
                 )}
-                <div style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>{new Date(s.created_at).toLocaleString()}</div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
+                  {new Date(s.created_at).toLocaleString()}
+                </div>
               </div>
             )
           })}
@@ -148,16 +185,34 @@ export function ExploratoryView() {
 
       {showForm && (
         <div className="modal-backdrop" onClick={() => setShowForm(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t.exploratory.formAria}>
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t.exploratory.formAria}
+          >
             <h2>{editing ? t.exploratory.editSession : t.exploratory.newSessionTitle}</h2>
             <div style={{ display: 'grid', gap: '0.5rem' }}>
-              <select className="select" value={form.product_id} onChange={(e) => setForm({ ...form, product_id: Number(e.target.value) })}>
+              <select
+                className="select"
+                value={form.product_id}
+                onChange={(e) => setForm({ ...form, product_id: Number(e.target.value) })}
+              >
                 {products.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
                 ))}
               </select>
               <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                <input style={{ flex: 1 }} className="input" placeholder={t.exploratory.charterPlaceholder} value={form.charter} onChange={(e) => setForm({ ...form, charter: e.target.value })} />
+                <input
+                  style={{ flex: 1 }}
+                  className="input"
+                  placeholder={t.exploratory.charterPlaceholder}
+                  value={form.charter}
+                  onChange={(e) => setForm({ ...form, charter: e.target.value })}
+                />
                 <button
                   type="button"
                   className="btn btn-sm"
@@ -180,8 +235,21 @@ export function ExploratoryView() {
                   <Sparkles size={13} /> {aiBusy === 'charter' ? '…' : t.exploratory.aiCharter}
                 </button>
               </div>
-              <input className="input" type="number" min={5} step={5} value={form.timebox_minutes} onChange={(e) => setForm({ ...form, timebox_minutes: Number(e.target.value) })} />
-              <textarea className="input" rows={4} placeholder={t.exploratory.notesPlaceholder} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              <input
+                className="input"
+                type="number"
+                min={5}
+                step={5}
+                value={form.timebox_minutes}
+                onChange={(e) => setForm({ ...form, timebox_minutes: Number(e.target.value) })}
+              />
+              <textarea
+                className="input"
+                rows={4}
+                placeholder={t.exploratory.notesPlaceholder}
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              />
               <div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.3rem' }}>
                   <button
@@ -205,12 +273,25 @@ export function ExploratoryView() {
                     <Sparkles size={13} /> {aiBusy === 'findings' ? '…' : t.exploratory.aiFindings}
                   </button>
                 </div>
-                <textarea className="input" rows={3} placeholder={t.exploratory.findingsPlaceholder} value={form.findings} onChange={(e) => setForm({ ...form, findings: e.target.value })} />
+                <textarea
+                  className="input"
+                  rows={3}
+                  placeholder={t.exploratory.findingsPlaceholder}
+                  value={form.findings}
+                  onChange={(e) => setForm({ ...form, findings: e.target.value })}
+                />
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.75rem' }}>
-              <button type="button" className="btn" onClick={() => setShowForm(false)}>{t.common.cancel}</button>
-              <button type="button" className="btn btn-primary" onClick={submit} disabled={!form.charter || !form.product_id}>
+              <button type="button" className="btn" onClick={() => setShowForm(false)}>
+                {t.common.cancel}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={submit}
+                disabled={!form.charter || !form.product_id}
+              >
                 {editing ? t.common.save : t.exploratory.start}
               </button>
             </div>

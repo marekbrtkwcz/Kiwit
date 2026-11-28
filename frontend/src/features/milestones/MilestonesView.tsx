@@ -1,25 +1,8 @@
+import { CheckCircle2, ChevronDown, ChevronUp, Flag, Pencil, Plus, Sparkles, Trash2, XCircle } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import {
-  CheckCircle2,
-  ChevronDown,
-  ChevronUp,
-  Flag,
-  Pencil,
-  Plus,
-  Sparkles,
-  Trash2,
-  XCircle,
-} from 'lucide-react'
-import {
-  api,
-  Milestone,
-  MilestoneProgress,
-  Product,
-  TestRun,
-  Version,
-} from '../../api/client'
-import { ConfirmDialog, EmptyState, LoadingSkeleton } from '../../components/UiPrimitives'
+import { api, type Milestone, type MilestoneProgress, type Product, type TestRun, type Version } from '../../api/client'
 import { ExportButton } from '../../components/ExportButton'
+import { ConfirmDialog, EmptyState, LoadingSkeleton } from '../../components/UiPrimitives'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useI18n } from '../../i18n'
 
@@ -53,10 +36,7 @@ export function MilestonesView() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [res, prods] = await Promise.all([
-        api.listMilestones(versionId || undefined),
-        api.listProducts(),
-      ])
+      const [res, prods] = await Promise.all([api.listMilestones(versionId || undefined), api.listProducts()])
       setItems(res.items)
       setProducts(prods.items)
     } catch {
@@ -76,7 +56,8 @@ export function MilestonesView() {
 
   useEffect(() => {
     if (!productId) return
-    api.listVersions(productId)
+    api
+      .listVersions(productId)
       .then((res) => setVersions(res.items))
       .catch(() => setVersions([]))
   }, [productId])
@@ -239,15 +220,26 @@ export function MilestonesView() {
       </div>
 
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
-        <select className="select" value={productId} onChange={(e) => { setProductId(Number(e.target.value)); setVersionId(0) }}>
+        <select
+          className="select"
+          value={productId}
+          onChange={(e) => {
+            setProductId(Number(e.target.value))
+            setVersionId(0)
+          }}
+        >
           {products.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
           ))}
         </select>
         <select className="select" value={versionId} onChange={(e) => setVersionId(Number(e.target.value))}>
           <option value={0}>{t.milestones.allVersions}</option>
           {versions.map((v) => (
-            <option key={v.id} value={v.id}>{v.value}</option>
+            <option key={v.id} value={v.id}>
+              {v.value}
+            </option>
           ))}
         </select>
       </div>
@@ -289,31 +281,59 @@ export function MilestonesView() {
                     <input
                       type="checkbox"
                       checked={selectedIds.includes(m.id)}
-                      onChange={() => setSelectedIds((prev) => prev.includes(m.id) ? prev.filter((x) => x !== m.id) : [...prev, m.id])}
+                      onChange={() =>
+                        setSelectedIds((prev) =>
+                          prev.includes(m.id) ? prev.filter((x) => x !== m.id) : [...prev, m.id],
+                        )
+                      }
                       aria-label={t.milestones.selectAria(m.name)}
                     />
                   </td>
                   <td>
-                    <button type="button" className="btn btn-sm" onClick={() => toggleExpand(m.id)} style={{ marginRight: '0.25rem' }}>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      onClick={() => toggleExpand(m.id)}
+                      style={{ marginRight: '0.25rem' }}
+                    >
                       {expandedId === m.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                     </button>
                     {m.name}
                   </td>
                   <td>{m.due_date || '—'}</td>
-                  <td><span className={`badge badge-${m.status === 'done' ? 'passed' : m.status === 'in_progress' ? 'running' : 'idle'}`}>{m.status}</span></td>
+                  <td>
+                    <span
+                      className={`badge badge-${m.status === 'done' ? 'passed' : m.status === 'in_progress' ? 'running' : 'idle'}`}
+                    >
+                      {m.status}
+                    </span>
+                  </td>
                   <td>{progress[m.id] ? progress[m.id].percent_done : '—'}</td>
                   <td>
                     {m.signoff_decision ? (
                       <span className={`badge badge-${m.signoff_decision === 'go' ? 'passed' : 'failed'}`}>
-                        {m.signoff_decision === 'go' ? <CheckCircle2 size={12} /> : <XCircle size={12} />} {m.signoff_decision.toUpperCase()}
+                        {m.signoff_decision === 'go' ? <CheckCircle2 size={12} /> : <XCircle size={12} />}{' '}
+                        {m.signoff_decision.toUpperCase()}
                       </span>
-                    ) : '—'}
+                    ) : (
+                      '—'
+                    )}
                   </td>
                   <td style={{ display: 'flex', gap: '0.25rem' }}>
-                    <button type="button" className="btn btn-sm" title={t.milestones.editAria} onClick={() => openEdit(m)}>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      title={t.milestones.editAria}
+                      onClick={() => openEdit(m)}
+                    >
                       <Pencil size={14} />
                     </button>
-                    <button type="button" className="btn btn-sm btn-danger" title={t.common.delete} onClick={() => setConfirmDelete(m)}>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-danger"
+                      title={t.common.delete}
+                      onClick={() => setConfirmDelete(m)}
+                    >
                       <Trash2 size={14} />
                     </button>
                   </td>
@@ -324,37 +344,75 @@ export function MilestonesView() {
                       <div style={{ padding: '0.5rem 0', display: 'grid', gap: '0.5rem' }}>
                         {progress[m.id] && (
                           <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', fontSize: '0.85rem' }}>
-                            <span>{t.milestones.total} <strong>{progress[m.id].total}</strong></span>
-                            <span className="badge badge-passed">{t.milestones.passed} {progress[m.id].passed}</span>
-                            <span className="badge badge-failed">{t.milestones.failed} {progress[m.id].failed}</span>
-                            <span className="badge badge-blocked">{t.milestones.blocked} {progress[m.id].blocked}</span>
-                            <span className="badge badge-skipped">{t.milestones.skipped} {progress[m.id].skipped}</span>
-                            <span className="badge badge-idle">{t.milestones.idle} {progress[m.id].idle}</span>
+                            <span>
+                              {t.milestones.total} <strong>{progress[m.id].total}</strong>
+                            </span>
+                            <span className="badge badge-passed">
+                              {t.milestones.passed} {progress[m.id].passed}
+                            </span>
+                            <span className="badge badge-failed">
+                              {t.milestones.failed} {progress[m.id].failed}
+                            </span>
+                            <span className="badge badge-blocked">
+                              {t.milestones.blocked} {progress[m.id].blocked}
+                            </span>
+                            <span className="badge badge-skipped">
+                              {t.milestones.skipped} {progress[m.id].skipped}
+                            </span>
+                            <span className="badge badge-idle">
+                              {t.milestones.idle} {progress[m.id].idle}
+                            </span>
                             <strong>{progress[m.id].percent_done}</strong>
                           </div>
                         )}
                         <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
                           <Flag size={14} />
                           <strong>{t.milestones.linkedRuns}</strong>
-                          {linkedRuns.length === 0 && <span style={{ color: 'var(--muted)' }}>{t.milestones.none}</span>}
+                          {linkedRuns.length === 0 && (
+                            <span style={{ color: 'var(--muted)' }}>{t.milestones.none}</span>
+                          )}
                           {linkedRuns.map((rid) => (
-                            <span key={rid} className="badge" style={{ display: 'inline-flex', gap: '0.25rem', alignItems: 'center' }}>
+                            <span
+                              key={rid}
+                              className="badge"
+                              style={{ display: 'inline-flex', gap: '0.25rem', alignItems: 'center' }}
+                            >
                               {t.milestones.runBadge(rid)}
-                              <button type="button" className="btn btn-sm" onClick={() => doUnlink(m.id, rid)} aria-label={t.milestones.unlinkRunAria(rid)}>
+                              <button
+                                type="button"
+                                className="btn btn-sm"
+                                onClick={() => doUnlink(m.id, rid)}
+                                aria-label={t.milestones.unlinkRunAria(rid)}
+                              >
                                 <XCircle size={12} />
                               </button>
                             </span>
                           ))}
-                          <select className="select" value={runId} onChange={(e) => setRunId(Number(e.target.value))} style={{ padding: '0.2rem 0.45rem', fontSize: '0.8rem' }}>
+                          <select
+                            className="select"
+                            value={runId}
+                            onChange={(e) => setRunId(Number(e.target.value))}
+                            style={{ padding: '0.2rem 0.45rem', fontSize: '0.8rem' }}
+                          >
                             {runs.map((r) => (
-                              <option key={r.id} value={r.id}>#{r.id} {r.summary}</option>
+                              <option key={r.id} value={r.id}>
+                                #{r.id} {r.summary}
+                              </option>
                             ))}
                           </select>
-                          <button type="button" className="btn btn-sm" onClick={doLink}>{t.milestones.linkRun}</button>
+                          <button type="button" className="btn btn-sm" onClick={doLink}>
+                            {t.milestones.linkRun}
+                          </button>
                         </div>
                         <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
                           <strong>{t.milestones.goNoGo}</strong>
-                          <input className="input" placeholder={t.milestones.notePlaceholder} value={signoffNote} onChange={(e) => setSignoffNote(e.target.value)} style={{ maxWidth: '16rem' }} />
+                          <input
+                            className="input"
+                            placeholder={t.milestones.notePlaceholder}
+                            value={signoffNote}
+                            onChange={(e) => setSignoffNote(e.target.value)}
+                            style={{ maxWidth: '16rem' }}
+                          />
                           <button type="button" className="btn btn-sm btn-primary" onClick={() => doSignoff(m, 'go')}>
                             <CheckCircle2 size={14} /> {t.milestones.go}
                           </button>
@@ -374,30 +432,58 @@ export function MilestonesView() {
 
       {showForm && (
         <div className="modal-backdrop" onClick={() => setShowForm(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t.milestones.formAria}>
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t.milestones.formAria}
+          >
             <h2>{editing ? t.milestones.editMilestone : t.milestones.newMilestone}</h2>
             <div style={{ display: 'grid', gap: '0.5rem' }}>
               {!editing && (
                 <select className="select" value={versionId} onChange={(e) => setVersionId(Number(e.target.value))}>
                   {versions.map((v) => (
-                    <option key={v.id} value={v.id}>{v.value}</option>
+                    <option key={v.id} value={v.id}>
+                      {v.value}
+                    </option>
                   ))}
                 </select>
               )}
-              <input className="input" placeholder={t.milestones.namePlaceholder} value={name} onChange={(e) => setName(e.target.value)} />
-              <textarea className="input" placeholder={t.common.description} rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
+              <input
+                className="input"
+                placeholder={t.milestones.namePlaceholder}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+              <textarea
+                className="input"
+                placeholder={t.common.description}
+                rows={3}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <input className="input" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
                 <select className="select" value={status} onChange={(e) => setStatus(e.target.value)}>
                   {STATUSES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
                   ))}
                 </select>
               </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.75rem' }}>
-              <button type="button" className="btn" onClick={() => setShowForm(false)}>{t.common.cancel}</button>
-              <button type="button" className="btn btn-primary" onClick={submit} disabled={!name || (!editing && !versionId)}>
+              <button type="button" className="btn" onClick={() => setShowForm(false)}>
+                {t.common.cancel}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={submit}
+                disabled={!name || (!editing && !versionId)}
+              >
                 {editing ? t.common.save : t.milestones.create}
               </button>
             </div>
@@ -415,14 +501,31 @@ export function MilestonesView() {
 
       {aiSummary && aiSummary !== 'busy' && (
         <div className="modal-backdrop" onClick={() => setAiSummary(null)}>
-          <div className="modal" style={{ maxWidth: 680 }} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t.milestones.aiSummaryAria}>
+          <div
+            className="modal"
+            style={{ maxWidth: 680 }}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t.milestones.aiSummaryAria}
+          >
             <h2 style={{ marginTop: 0 }}>{t.milestones.aiTitle}</h2>
             <p style={{ fontSize: '0.92rem', lineHeight: 1.5 }}>{aiSummary.summary}</p>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem' }}>
+            <div
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem' }}
+            >
               <span style={{ color: 'var(--muted)', fontSize: '0.75rem' }}>{aiSummary.model}</span>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button type="button" className="btn" onClick={() => void navigator.clipboard.writeText(aiSummary.summary)}>{t.milestones.copy}</button>
-                <button type="button" className="btn btn-primary" onClick={() => setAiSummary(null)}>{t.common.close}</button>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => void navigator.clipboard.writeText(aiSummary.summary)}
+                >
+                  {t.milestones.copy}
+                </button>
+                <button type="button" className="btn btn-primary" onClick={() => setAiSummary(null)}>
+                  {t.common.close}
+                </button>
               </div>
             </div>
           </div>

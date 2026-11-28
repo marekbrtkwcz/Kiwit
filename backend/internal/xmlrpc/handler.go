@@ -133,9 +133,9 @@ type methodClass int
 
 const (
 	methodPublic methodClass = iota // no authentication required
-	methodRead                       // any authenticated user
-	methodWrite                      // write role (tester/admin)
-	methodAdmin                      // admin only
+	methodRead                      // any authenticated user
+	methodWrite                     // write role (tester/admin)
+	methodAdmin                     // admin only
 )
 
 // classifyMethod maps a method name to its authorization class.
@@ -269,22 +269,17 @@ func (h *Handler) serveHTTP(w http.ResponseWriter, req *http.Request) {
 	_, _ = w.Write([]byte(xml.Header + encodeResponse(resultVal)))
 }
 
-type funcResult struct {
-	value any
-	err   error
-}
-
 // --- Service methods ---
 
 func (h *Handler) authLogin(r *http.Request, args []any) (any, error) {
 	if len(args) < 2 {
-		return nil, fmt.Errorf("Auth.login requires username and password")
+		return nil, fmt.Errorf("auth.login requires username and password")
 	}
 	username, _ := args[0].(string)
 	password, _ := args[1].(string)
 	token, u, err := h.svc.Login(r.Context(), username, password)
 	if err != nil {
-		return nil, fmt.Errorf("Authentication failed")
+		return nil, fmt.Errorf("authentication failed")
 	}
 	*r = *r.WithContext(contextWithToken(r.Context(), token))
 	return map[string]any{
@@ -305,18 +300,18 @@ func (h *Handler) kiwiVersion(_ *http.Request, _ []any) (any, error) {
 // row's product_id, used to enforce product_members isolation on .filter for
 // non-admin users.
 var productScopedTables = map[string]string{
-	"test_cases":         "t.product_id",
-	"test_plans":         "t.product_id",
-	"products":           "t.id",
-	"versions":           "t.product_id",
-	"components":         "t.product_id",
-	"requirements":       "t.product_id",
-	"campaigns":          "t.product_id",
-	"test_runs":          "(SELECT tp.product_id FROM test_plans tp WHERE tp.id = t.test_plan_id)",
-	"test_executions":    "(SELECT tp.product_id FROM test_runs tr JOIN test_plans tp ON tp.id = tr.test_plan_id WHERE tr.id = t.test_run_id)",
-	"milestones":         "(SELECT v.product_id FROM versions v WHERE v.id = t.version_id)",
-	"test_case_datasets": "(SELECT tc.product_id FROM test_cases tc WHERE tc.id = t.test_case_id)",
-	"builds":             "(SELECT v.product_id FROM versions v WHERE v.id = t.version_id)",
+	"test_cases":          "t.product_id",
+	"test_plans":          "t.product_id",
+	"products":            "t.id",
+	"versions":            "t.product_id",
+	"components":          "t.product_id",
+	"requirements":        "t.product_id",
+	"campaigns":           "t.product_id",
+	"test_runs":           "(SELECT tp.product_id FROM test_plans tp WHERE tp.id = t.test_plan_id)",
+	"test_executions":     "(SELECT tp.product_id FROM test_runs tr JOIN test_plans tp ON tp.id = tr.test_plan_id WHERE tr.id = t.test_run_id)",
+	"milestones":          "(SELECT v.product_id FROM versions v WHERE v.id = t.version_id)",
+	"test_case_datasets":  "(SELECT tc.product_id FROM test_cases tc WHERE tc.id = t.test_case_id)",
+	"builds":              "(SELECT v.product_id FROM versions v WHERE v.id = t.version_id)",
 	"campaign_iterations": "(SELECT c.product_id FROM campaigns c WHERE c.id = t.campaign_id)",
 }
 
@@ -497,13 +492,13 @@ func (v *value) any() any {
 		return v.Str
 	case v.Int != "" || v.I4 != "":
 		var i int64
-		fmt.Sscanf(v.Int+v.I4, "%d", &i)
+		_, _ = fmt.Sscanf(v.Int+v.I4, "%d", &i)
 		return i
 	case v.Bool != "":
 		return v.Bool == "1"
 	case v.Double != "":
 		var f float64
-		fmt.Sscanf(v.Double, "%g", &f)
+		_, _ = fmt.Sscanf(v.Double, "%g", &f)
 		return f
 	case len(v.Struct.Members) > 0:
 		m := map[string]any{}

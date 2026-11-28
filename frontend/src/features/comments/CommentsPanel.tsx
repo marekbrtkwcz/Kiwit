@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api, CommentItem } from '../../api/client'
+import { api, type CommentItem } from '../../api/client'
 import { useI18n } from '../../i18n'
 
 interface Props {
@@ -42,7 +42,11 @@ export function CommentsPanel({ entityType, entityId }: Props) {
 
   return (
     <div style={{ display: 'grid', gap: '0.5rem', fontSize: '0.84rem' }}>
-      {error && <div className="alert-error" style={{ margin: 0 }}>{error}</div>}
+      {error && (
+        <div className="alert-error" style={{ margin: 0 }}>
+          {error}
+        </div>
+      )}
       <form onSubmit={handleAdd} style={{ display: 'flex', gap: '0.4rem' }}>
         <input
           className="input"

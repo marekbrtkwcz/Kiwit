@@ -68,7 +68,7 @@ func RegisterRoutes(api huma.API, s *Store) {
 }
 
 func (s *Store) Search(ctx context.Context, terms []string, limit int) ([]Result, error) {
-	out := []Result{}
+	var out []Result
 	var err error
 	if s.pg != nil {
 		out, err = s.searchPG(ctx, terms, limit)
