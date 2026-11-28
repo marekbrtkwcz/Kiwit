@@ -44,6 +44,21 @@ func TestRateLimiterLimitAndRetryAfter(t *testing.T) {
 		t.Fatalf("other IP should pass, got %d", rec.Code)
 	}
 
+	// ldap-login is also rate limited
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/auth/ldap-login", nil)
+	req.RemoteAddr = "203.0.113.20:1234"
+	h2 := NewRateLimiter(1, time.Minute).LimitAuthRoutes(okHandler())
+	rec = httptest.NewRecorder()
+	h2.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("first ldap-login: expected 200, got %d", rec.Code)
+	}
+	rec = httptest.NewRecorder()
+	h2.ServeHTTP(rec, req)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("second ldap-login: expected 429, got %d", rec.Code)
+	}
+
 	// Non-auth routes are not limited
 	for i := 0; i < 10; i++ {
 		req = httptest.NewRequest(http.MethodPost, "/api/v1/testcases", nil)

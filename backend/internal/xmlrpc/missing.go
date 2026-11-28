@@ -430,10 +430,11 @@ func (h *Handler) tpClone(r *http.Request, args []any) (any, error) {
 	// Read source plan
 	var productID, versionID, authorID int64
 	var name, desc string
-	var active bool
+	var activeRaw any // SQLite returns 0/1, PostgreSQL returns bool
 	err := h.queryRow(r.Context(),
 		`SELECT product_id, version_id, COALESCE(author_id,0), name, description, is_active FROM test_plans WHERE id = ?`, srcID).
-		Scan(&productID, &versionID, &authorID, &name, &desc, &active)
+		Scan(&productID, &versionID, &authorID, &name, &desc, &activeRaw)
+	active := activeRaw == true || activeRaw == int64(1) || activeRaw == int(1)
 	if err != nil {
 		return nil, fmt.Errorf("source plan %d not found", srcID)
 	}

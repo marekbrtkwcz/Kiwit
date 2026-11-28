@@ -198,9 +198,9 @@ func (h *Handler) userUpdate(r *http.Request, args []any) (any, error) {
 	username := argStr(args[0])
 	role := argStr(m["role"])
 	isActive := m["is_active"]
-	active := 1
+	active := true
 	if b, ok := isActive.(bool); ok && !b {
-		active = 0
+		active = false
 	}
 	_, err := h.exec(r.Context(), `UPDATE users SET role = COALESCE(?, role), is_active = ? WHERE username = ? OR email = ?`,
 		nullIfEmpty(role), active, username, username)
@@ -211,6 +211,6 @@ func (h *Handler) userDeactivate(r *http.Request, args []any) (any, error) {
 	if !h.available() {
 		return nil, errNoDB
 	}
-	_, err := h.exec(r.Context(), `UPDATE users SET is_active = 0 WHERE username = ? OR email = ?`, argStr(args[0]), argStr(args[0]))
+	_, err := h.exec(r.Context(), `UPDATE users SET is_active = FALSE WHERE username = ? OR email = ?`, argStr(args[0]), argStr(args[0]))
 	return map[string]any{"ok": err == nil}, err
 }

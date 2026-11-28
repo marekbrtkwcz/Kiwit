@@ -182,7 +182,7 @@ func (s *Store) seedAdmin(ctx context.Context, email, username, password string)
 	} else {
 		_, err = s.db.ExecContext(ctx, `
 			INSERT INTO users (email, username, password_hash, role, is_active, created_at, updated_at)
-			VALUES (?, ?, ?, 'admin', 1, ?, ?)`,
+			VALUES (?, ?, ?, 'admin', TRUE, ?, ?)`,
 			email, username, string(hash), now.Format("2006-01-02 15:04:05"), now.Format("2006-01-02 15:04:05"))
 	}
 	return err
@@ -192,7 +192,7 @@ func (s *Store) seedAdmin(ctx context.Context, email, username, password string)
 func (s *Store) seedDictionaries(ctx context.Context) error {
 	stmts := []string{
 		`INSERT OR IGNORE INTO categories (name) VALUES ('Functional'), ('Web API'), ('Performance'), ('UX / Usability'), ('Security'), ('Smoke'), ('Regression')`,
-		`INSERT OR IGNORE INTO priorities (value, is_active) VALUES ('low', 1), ('medium', 1), ('high', 1), ('critical', 1)`,
+		`INSERT OR IGNORE INTO priorities (value, is_active) VALUES ('low', TRUE), ('medium', TRUE), ('high', TRUE), ('critical', TRUE)`,
 		`INSERT OR IGNORE INTO execution_statuses (name, color, weight) VALUES ('idle', '#9ca3af', 0), ('running', '#2563eb', 10), ('passed', '#16a34a', 20), ('failed', '#dc2626', -20), ('blocked', '#d97706', -10), ('skipped', '#6b7280', 0)`,
 	}
 	for _, q := range stmts {

@@ -13,7 +13,7 @@ func (h *Handler) telemetryBreakdown(r *http.Request, _ []any) (any, error) {
 		return nil, errNoDB
 	}
 	var total, automated int64
-	_ = h.queryRow(r.Context(), `SELECT COUNT(*), COALESCE(SUM(is_automated),0) FROM test_cases WHERE deleted_at IS NULL`).Scan(&total, &automated)
+	_ = h.queryRow(r.Context(), `SELECT COUNT(*), COALESCE(SUM(CASE WHEN is_automated THEN 1 ELSE 0 END),0) FROM test_cases WHERE deleted_at IS NULL`).Scan(&total, &automated)
 	var passed, failed, blocked, skipped int64
 	rows, err := h.query(r.Context(), `
 		SELECT es.name, COUNT(*) FROM test_executions te

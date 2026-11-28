@@ -161,7 +161,7 @@ func (h *Handler) tcCreate(r *http.Request, args []any) (any, error) {
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
 	id, err := h.insertID(r.Context(),
 		`INSERT INTO test_cases (product_id, summary, preconditions, priority, status, is_automated, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, 'confirmed', 0, ?, ?)`,
+		 VALUES (?, ?, ?, ?, 'confirmed', FALSE, ?, ?)`,
 		argInt(m["product_id"]), argStr(m["summary"]), argStr(m["preconditions"]), argStr(m["priority"]), now, now)
 	if err != nil {
 		return nil, err
@@ -283,7 +283,7 @@ func (h *Handler) tpCreate(r *http.Request, args []any) (any, error) {
 	}
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
 	id, err := h.insertID(r.Context(),
-		`INSERT INTO test_plans (product_id, version_id, name, description, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?)`,
+		`INSERT INTO test_plans (product_id, version_id, name, description, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, TRUE, ?, ?)`,
 		argInt(m["product_id"]), argInt(m["version_id"]), argStr(m["name"]), argStr(m["description"]), now, now)
 	if err != nil {
 		return nil, err

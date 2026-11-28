@@ -83,11 +83,13 @@ func (rl *RateLimiter) sweepLocked(now time.Time) {
 }
 
 // LimitAuthRoutes applies rate limiting to sensitive unauthenticated routes:
-// /api/v1/auth/login, /api/v1/auth/register and the password-reset pair.
+// /api/v1/auth/login, /api/v1/auth/register, /api/v1/auth/ldap-login and the
+// password-reset pair.
 func (rl *RateLimiter) LimitAuthRoutes(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost &&
 			(r.URL.Path == "/api/v1/auth/login" || r.URL.Path == "/api/v1/auth/register" ||
+				r.URL.Path == "/api/v1/auth/ldap-login" ||
 				r.URL.Path == "/api/v1/auth/password-reset" || r.URL.Path == "/api/v1/auth/password-reset/confirm") {
 			ip := rl.clientIP(r)
 			if !rl.allow(ip, time.Now()) {

@@ -190,9 +190,9 @@ func main() {
 	router := chi.NewMux()
 	router.Use(middleware.RequestID)
 	router.Use(web.RequestIDMiddleware)
-	router.Use(middleware.RealIP)
-	router.Use(middleware.Recoverer)
-	router.Use(requestLogger(logger))
+	// Rate limiting must run BEFORE middleware.RealIP: RealIP overwrites
+	// r.RemoteAddr with X-Forwarded-For/X-Real-IP unconditionally, which
+	// would let any client spoof the address the limiter keys on.
 	rateLimiter := auth.NewRateLimiter(20, time.Minute)
 	for _, cidr := range cfg.TrustedProxies {
 		if cidr = strings.TrimSpace(cidr); cidr != "" {
@@ -200,6 +200,9 @@ func main() {
 		}
 	}
 	router.Use(rateLimiter.LimitAuthRoutes)
+	router.Use(middleware.RealIP)
+	router.Use(middleware.Recoverer)
+	router.Use(requestLogger(logger))
 	if authSvc != nil {
 		router.Use(authSvc.RequireAuth)
 	}
