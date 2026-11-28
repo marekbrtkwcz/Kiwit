@@ -768,8 +768,24 @@ export interface NotificationEventPreference {
 }
 
 export const api = {
-  register: (body: { email: string; username: string; password: string }) =>
+  register: (body: {
+    email: string
+    username: string
+    password: string
+    website?: string // honeypot — must stay empty
+    captcha_id?: string
+    captcha_answer?: string
+  }) =>
     request<User>('/api/v1/auth/register', { method: 'POST', body: JSON.stringify(body) }),
+  getCaptcha: () =>
+    request<{ captcha_id: string; question: string; expires_in: number }>('/api/v1/auth/captcha'),
+  getPublicSettings: () => request<Record<string, string>>('/api/v1/settings'),
+  getAdminSettings: () => request<Record<string, string>>('/api/v1/admin/settings'),
+  bulkUpdateSettings: (settings: Record<string, string>) =>
+    request<{ updated: Record<string, string>; count: number }>('/api/v1/admin/settings', {
+      method: 'POST',
+      body: JSON.stringify({ settings }),
+    }),
   login: (body: { email: string; password: string }) =>
     request<{ access_token: string; token_type: string; user: User }>('/api/v1/auth/login', {
       method: 'POST',

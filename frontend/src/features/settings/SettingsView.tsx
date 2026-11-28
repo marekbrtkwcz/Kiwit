@@ -32,7 +32,18 @@ function parseProperties(raw: string): Record<string, string> {
 export function SettingsView() {
   const { t } = useI18n()
   const { notify } = useWorkspace()
-  const [tab, setTab] = useState<'trackers' | 'env' | 'dicts' | 'notify' | 'webhooks' | 'logs'>('trackers')
+  const [tab, setTab] = useState<'trackers' | 'env' | 'dicts' | 'notify' | 'webhooks' | 'logs' | 'instance'>('trackers')
+
+  // Instance settings (runtime-editable, DB-backed) — admin only
+  const [inst, setInst] = useState<Record<string, string>>({})
+  const loadInstance = async () => {
+    if (!isAdmin) return
+    try {
+      setInst(await api.getAdminSettings())
+    } catch {
+      setInst({})
+    }
+  }
 
   const [trackers, setTrackers] = useState<IssueTrackerItem[]>([])
   const [environments, setEnvironments] = useState<EnvironmentItem[]>([])
@@ -108,7 +119,14 @@ export function SettingsView() {
 
   useEffect(() => {
     void loadAll()
+    void loadInstance()
   }, [])
+
+  const setInstField = (key: string, value: string) => setInst((prev) => ({ ...prev, [key]: value }))
+  const saveInstance = () =>
+    void runAction(async () => {
+      await api.bulkUpdateSettings(inst)
+    }, t.settings.instanceSaved)
 
   const runAction = async (fn: () => Promise<void>, okMessage: string) => {
     setError(null)
@@ -157,7 +175,62 @@ export function SettingsView() {
             <ScrollText size={15} /> {t.settings.tabLogs}
           </button>
         )}
+        {isAdmin && (
+          <button type="button" className={`tab-btn ${tab === 'instance' ? 'active' : ''}`} onClick={() => setTab('instance')}>
+            <AtSign size={15} /> {t.settings.tabInstance}
+          </button>
+        )}
       </div>
+
+      {isAdmin && tab === 'instance' && (
+        <div className="card" style={{ display: 'grid', gap: '0.85rem' }}>
+          <h3 className="card-title"><AtSign size={15} /> {t.settings.instanceTitle}</h3>
+          <p style={{ color: 'var(--muted)', fontSize: '0.8rem', margin: 0 }}>{t.settings.instanceHint}</p>
+          <div style={{ display: 'grid', gap: '0.6rem', maxWidth: 560 }}>
+            <label style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
+              <span>{t.settings.domainLabel}</span>
+              <input className="input" value={inst.domain ?? ''} onChange={(e) => setInstField('domain', e.target.value)} />
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+              <input type="checkbox" checked={inst.allow_registration === 'true'} onChange={(e) => setInstField('allow_registration', String(e.target.checked))} />
+              <span>{t.settings.allowRegistrationLabel}</span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+              <input type="checkbox" checked={inst.captcha_enabled === 'true'} onChange={(e) => setInstField('captcha_enabled', String(e.target.checked))} />
+              <span>{t.settings.captchaEnabledLabel}</span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+              <input type="checkbox" checked={inst.anonymous_access === 'true'} onChange={(e) => setInstField('anonymous_access', String(e.target.checked))} />
+              <span>{t.settings.anonymousAccessLabel}</span>
+            </label>
+            <label style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
+              <span>{t.settings.smtpHostLabel}</span>
+              <input className="input" value={inst.smtp_host ?? ''} onChange={(e) => setInstField('smtp_host', e.target.value)} />
+            </label>
+            <label style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
+              <span>{t.settings.smtpPortLabel}</span>
+              <input className="input" value={inst.smtp_port ?? ''} onChange={(e) => setInstField('smtp_port', e.target.value)} />
+            </label>
+            <label style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
+              <span>{t.settings.smtpUserLabel}</span>
+              <input className="input" value={inst.smtp_user ?? ''} onChange={(e) => setInstField('smtp_user', e.target.value)} />
+            </label>
+            <label style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
+              <span>{t.settings.smtpPassLabel}</span>
+              <input className="input" type="password" value={inst.smtp_pass ?? ''} onChange={(e) => setInstField('smtp_pass', e.target.value)} />
+            </label>
+            <label style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
+              <span>{t.settings.smtpFromLabel}</span>
+              <input className="input" value={inst.smtp_from ?? ''} onChange={(e) => setInstField('smtp_from', e.target.value)} />
+            </label>
+            <div>
+              <button type="button" className="btn btn-primary btn-sm" onClick={saveInstance}>
+                <Save size={13} /> {t.settings.saveInstance}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {tab === 'trackers' && (
         <div className="card" style={{ display: 'grid', gap: '0.85rem' }}>

@@ -39,6 +39,11 @@ export function AuthView() {
   const [ldapEnabled, setLdapEnabled] = useState(false)
   const [ldapUsername, setLdapUsername] = useState('')
   const [ldapPassword, setLdapPassword] = useState('')
+  // Public instance settings (allow_registration, captcha_enabled, …)
+  const [pubSettings, setPubSettings] = useState<Record<string, string> | null>(null)
+  const [captcha, setCaptcha] = useState<{ captcha_id: string; question: string } | null>(null)
+  const [captchaAnswer, setCaptchaAnswer] = useState('')
+  const [website, setWebsite] = useState('') // honeypot — must stay empty
 
   // Handle SSO callback: backend redirects to /auth/callback#token=...
   // Only the pathname triggers this — a ?token= on /reset-password is a
@@ -67,7 +72,27 @@ export function AuthView() {
     api.authMethods()
       .then(d => setLdapEnabled(!!d.ldap))
       .catch(() => {})
+    api.getPublicSettings()
+      .then(setPubSettings)
+      .catch(() => setPubSettings(null))
   }, [])
+
+  const registrationAllowed = pubSettings?.allow_registration !== 'false'
+  const captchaRequired = pubSettings?.captcha_enabled === 'true'
+
+  // When registration is disabled, never stay on the register form.
+  useEffect(() => {
+    if (mode === 'register' && pubSettings && !registrationAllowed) setMode('login')
+  }, [mode, pubSettings, registrationAllowed])
+
+  // Fetch a fresh captcha challenge when entering the register form.
+  useEffect(() => {
+    if (mode === 'register' && captchaRequired && !captcha) {
+      api.getCaptcha()
+        .then(setCaptcha)
+        .catch(() => setCaptcha(null))
+    }
+  }, [mode, captchaRequired, captcha])
 
   const handleLdapLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -153,7 +178,13 @@ export function AuthView() {
     setNotice(null)
     try {
       if (mode === 'register') {
-        await api.register({ email, username, password })
+        await api.register({
+          email,
+          username,
+          password,
+          website, // honeypot
+          ...(captchaRequired ? { captcha_id: captcha?.captcha_id, captcha_answer: captchaAnswer } : {}),
+        })
       }
       const res = await api.login({ email, password })
       setAuthToken(res.access_token)
@@ -167,6 +198,12 @@ export function AuthView() {
       await refreshProducts()
     } catch (err) {
       setError(err instanceof Error ? err.message : t.errors.authFailed)
+      // A failed captcha is single-use — fetch a fresh challenge.
+      if (mode === 'register' && captchaRequired) {
+        setCaptcha(null)
+        setCaptchaAnswer('')
+        api.getCaptcha().then(setCaptcha).catch(() => setCaptcha(null))
+      }
     }
   }
 
@@ -421,10 +458,15 @@ export function AuthView() {
             <button type="button" onClick={() => setMode('login')} className={mode === 'login' ? 'btn btn-primary btn-sm' : 'btn btn-sm'}>
               {t.auth.login}
             </button>
-            <button type="button" onClick={() => setMode('register')} className={mode === 'register' ? 'btn btn-primary btn-sm' : 'btn btn-sm'}>
-              {t.auth.register}
-            </button>
+            {registrationAllowed && (
+              <button type="button" onClick={() => setMode('register')} className={mode === 'register' ? 'btn btn-primary btn-sm' : 'btn btn-sm'}>
+                {t.auth.register}
+              </button>
+            )}
           </div>
+          {mode === 'register' && !registrationAllowed && (
+            <p className="alert-error" style={{ margin: 0 }}>{t.auth.registrationDisabled}</p>
+          )}
           <label htmlFor="auth-email" style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
             <span>{t.common.email}</span>
             <input
@@ -459,6 +501,35 @@ export function AuthView() {
                 required
               />
             </label>
+          )}
+          {mode === 'register' && captchaRequired && captcha && (
+            <label htmlFor="auth-captcha" style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
+              <span>{t.auth.captchaLabel}: {captcha.question}</span>
+              <input
+                id="auth-captcha"
+                name="captcha_answer"
+                className="input"
+                inputMode="numeric"
+                autoComplete="off"
+                placeholder={t.auth.captchaPlaceholder}
+                title={t.auth.captchaHint}
+                value={captchaAnswer}
+                onChange={(e) => setCaptchaAnswer(e.target.value)}
+                required
+              />
+            </label>
+          )}
+          {mode === 'register' && (
+            <input
+              type="text"
+              name="website"
+              autoComplete="off"
+              tabIndex={-1}
+              aria-hidden="true"
+              style={{ position: 'absolute', left: -9999, width: 1, height: 1, opacity: 0 }}
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
+            />
           )}
           <label htmlFor="auth-password" style={{ display: 'grid', gap: '0.25rem', fontSize: '0.85rem' }}>
             <span>{t.auth.passwordPlaceholder}</span>
